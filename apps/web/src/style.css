@@ -156,8 +156,14 @@ body {
 
 #place {
   flex: 1;
-  color: var(--muted);
-  font-size: 0.9rem;
+  color: var(--fg);
+  font-size: 0.95rem;
+  font-weight: 600;
+  transition: opacity 0.25s ease;
+}
+
+#place.changing {
+  opacity: 0;
 }
 
 #debug {

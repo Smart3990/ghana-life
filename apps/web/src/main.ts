@@ -1,6 +1,7 @@
 import './style.css';
-import { applyLight, createMap, flyIn, startIdleOrbit } from './map/createMap';
+import { applyLight, createMap, flyIn } from './map/createMap';
 import { detectTier, forcedTier, measureFps, recordSlowRun } from './map/tier';
+import { startTour } from './map/tour';
 
 const SPLASH_MS = 3000;
 const MIN_FPS = 20; // below this, 3D is too heavy for the device
@@ -17,11 +18,21 @@ if (debug) (window as unknown as { gameMap: typeof map }).gameMap = map; // for 
 
 const splash = document.getElementById('splash')!;
 const hud = document.querySelector<HTMLElement>('.hud')!;
+const place = document.getElementById('place')!;
 const debugLine = document.getElementById('debug')!;
 const showDebug = (text: string) => {
   if (!debug) return;
   debugLine.hidden = false;
   debugLine.textContent = text;
+};
+
+// Fade the place name out and back in when the tour reaches a new area.
+const showPlace = (name: string) => {
+  place.classList.add('changing');
+  setTimeout(() => {
+    place.textContent = name;
+    place.classList.remove('changing');
+  }, 250);
 };
 
 // Welcome screen: 3 seconds, or sooner if the player taps it.
@@ -44,17 +55,16 @@ async function start() {
   showDebug(`${tier} (${detected.reason}) · ${((performance.now() - started) / 1000).toFixed(1)} s`);
 
   await flyIn(map, tier);
+
+  // Let the square finish loading, then start the tour of Accra (it begins by circling the monument).
+  await new Promise<void>((resolve) => map.once('idle', () => resolve()));
+  startTour(map, () => tier, showPlace);
   if (tier === 'light') return;
 
-  // Let the houses finish loading first, so the frame rate is measured on a full street.
-  await new Promise<void>((resolve) => map.once('idle', () => resolve()));
-
-  // Watch the frame rate while the camera circles. Only repeated slowness switches to Light.
-  const stopOrbit = startIdleOrbit(map);
+  // Watch the frame rate during the first seconds of the tour. Only repeated slowness switches to Light.
   const fps = await measureFps(3);
   showDebug(`${tier} (${detected.reason}) · ${Math.round(fps)} fps`);
   if (fps < MIN_FPS && !forcedTier() && recordSlowRun()) {
-    stopOrbit();
     tier = 'light';
     applyLight(map);
     showDebug(`light (slow: ${Math.round(fps)} fps)`);

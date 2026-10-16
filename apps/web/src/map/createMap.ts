@@ -42,27 +42,6 @@ export function flyIn(map: maplibregl.Map, tier: Tier): Promise<void> {
   });
 }
 
-// A slow circle around the street after landing. Stops for good once the player touches the map.
-export function startIdleOrbit(map: maplibregl.Map) {
-  if (reducedMotion) return () => {};
-  let running = true;
-  let frame = 0;
-  let last = performance.now();
-  const step = (now: number) => {
-    if (!running) return;
-    map.setBearing(map.getBearing() + ((now - last) / 1000) * 2); // 2 degrees a second
-    last = now;
-    frame = requestAnimationFrame(step);
-  };
-  const stop = () => {
-    running = false;
-    cancelAnimationFrame(frame);
-  };
-  for (const event of ['mousedown', 'touchstart', 'wheel'] as const) map.once(event, stop);
-  frame = requestAnimationFrame(step);
-  return stop;
-}
-
 // Switch to Light in place: flat buildings, fewer layers, fewer pixels, camera from above.
 export function applyLight(map: maplibregl.Map) {
   map.setPixelRatio(pixelRatioFor('light'));
