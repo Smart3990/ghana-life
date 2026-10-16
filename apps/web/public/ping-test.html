@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Distance test (T0a)</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; padding: 20px 16px; max-width: 34rem; }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  h2 { font-size: 1rem; margin: 20px 0 4px; }
+  .row { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid #ddd; }
+  .ok { color: #0e7a3e; font-weight: 700; }
+  .bad { color: #c8102e; font-weight: 700; }
+  #verdict { font-size: 1.3rem; margin-top: 16px; font-weight: 700; }
+  button { font: inherit; padding: 10px 16px; margin-top: 16px; }
+</style>
+</head>
+<body>
+<h1>Distance test</h1>
+<p>Measures how long a message takes to reach the live server and come back. Use mobile data, not Wi-Fi. Takes about 20 seconds.</p>
+<div id="out"></div>
+<div id="verdict">Running…</div>
+<button id="again">Run again</button>
+<script>
+const SERVER = 'wss://ghana-life-server.ghana-life-web.workers.dev/ping/';
+const COUNT = 25;
+const out = document.getElementById('out');
+const verdict = document.getElementById('verdict');
+
+function heading(text) { const h = document.createElement('h2'); h.textContent = text; out.append(h); }
+function row(label, value, good) {
+  const d = document.createElement('div');
+  d.className = 'row';
+  d.innerHTML = '<span></span><span></span>';
+  d.children[0].textContent = label;
+  d.children[1].textContent = value;
+  if (good !== undefined) d.children[1].className = good ? 'ok' : 'bad';
+  out.append(d);
+}
+
+function measure(room) {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(SERVER + room);
+    const info = { times: [] };
+    let sentAt = 0, n = 0;
+    const timer = setTimeout(() => { ws.close(); reject(new Error('timed out')); }, 30000);
+    const ping = () => { sentAt = performance.now(); ws.send('p' + n); };
+    ws.onmessage = (e) => {
+      const msg = String(e.data);
+      if (msg.startsWith('edge:')) { info.edge = msg.slice(5); ws.send('where'); return; }
+      if (msg.startsWith('room:')) { info.room = msg.slice(5); ping(); return; }
+      info.times.push(performance.now() - sentAt);
+      if (++n < COUNT) setTimeout(ping, 150);
+      else { clearTimeout(timer); ws.close(); resolve(info); }
+    };
+    ws.onerror = () => { clearTimeout(timer); reject(new Error('could not connect')); };
+  });
+}
+
+const pct = (sorted, p) => Math.round(sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))]);
+
+async function run() {
+  out.innerHTML = ''; verdict.textContent = 'Running…'; verdict.className = '';
+  row('Connection', (navigator.connection && navigator.connection.effectiveType) || 'not reported');
+  const medians = [];
+  for (const [room, label] of [['default', 'Room placed automatically'], ['afr', 'Room placed in Africa (if possible)']]) {
+    heading(label);
+    try {
+      const r = await measure(room);
+      const t = r.times.slice(1).sort((a, b) => a - b); // skip the first, it includes warm-up
+      const median = pct(t, 0.5);
+      medians.push(median);
+      row('Your nearest Cloudflare city', r.edge);
+      row('Where the room runs', r.room);
+      row('Typical round trip', median + ' ms', median < 250);
+      row('Fastest / slow (90%)', `${pct(t, 0)} ms / ${pct(t, 0.9)} ms`);
+    } catch (e) {
+      row('Error', e.message, false);
+    }
+  }
+  const best = Math.min(...medians);
+  if (!medians.length) { verdict.textContent = 'FAIL: could not reach the server'; verdict.className = 'bad'; }
+  else if (best < 250) { verdict.textContent = `PASS: ${best} ms typical round trip`; verdict.className = 'ok'; }
+  else { verdict.textContent = `TOO SLOW: ${best} ms. Tell Claude these numbers`; verdict.className = 'bad'; }
+}
+document.getElementById('again').onclick = run;
+run();
+</script>
+</body>
+</html>
