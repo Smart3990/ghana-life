@@ -13,6 +13,7 @@ let tier = detected.tier;
 // The map starts loading right away, hidden behind the welcome screen.
 const map = createMap(document.getElementById('map')!, tier);
 const mapLoaded = new Promise<void>((resolve) => map.once('load', () => resolve()));
+if (debug) (window as unknown as { gameMap: typeof map }).gameMap = map; // for testing from the browser console
 
 const splash = document.getElementById('splash')!;
 const hud = document.querySelector<HTMLElement>('.hud')!;
