@@ -8,3 +8,4 @@ dist/
 
 # Big map files are built by scripts, not stored in Git
 *.pmtiles
+apps/web/public/tiles/*/

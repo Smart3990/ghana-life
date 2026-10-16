@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Map tiles test (T0a)</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; padding: 20px 16px; max-width: 34rem; }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  .row { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid #ddd; }
+  .ok { color: #0e7a3e; font-weight: 700; }
+  .bad { color: #c8102e; font-weight: 700; }
+  #verdict { font-size: 1.3rem; margin-top: 16px; font-weight: 700; }
+  button { font: inherit; padding: 10px 16px; margin-top: 16px; }
+</style>
+</head>
+<body>
+<h1>Map tiles test</h1>
+<p>Loads one phone screen of the Accra map (central Accra, street level) and measures the data it costs. Use mobile data, not Wi-Fi.</p>
+<div id="out"></div>
+<div id="verdict">Running…</div>
+<button id="again">Run again</button>
+<script>
+const out = document.getElementById('out');
+const verdict = document.getElementById('verdict');
+
+function row(label, value, good) {
+  const d = document.createElement('div');
+  d.className = 'row';
+  d.innerHTML = '<span></span><span></span>';
+  d.children[0].textContent = label;
+  d.children[1].textContent = value;
+  if (good !== undefined) d.children[1].className = good ? 'ok' : 'bad';
+  out.append(d);
+}
+
+// Tile numbers for central Accra (around Makola / Ridge) at zoom 14.
+const tileX = (lon, z) => Math.floor(((lon + 180) / 360) * 2 ** z);
+const tileY = (lat, z) => { const r = lat * Math.PI / 180; return Math.floor((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * 2 ** z); };
+
+async function run() {
+  out.innerHTML = ''; verdict.textContent = 'Running…'; verdict.className = '';
+  const conn = navigator.connection && navigator.connection.effectiveType;
+  row('Connection', conn || 'not reported');
+  const z = 14, cx = tileX(-0.205, z), cy = tileY(5.555, z), stamp = Date.now();
+  const urls = [];
+  for (let dx = -1; dx <= 1; dx++) for (let dy = -2; dy <= 1; dy++) urls.push(`/tiles/accra/${z}/${cx + dx}/${cy + dy}.pbf?t=${stamp}`);
+  try {
+    const t0 = performance.now();
+    const results = await Promise.all(urls.map(async u => { const r = await fetch(u, { cache: 'no-store' }); await r.arrayBuffer(); return { ok: r.ok, enc: r.headers.get('content-encoding') }; }));
+    const ms = Math.round(performance.now() - t0);
+    const loaded = results.filter(r => r.ok).length;
+    let sent = 0, unpacked = 0;
+    for (const e of performance.getEntriesByType('resource')) if (e.name.includes(`t=${stamp}`)) { sent += e.encodedBodySize; unpacked += e.decodedBodySize; }
+    const compressed = results.some(r => r.enc) || (sent > 0 && sent < unpacked * 0.9);
+    row('Tiles loaded', `${loaded} of ${urls.length}`, loaded === urls.length);
+    row('Time for one screen', ms + ' ms', ms < 5000);
+    row('Compressed on the way', compressed ? `yes (${results.find(r => r.enc)?.enc || 'size shows it'})` : 'no', compressed);
+    row('Data used for one screen', sent ? (sent / 1024).toFixed(0) + ' KB' : 'not reported by this browser');
+    row('Size after unpacking', unpacked ? (unpacked / 1024).toFixed(0) + ' KB' : 'not reported');
+    const pass = loaded === urls.length && ms < 5000;
+    verdict.textContent = pass ? 'PASS: the map can be served from here' : 'FAIL: tell Claude what this page shows';
+    verdict.className = pass ? 'ok' : 'bad';
+  } catch (e) {
+    row('Error', String(e), false);
+    verdict.textContent = 'FAIL: tell Claude what this page shows'; verdict.className = 'bad';
+  }
+}
+document.getElementById('again').onclick = run;
+run();
+</script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+# Map tiles: give them their real type so Cloudflare compresses them,
+# and let phones cache them for a day.
+/tiles/*
+  Content-Type: application/x-protobuf
+  Cache-Control: public, max-age=86400
