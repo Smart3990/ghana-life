@@ -1,0 +1,77 @@
+:root {
+  --bg: #fbfaf7;
+  --fg: #1a1a1a;
+  --muted: #5c5c5c;
+  --gold: #e8b10d;
+  --green: #0e7a3e;
+  --red: #c8102e;
+  --black: #111111;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--fg);
+  background: var(--bg);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121212;
+    --fg: #f1f1f1;
+    --muted: #a8a8a8;
+    color-scheme: dark;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+}
+
+/* Kente-inspired band: repeating gold, green, red and black blocks */
+.kente {
+  height: 28px;
+  background:
+    repeating-linear-gradient(90deg,
+      var(--gold) 0 24px, var(--green) 24px 36px, var(--gold) 36px 48px,
+      var(--red) 48px 60px, var(--black) 60px 66px, var(--gold) 66px 90px);
+}
+
+main {
+  max-width: 34rem;
+  margin: 0 auto;
+  padding: 2rem max(16px, env(safe-area-inset-right)) 3rem max(16px, env(safe-area-inset-left));
+}
+
+h1 {
+  font-size: 3rem;
+  margin: 0;
+  color: var(--green);
+}
+
+h2 {
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin-top: 2rem;
+}
+
+.sub {
+  margin-top: 0.25rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.4rem 1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+dt {
+  color: var(--muted);
+}
+
+dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}

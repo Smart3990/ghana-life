@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.wrangler/
+.dev.vars
+*.log
+.DS_Store
+
+# Big map files are built by scripts, not stored in Git
+*.pmtiles
