@@ -119,6 +119,20 @@ const buildingsFlat: LayerSpecification = {
   paint: { 'fill-color': buildingColour, 'fill-outline-color': '#b59c80' },
 };
 
+// The walking route the player tapped, drawn as a dashed green line on the streets.
+const routeLayer: LayerSpecification = {
+  id: 'route',
+  type: 'line',
+  source: 'route',
+  layout: { 'line-cap': 'round', 'line-join': 'round' },
+  paint: {
+    'line-color': '#0e7a3e',
+    'line-width': ['interpolate', ['linear'], ['zoom'], 14, 3, 18, 9],
+    'line-dasharray': [1, 1.6],
+    'line-opacity': 0.9,
+  },
+};
+
 // Where the camera lands: on Black Star Square, looking north across the square
 // to Black Star Gate, with Nationalism Park and the city behind it.
 export const ACCRA_START = {
@@ -144,6 +158,7 @@ export function buildStyle(tier: Tier): StyleSpecification {
     if (l.id !== 'buildings') return [l];
     return tier === 'light' ? [buildingsFlat, ...landmarkLayers('light')] : [buildings3d, roofs3d, ...landmarkLayers('full')];
   });
+  withBuildings.push(routeLayer);
   return {
     version: 8,
     glyphs: `${origin}/map/fonts/{fontstack}/{range}.pbf`,
@@ -158,6 +173,7 @@ export function buildStyle(tier: Tier): StyleSpecification {
     },
     sources: {
       ...landmarkSources(),
+      route: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
       accra: {
         type: 'vector',
         tiles: [`${origin}/tiles/accra/{z}/{x}/{y}.pbf`],

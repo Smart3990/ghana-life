@@ -2,6 +2,7 @@ import './style.css';
 import { applyLight, createMap, flyIn } from './map/createMap';
 import { detectTier, forcedTier, measureFps, recordSlowRun } from './map/tier';
 import { startTour } from './map/tour';
+import { enableWalking } from './game/walking';
 
 const SPLASH_MS = 3000;
 const MIN_FPS = 20; // below this, 3D is too heavy for the device
@@ -35,6 +36,16 @@ const showPlace = (name: string) => {
   }, 250);
 };
 
+// Short messages at the bottom of the screen, gone after a few seconds.
+const toastBox = document.getElementById('toast')!;
+let toastTimer = 0;
+const showToast = (text: string) => {
+  toastBox.textContent = text;
+  toastBox.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => (toastBox.hidden = true), 3500);
+};
+
 // Welcome screen: 3 seconds, or sooner if the player taps it.
 const splashDone = new Promise<void>((resolve) => {
   const leave = () => {
@@ -59,6 +70,7 @@ async function start() {
   // Let the square finish loading, then start the tour of Accra (it begins by circling the monument).
   await new Promise<void>((resolve) => map.once('idle', () => resolve()));
   startTour(map, () => tier, showPlace);
+  enableWalking(map, showToast);
   if (tier === 'light') return;
 
   // Watch the frame rate during the first seconds of the tour. Only repeated slowness switches to Light.
