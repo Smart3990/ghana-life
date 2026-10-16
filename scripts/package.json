@@ -1,1 +1,1 @@
-{"name":"ghana-life-scripts","private":true,"type":"module","dependencies":{"pmtiles":"^4.5.0"}}
+{"name":"ghana-life-scripts","private":true,"type":"module","dependencies":{"@mapbox/vector-tile":"^3.0.0","pbf":"^5.1.2","pmtiles":"^4.5.0"}}
