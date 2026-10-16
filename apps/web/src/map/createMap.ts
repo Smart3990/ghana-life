@@ -22,7 +22,7 @@ export function createMap(container: HTMLElement, tier: Tier) {
     ...(reducedMotion ? landingFor(tier) : ACCRA_OVERVIEW),
     minZoom: 10,
     maxZoom: 19,
-    maxPitch: 70,
+    maxPitch: 80,
     // Keep players around Greater Accra, where we have map data.
     maxBounds: [-0.8, 5.25, 0.95, 6.3],
     pixelRatio: pixelRatioFor(tier),

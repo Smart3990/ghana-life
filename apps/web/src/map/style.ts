@@ -85,11 +85,12 @@ const buildingsFlat: LayerSpecification = {
   paint: { 'fill-color': buildingColour, 'fill-outline-color': '#b59c80' },
 };
 
-// Where the camera lands: Osu, near Oxford Street.
+// Where the camera lands: Osu, near Oxford Street, looking across the street
+// from low down so the houses are seen from the side with sky on the horizon.
 export const ACCRA_START = {
   center: [-0.1812, 5.5566] as [number, number],
-  zoom: 17,
-  pitch: 60,
+  zoom: 17.4,
+  pitch: 72,
   bearing: -20,
 };
 

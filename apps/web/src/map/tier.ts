@@ -1,13 +1,15 @@
 import type { Tier } from './style';
 
-const DOWNGRADE_KEY = 'gl.downgraded';
+// Renamed from "gl.downgraded" so earlier, too-eager downgrades are forgotten.
+const SLOW_RUNS_KEY = 'gl.slowRuns';
+const SLOW_RUNS_TO_DOWNGRADE = 2;
 
 type NavigatorExtras = Navigator & {
   deviceMemory?: number;
   connection?: { saveData?: boolean };
 };
 
-// Graphics chips that are really software drawing, so 3D will crawl.
+// Graphics that are really software drawing, so 3D will crawl.
 function hasSoftwareGraphics(): boolean {
   try {
     const gl = document.createElement('canvas').getContext('webgl');
@@ -20,38 +22,42 @@ function hasSoftwareGraphics(): boolean {
   }
 }
 
+function slowRuns(): number {
+  try {
+    return Number(localStorage.getItem(SLOW_RUNS_KEY)) || 0;
+  } catch {
+    return 0;
+  }
+}
+
 // "?tier=light" or "?tier=full" in the address forces a tier for testing.
 export function forcedTier(): Tier | null {
   const forced = new URLSearchParams(window.location.search).get('tier');
   return forced === 'light' || forced === 'full' ? forced : null;
 }
 
-// Picks the quality from device clues, unless a tier is forced.
-export function detectTier(): Tier {
+// Full 3D unless there is clear evidence the device cannot cope. The reason is shown with ?debug.
+export function detectTier(): { tier: Tier; reason: string } {
   const forced = forcedTier();
-  if (forced) return forced;
-
-  try {
-    if (localStorage.getItem(DOWNGRADE_KEY) === '1') return 'light';
-  } catch {
-    // Storage blocked: decide from the device alone.
-  }
+  if (forced) return { tier: forced, reason: 'forced' };
+  if (slowRuns() >= SLOW_RUNS_TO_DOWNGRADE) return { tier: 'light', reason: 'slow before' };
 
   const nav = navigator as NavigatorExtras;
-  if (nav.connection?.saveData) return 'light';
-  if (nav.deviceMemory !== undefined && nav.deviceMemory <= 2) return 'light';
-  if (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4) return 'light';
-  if (hasSoftwareGraphics()) return 'light';
-  return 'full';
+  if (nav.connection?.saveData) return { tier: 'light', reason: 'data saver' };
+  if (nav.deviceMemory !== undefined && nav.deviceMemory <= 1) return { tier: 'light', reason: `${nav.deviceMemory} GB memory` };
+  if (hasSoftwareGraphics()) return { tier: 'light', reason: 'no graphics chip' };
+  return { tier: 'full', reason: 'auto' };
 }
 
-// Remember that this device struggled, so next visit starts in Light. Never upgrades by itself.
-export function rememberDowngrade() {
+// Counts a slow 3D run. After two, the device starts in Light. Never upgrades by itself.
+export function recordSlowRun(): boolean {
+  const runs = slowRuns() + 1;
   try {
-    localStorage.setItem(DOWNGRADE_KEY, '1');
+    localStorage.setItem(SLOW_RUNS_KEY, String(runs));
   } catch {
-    // Storage blocked: the downgrade still applies for this visit.
+    // Storage blocked: decide again next visit.
   }
+  return runs >= SLOW_RUNS_TO_DOWNGRADE;
 }
 
 // Counts frames for a few seconds and reports the average frame rate.

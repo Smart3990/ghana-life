@@ -1,13 +1,14 @@
 import './style.css';
 import { applyLight, createMap, flyIn, startIdleOrbit } from './map/createMap';
-import { detectTier, forcedTier, measureFps, rememberDowngrade } from './map/tier';
+import { detectTier, forcedTier, measureFps, recordSlowRun } from './map/tier';
 
 const SPLASH_MS = 3000;
-const MIN_FPS = 24; // below this, 3D is too heavy for the device
+const MIN_FPS = 20; // below this, 3D is too heavy for the device
 
 const started = performance.now();
 const debug = new URLSearchParams(window.location.search).has('debug');
-let tier = detectTier();
+const detected = detectTier();
+let tier = detected.tier;
 
 // The map starts loading right away, hidden behind the welcome screen.
 const map = createMap(document.getElementById('map')!, tier);
@@ -39,7 +40,7 @@ const splashDone = new Promise<void>((resolve) => {
 async function start() {
   await Promise.all([splashDone, mapLoaded]);
   hud.hidden = false;
-  showDebug(`${tier} · loaded ${((performance.now() - started) / 1000).toFixed(1)} s`);
+  showDebug(`${tier} (${detected.reason}) · ${((performance.now() - started) / 1000).toFixed(1)} s`);
 
   await flyIn(map, tier);
   if (tier === 'light') return;
@@ -47,16 +48,15 @@ async function start() {
   // Let the houses finish loading first, so the frame rate is measured on a full street.
   await new Promise<void>((resolve) => map.once('idle', () => resolve()));
 
-  // Watch the frame rate while the camera circles. If 3D stutters, drop to Light for good.
+  // Watch the frame rate while the camera circles. Only repeated slowness switches to Light.
   const stopOrbit = startIdleOrbit(map);
   const fps = await measureFps(3);
-  showDebug(`${tier} · ${Math.round(fps)} fps`);
-  if (fps < MIN_FPS && !forcedTier()) {
+  showDebug(`${tier} (${detected.reason}) · ${Math.round(fps)} fps`);
+  if (fps < MIN_FPS && !forcedTier() && recordSlowRun()) {
     stopOrbit();
     tier = 'light';
-    rememberDowngrade();
     applyLight(map);
-    showDebug(`light (was ${Math.round(fps)} fps)`);
+    showDebug(`light (slow: ${Math.round(fps)} fps)`);
   }
 }
 
