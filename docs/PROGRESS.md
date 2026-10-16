@@ -5,8 +5,8 @@
 | Task | Status | Notes |
 |---|---|---|
 | T0 Hello page online | Done (2026-10-16) | Live at https://ghana-life-web.ghana-life-web.workers.dev, opens on phone and Windows |
-| T0a Map file test (R2) | Passed on PC, phone check pending | See R2 below. Phone test page: /tile-test.html |
-| T0a Round-trip test from Accra (R3) | Not started | |
+| T0a Map file test (R2) | Done (2026-10-16) | Passed on PC and on phone (mobile data). Test page: /tile-test.html |
+| T0a Round-trip test (R3) | Done (2026-10-16) | Passed on phone, 170 ms typical. Test page: /ping-test.html |
 
 ## Test results for the risk register
 
@@ -17,7 +17,11 @@
   - Fix chosen: export to plain tile files, `tiles/accra/{z}/{x}/{y}.pbf` (2,517 files, 15.1 MiB unpacked, largest 174 KiB), with `public/_headers` setting `application/x-protobuf` so Cloudflare compresses them (brotli, about 27 percent smaller). Missing tiles return 404.
   - Rebuild: `pmtiles extract https://build.protomaps.com/<date>.pmtiles data/accra.pmtiles --bbox=-0.55,5.45,0.72,6.10 --maxzoom=14`, then `node scripts/export-tiles.mjs data/accra.pmtiles apps/web/public/tiles/accra`.
   - Note: uploading all tiles from this PC took about 5 minutes; later deploys only upload changed files.
-- R3 (round-trip time from Accra): not measured yet
+- R3 (round-trip time), measured 2026-10-16:
+  - Phone on mobile data: 170 ms typical round trip to a Durable Object room. Passes the 250 ms target. Network, Cloudflare city and room location not yet recorded.
+  - PC on home internet: Cloudflare city London (LHR), room in London, 232 ms typical, 111 ms fastest. Traffic from this connection goes through Europe.
+  - Server: `apps/server` (Worker `ghana-life-server`), rooms `ping/default` (placed by first visitor) and `ping/afr` (Africa location hint).
+  - Design note: keep click-to-move and animate between messages, as the plan says. 170 ms is fine for that, not for fast-reaction gameplay.
 
 ## Changes from the master plan
 
