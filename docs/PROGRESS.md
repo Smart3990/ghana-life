@@ -7,6 +7,8 @@
 | T0 Hello page online | Done (2026-10-16) | Live at https://ghana-life-web.ghana-life-web.workers.dev, opens on phone and Windows |
 | T0a Map file test (R2) | Done (2026-10-16) | Passed on PC and on phone (mobile data). Test page: /tile-test.html |
 | T0a Round-trip test (R3) | Done (2026-10-16) | Passed on phone, 170 ms typical. Test page: /ping-test.html |
+| T1 Vite + TypeScript + MapLibre project | Done (2026-10-16) | MapLibre 6.14, map code in `apps/web/src/map/` |
+| T2 Styled Accra map with OSM credit | Built, phone check pending | Own Ghana palette on Protomaps layers, self-hosted Latin fonts and icons. Ready in 3.8 s in a headless desktop browser. Light mode drops buildings, land cover, icons, house numbers and shields, and caps pixel density at 1.5. Code download about 300 KB compressed. Device facts moved to /device.html |
 
 ## Test results for the risk register
 

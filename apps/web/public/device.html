@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>This device · Ghana Life</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; padding: 20px 16px; max-width: 34rem; }
+  h1 { font-size: 1.4rem; margin: 0 0 12px; color: #0e7a3e; }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; }
+  dt { color: #5c5c5c; }
+  dd { margin: 0; overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+<h1>This device</h1>
+<p>Helps pick the official test phone. Send these numbers to Claude.</p>
+<dl id="device"></dl>
+<script>
+const c = navigator.connection || {};
+const facts = [
+  ['Screen', `${screen.width} × ${screen.height}`],
+  ['Pixel density', String(window.devicePixelRatio)],
+  ['Memory', navigator.deviceMemory ? `about ${navigator.deviceMemory} GB` : 'not reported'],
+  ['CPU cores', navigator.hardwareConcurrency ? String(navigator.hardwareConcurrency) : 'not reported'],
+  ['Connection', c.effectiveType || 'not reported'],
+  ['Data saver', c.saveData ? 'on' : 'off'],
+  ['Browser', navigator.userAgent],
+];
+const list = document.getElementById('device');
+for (const [label, value] of facts) {
+  const dt = document.createElement('dt'); dt.textContent = label;
+  const dd = document.createElement('dd'); dd.textContent = value;
+  list.append(dt, dd);
+}
+</script>
+</body>
+</html>

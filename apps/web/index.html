@@ -7,14 +7,12 @@
     <title>Ghana Life · test build</title>
   </head>
   <body>
-    <div class="kente" aria-hidden="true"></div>
-    <main>
-      <h1>Akwaaba</h1>
-      <p class="sub">Ghana Life · test build T0</p>
-      <p>This page proves the game can be put online for free. The map comes next.</p>
-      <h2>This device</h2>
-      <dl id="device"></dl>
-    </main>
+    <div id="map"></div>
+    <header class="hud">
+      <span class="brand">Akwaaba</span>
+      <span id="status">Loading Accra…</span>
+      <button id="tier" type="button">Light mode</button>
+    </header>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

@@ -3,3 +3,10 @@
 /tiles/*
   Content-Type: application/x-protobuf
   Cache-Control: public, max-age=86400
+
+# Map fonts and icons rarely change.
+/map/fonts/*
+  Content-Type: application/x-protobuf
+  Cache-Control: public, max-age=604800
+/map/sprites/*
+  Cache-Control: public, max-age=604800
