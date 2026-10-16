@@ -85,11 +85,20 @@ const buildingsFlat: LayerSpecification = {
   paint: { 'fill-color': buildingColour, 'fill-outline-color': '#b59c80' },
 };
 
+// Where the camera lands: Osu, near Oxford Street.
 export const ACCRA_START = {
-  center: [-0.1812, 5.5566] as [number, number], // Osu, near Oxford Street
+  center: [-0.1812, 5.5566] as [number, number],
   zoom: 17,
   pitch: 60,
   bearing: -20,
+};
+
+// Where the camera starts before gliding down: high above central Accra.
+export const ACCRA_OVERVIEW = {
+  center: [-0.2, 5.585] as [number, number],
+  zoom: 11.5,
+  pitch: 0,
+  bearing: 0,
 };
 
 export function buildStyle(tier: Tier): StyleSpecification {

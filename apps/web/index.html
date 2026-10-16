@@ -8,11 +8,27 @@
   </head>
   <body>
     <div id="map"></div>
-    <header class="hud">
+
+    <header class="hud" hidden>
       <span class="brand">Akwaaba</span>
-      <span id="status">Loading Accra…</span>
-      <button id="tier" type="button">Light mode</button>
+      <span id="place">Osu, Accra</span>
+      <span id="debug" hidden></span>
     </header>
+
+    <section id="splash" aria-label="Welcome">
+      <div class="kente" aria-hidden="true"></div>
+      <div class="splash-body">
+        <h1>Akwaaba</h1>
+        <ul class="greetings">
+          <li><span class="lang">Twi</span><span class="phrase" lang="tw">Yɛma wo akwaaba! Wo ho te sɛn?</span></li>
+          <li><span class="lang">Fante</span><span class="phrase" lang="fat">Yɛma wo akwaaba! Ɛte dɛn?</span></li>
+          <li><span class="lang">English</span><span class="phrase">We welcome you! How are you?</span></li>
+        </ul>
+        <p class="loading">Bringing you to Accra…</p>
+      </div>
+      <div class="kente" aria-hidden="true"></div>
+    </section>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

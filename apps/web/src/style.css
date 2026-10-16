@@ -6,6 +6,7 @@
   --panel: rgba(255, 255, 255, 0.92);
   --fg: #1a1a1a;
   --muted: #5c5c5c;
+  --cream: #f6efe0;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color: var(--fg);
 }
@@ -22,7 +23,112 @@ body {
   inset: 0;
 }
 
-/* Floating bar with a kente-inspired stripe along its top edge */
+[hidden] {
+  display: none !important;
+}
+
+/* Kente-inspired stripe, used on the welcome screen and the top bar */
+.kente {
+  height: 22px;
+  background: repeating-linear-gradient(90deg,
+      var(--gold) 0 24px, var(--green) 24px 36px, var(--gold) 36px 48px,
+      var(--red) 48px 60px, var(--black) 60px 66px, var(--gold) 66px 90px);
+}
+
+/* ---------- Welcome screen ---------- */
+#splash {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  background: var(--cream);
+  transition: opacity 0.7s ease, transform 0.7s ease;
+}
+
+#splash.leaving {
+  opacity: 0;
+  transform: scale(1.04);
+  pointer-events: none;
+}
+
+#splash .kente:first-child {
+  margin-top: env(safe-area-inset-top, 0px);
+}
+
+#splash .kente:last-child {
+  margin-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.splash-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 18px;
+  padding: 24px max(20px, env(safe-area-inset-right)) 24px max(20px, env(safe-area-inset-left));
+  text-align: center;
+}
+
+.splash-body h1 {
+  margin: 0;
+  font-size: clamp(3rem, 14vw, 5.5rem);
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  color: var(--green);
+  animation: rise 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.greetings {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.greetings li {
+  display: grid;
+  gap: 2px;
+  animation: rise 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.greetings li:nth-child(1) { animation-delay: 0.35s; }
+.greetings li:nth-child(2) { animation-delay: 0.6s; }
+.greetings li:nth-child(3) { animation-delay: 0.85s; }
+
+.lang {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--red);
+}
+
+.phrase {
+  font-size: clamp(1.05rem, 4.6vw, 1.35rem);
+  font-weight: 600;
+}
+
+.loading {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  animation: pulse 1.4s ease-in-out infinite alternate;
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes pulse {
+  from { opacity: 0.45; }
+  to { opacity: 1; }
+}
+
+/* ---------- Top bar over the map ---------- */
 .hud {
   position: fixed;
   top: calc(env(safe-area-inset-top, 0px) + 10px);
@@ -39,6 +145,7 @@ body {
   border-image: repeating-linear-gradient(90deg,
       var(--gold) 0 18px, var(--green) 18px 26px, var(--gold) 26px 34px,
       var(--red) 34px 42px, var(--black) 42px 46px) 5;
+  animation: rise 0.6s ease both;
 }
 
 .brand {
@@ -47,20 +154,21 @@ body {
   font-size: 1.1rem;
 }
 
-#status {
+#place {
   flex: 1;
   color: var(--muted);
   font-size: 0.9rem;
+}
+
+#debug {
+  font: 600 0.75rem ui-monospace, Consolas, monospace;
+  color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
 
-#tier {
-  font: inherit;
-  font-size: 0.85rem;
-  font-weight: 600;
-  padding: 6px 10px;
-  border: 1px solid #c9c2b4;
-  border-radius: 8px;
-  background: #fff;
-  cursor: pointer;
+@media (prefers-reduced-motion: reduce) {
+  #splash, .splash-body h1, .greetings li, .loading, .hud {
+    animation: none;
+    transition: none;
+  }
 }
