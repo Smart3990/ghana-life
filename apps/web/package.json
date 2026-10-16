@@ -6,10 +6,11 @@
   "scripts": {
     "dev": "vite --host",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview --host",
-    "deploy": "npm run build && wrangler pages deploy dist --project-name ghana-life"
+    "preview": "npm run build && wrangler dev",
+    "deploy": "npm run build && wrangler deploy"
   },
   "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.64.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.4",
     "wrangler": "^4.151.1"
