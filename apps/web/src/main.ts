@@ -1,6 +1,6 @@
 import './style.css';
-import { applyLight, createMap, flyIn } from './map/createMap';
-import { detectTier, forcedTier, measureFps, recordSlowRun } from './map/tier';
+import { applyTier, createMap, flyIn } from './map/createMap';
+import { detectTier, forcedTier, measureFps, MIN_FPS, recordSlow, tierBelow } from './map/tier';
 import { startTour } from './map/tour';
 import { enableWalking } from './game/walking';
 import { keepSessionSaved, loadSession } from './game/session';
@@ -13,7 +13,6 @@ import { houseRules } from './ui/rules';
 import { offerFullBrowser } from './ui/inapp';
 
 const SPLASH_MS = 3000;
-const MIN_FPS = 20; // below this, 3D is too heavy for the device
 
 const started = performance.now();
 const debug = new URLSearchParams(window.location.search).has('debug');
@@ -108,16 +107,24 @@ async function start() {
   startTraffic(map, () => tier, () => live?.serverNow() ?? Date.now());
   startPlanes(map, () => live?.serverNow() ?? Date.now());
   keepSessionSaved(map, () => me.position);
-  if (tier === 'light') return;
 
-  // Watch the frame rate for a few seconds once the street has loaded. Only repeated slowness switches to Light.
-  if (returning) await new Promise<void>((resolve) => map.once('idle', () => resolve()));
-  const fps = await measureFps(3);
-  showDebug(`${tier} (${detected.reason}) · ${Math.round(fps)} fps`);
-  if (fps < MIN_FPS && !forcedTier() && recordSlowRun()) {
-    tier = 'light';
-    applyLight(map);
-    showDebug(`light (slow: ${Math.round(fps)} fps)`);
+  // Watch the frame rate while playing. Two slow checks in a row step down one tier
+  // (Ultra to Standard to Light). With ?debug the tier and frame rate show live.
+  await new Promise<void>((resolve) => map.once('idle', () => resolve()));
+  let slowChecks = 0;
+  for (;;) {
+    const fps = await measureFps(2);
+    showDebug(`${tier} (${detected.reason}) · ${Math.round(fps)} fps`);
+    if (document.visibilityState === 'hidden') continue;
+    slowChecks = fps < MIN_FPS[tier] ? slowChecks + 1 : 0;
+    const lower = tierBelow(tier);
+    if (slowChecks >= 2 && lower && !forcedTier()) {
+      recordSlow(tier);
+      tier = lower;
+      applyTier(map, tier);
+      slowChecks = 0;
+    }
+    await new Promise((r) => setTimeout(r, 3000));
   }
 }
 

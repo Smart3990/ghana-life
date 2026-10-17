@@ -2,7 +2,9 @@ import type { ExpressionSpecification, LayerSpecification, StyleSpecification } 
 import { layers, namedFlavor, type Flavor } from '@protomaps/basemaps';
 import { landmarkLayers, landmarkSources } from './landmarks';
 
-export type Tier = 'light' | 'full';
+// Light: flat map from above. Standard: 3D buildings, 40 vehicles, lower pixel density.
+// Ultra: 3D buildings, 100 vehicles, full pixel density.
+export type Tier = 'light' | 'standard' | 'ultra';
 
 // Our own bright Ghana palette, on top of Protomaps' "light" flavor.
 const GHANA: Flavor = {
@@ -201,7 +203,10 @@ export function buildStyle(tier: Tier): StyleSpecification {
   const kept = tier === 'light' ? base.filter((l) => !HEAVY.includes(l.id)) : base;
   const withBuildings = kept.flatMap((l) => {
     if (l.id !== 'buildings') return [l];
-    return tier === 'light' ? [buildingsFlat, ...landmarkLayers('light')] : [buildings3d, roofs3d, ...landmarkLayers('full')];
+    if (tier === 'light') return [buildingsFlat, ...landmarkLayers('light')];
+    // Standard and Ultra both get walls and roofs (the Accra look); Standard saves its effort
+    // on pixel density and vehicle count instead (createMap.ts, traffic.ts).
+    return [buildings3d, roofs3d, ...landmarkLayers('3d')];
   });
   withBuildings.push(tier === 'light' ? trafficFlat : traffic3d, routeLayer, planeShadows, tier === 'light' ? planesFlat : planes3d);
   return {

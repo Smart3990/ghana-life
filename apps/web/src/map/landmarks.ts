@@ -96,7 +96,7 @@ export function landmarkSources(): Record<string, SourceSpecification> {
   return { landmarks: { type: 'geojson', data: { type: 'FeatureCollection', features: boxes } } };
 }
 
-export function landmarkLayers(tier: 'light' | 'full'): LayerSpecification[] {
+export function landmarkLayers(tier: 'light' | '3d'): LayerSpecification[] {
   if (tier === 'light') {
     return [{
       id: 'landmarks',

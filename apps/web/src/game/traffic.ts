@@ -9,8 +9,9 @@ const VEHICLES = 420; // across the whole area; only the nearest few are drawn
 // Vehicles are drawn about twice real size, like most map games, so they read clearly
 // next to the (screen-sized) characters.
 const SIZE = 2.1;
-const DRAW_LIMIT: Record<Tier, number> = { light: 15, full: 40 };
-const DRAW_RADIUS_M: Record<Tier, number> = { light: 600, full: 900 };
+// Vehicles drawn at once, per tier (master plan performance budget: 15 / 40 / 100).
+const DRAW_LIMIT: Record<Tier, number> = { light: 15, standard: 40, ultra: 100 };
+const DRAW_RADIUS_M: Record<Tier, number> = { light: 600, standard: 900, ultra: 1300 };
 const FRAME_MS = 50; // update about 20 times a second
 const LANE_OFFSET_M = 3.2; // Ghana drives on the right (wider than real, to match the bigger vehicles)
 

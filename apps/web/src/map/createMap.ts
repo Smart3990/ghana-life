@@ -9,7 +9,7 @@ maplibregl.setWorkerUrl(workerUrl);
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // Light mode draws fewer pixels: phones gain little from full density.
-const pixelRatioFor = (tier: Tier) => Math.min(window.devicePixelRatio, tier === 'light' ? 1.5 : 2);
+const pixelRatioFor = (tier: Tier) => Math.min(window.devicePixelRatio, tier === 'ultra' ? 2 : 1.5);
 
 // Light looks straight down at flat buildings; Full tilts to show them in 3D.
 const landingFor = (tier: Tier) =>
@@ -45,9 +45,9 @@ export function flyIn(map: maplibregl.Map, tier: Tier): Promise<void> {
   });
 }
 
-// Switch to Light in place: flat buildings, fewer layers, fewer pixels, camera from above.
-export function applyLight(map: maplibregl.Map) {
-  map.setPixelRatio(pixelRatioFor('light'));
-  map.setStyle(buildStyle('light'));
-  map.easeTo({ pitch: 0, bearing: 0, duration: 800 });
+// Switch tier in place (used when stepping down for speed). Light also looks straight down.
+export function applyTier(map: maplibregl.Map, tier: Tier) {
+  map.setPixelRatio(pixelRatioFor(tier));
+  map.setStyle(buildStyle(tier));
+  if (tier === 'light') map.easeTo({ pitch: 0, bearing: 0, duration: 800 });
 }
