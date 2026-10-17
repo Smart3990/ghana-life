@@ -33,7 +33,9 @@
 ## Changes from the master plan
 
 - Hosting: the plan says Cloudflare Pages. Wrangler 4 now deploys Pages projects as Workers with static assets, so the site is a Worker (`apps/web/wrangler.jsonc`). Still free, static requests still unlimited, 25 MiB per file still applies. Deploy with `npm run deploy` in `apps/web`.
-- Login: Wrangler uses an API token in `apps/web/.env` (not in Git) because the browser login kept timing out.
+- Login: Wrangler uses an API token in `apps/web/.env` and `apps/server/.env` (not in Git) because the browser login kept timing out. The token must have no IP address filter: home and mobile internet addresses in Ghana change often.
+- Dropped by the owner (2026-10-17): adding "Mr Candy Ghana" in Nationalism Park.
+- Verified live on 2026-10-17: welcome screen, no debug text on the normal link, street network served (31,758 points), tap-to-walk works in full 3D.
 
 ## Test phone
 
