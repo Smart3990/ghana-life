@@ -242,7 +242,8 @@ export class Live {
     this.ui.onCount(1);
   }
 
-  private serverNow() {
+  // The shared clock: server time, so simulated traffic and planes match on every phone.
+  serverNow() {
     return Date.now() + this.clockOffset;
   }
 }

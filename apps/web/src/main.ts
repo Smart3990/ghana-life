@@ -7,6 +7,7 @@ import { keepSessionSaved, loadSession } from './game/session';
 import { Live } from './net/live';
 import { playerName } from './net/names';
 import { openPlayerMenu, setUpChatBar } from './ui/chat';
+import { startTraffic } from './game/traffic';
 
 const SPLASH_MS = 3000;
 const MIN_FPS = 20; // below this, 3D is too heavy for the device
@@ -98,6 +99,7 @@ async function start() {
     openMenu: (player) => live && openPlayerMenu(player, live, showToast),
   });
   setUpChatBar(() => live, showToast);
+  startTraffic(map, () => tier, () => live?.serverNow() ?? Date.now());
   keepSessionSaved(map, () => me.position);
   if (tier === 'light') return;
 

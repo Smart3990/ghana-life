@@ -119,6 +119,24 @@ const buildingsFlat: LayerSpecification = {
   paint: { 'fill-color': buildingColour, 'fill-outline-color': '#b59c80' },
 };
 
+// Simulated vehicles (game/traffic.ts fills this source many times a second).
+const traffic3d: LayerSpecification = {
+  id: 'traffic',
+  type: 'fill-extrusion',
+  source: 'traffic',
+  paint: {
+    'fill-extrusion-color': ['get', 'colour'],
+    'fill-extrusion-base': ['get', 'base'],
+    'fill-extrusion-height': ['get', 'top'],
+  },
+};
+const trafficFlat: LayerSpecification = {
+  id: 'traffic',
+  type: 'fill',
+  source: 'traffic',
+  paint: { 'fill-color': ['get', 'colour'] },
+};
+
 // The walking route the player tapped, drawn as a dashed green line on the streets.
 const routeLayer: LayerSpecification = {
   id: 'route',
@@ -158,7 +176,7 @@ export function buildStyle(tier: Tier): StyleSpecification {
     if (l.id !== 'buildings') return [l];
     return tier === 'light' ? [buildingsFlat, ...landmarkLayers('light')] : [buildings3d, roofs3d, ...landmarkLayers('full')];
   });
-  withBuildings.push(routeLayer);
+  withBuildings.push(tier === 'light' ? trafficFlat : traffic3d, routeLayer);
   return {
     version: 8,
     glyphs: `${origin}/map/fonts/{fontstack}/{range}.pbf`,
@@ -174,6 +192,7 @@ export function buildStyle(tier: Tier): StyleSpecification {
     sources: {
       ...landmarkSources(),
       route: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
+      traffic: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
       accra: {
         type: 'vector',
         tiles: [`${origin}/tiles/accra/{z}/{x}/{y}.pbf`],
