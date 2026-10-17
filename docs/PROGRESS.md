@@ -1,43 +1,60 @@
 # Progress and test results
 
+Live game: https://ghana-life-web.ghana-life-web.workers.dev · Code: https://github.com/Smart3990/ghana-life
+
 ## Week one
 
 | Task | Status | Notes |
 |---|---|---|
-| T0 Hello page online | Done (2026-10-16) | Live at https://ghana-life-web.ghana-life-web.workers.dev, opens on phone and Windows |
+| T0 Hello page online | Done (2026-10-16) | Opens on phone and Windows |
 | T0a Map file test (R2) | Done (2026-10-16) | Passed on PC and on phone (mobile data). Test page: /tile-test.html |
 | T0a Round-trip test (R3) | Done (2026-10-16) | Passed on phone, 170 ms typical. Test page: /ping-test.html |
 | T1 Vite + TypeScript + MapLibre project | Done (2026-10-16) | MapLibre 6.14, map code in `apps/web/src/map/` |
-| Opening sequence (part of T7b) | Built (2026-10-16) | Akwaaba welcome screen (Twi, Fante, English) for 3 s while the map loads, then a 5.5 s glide from above Accra down to Osu, then a slow circle that stops on touch. Respects reduce-motion. Twi and Fante lines need checking by native speakers |
-| T2a Quality tiers (first version) | Built (2026-10-16) | No button. Full (3D) by default. Light only if data saver, memory 1 GB or less, or software graphics. Frame rate measured for 3 s on the loaded street; under 20 fps on two visits switches to Light for good. Never upgrades itself. Camera lands at pitch 72 (side-on), which draws many more buildings: watch the frame rate on cheap phones. `?tier=light`, `?tier=full`, `?debug` for testing. Still to do: a separate Standard tier and the frame-rate overlay |
-| T4 Live server, players see each other | Built (2026-10-17), two-device check pending | `apps/server/src/rooms/area.ts`: one Durable Object room per 0.05° area (about 5.5 km), Africa location hint, hibernation API, player state on each socket (no storage writes), cap 100 per room, moves at most every 300 ms, 40 KB message limit, only our site may connect. Messages: hello, snapshot, joined, move_to/walk (route plus server start time; others animate it), left. Measured relay A to B: 132 to 164 ms. Client `apps/web/src/net/live.ts`: simplified routes, joins late walks at the right spot, switches room when walking into another area, reconnects with backoff. Temporary names are Akan day-names plus a number. "N here" in the top bar |
-| T3 Walk on real roads | Built (2026-10-16), phone check pending | `scripts/build-roads.mjs` downloads central Accra streets from OpenStreetMap (Overpass) into `public/data/roads-central.json`: 31,758 points, 34,728 segments, main network only, about 220 KB compressed. A* route search in the browser. Placeholder avatar starts on Black Star Square; tap a spot and it walks the route (14 m/s game speed) with a dashed green line, camera following until the player drags. Walking area: about 7 x 7 km from Jamestown to Osu and Ridge |
-| Landing and tour | Built (2026-10-16) | Lands on Black Star Square (3D Black Star Gate with upright black star, Independence Arch). Then a one-time tour, 5 s flight plus 10 s sideways glide per stop: Jamestown, Makola Market, Osu, Labadi Beach, Airport City, East Legon, University of Ghana, Tema (Community 1). Ends circling Black Star Square. Touch stops it. One tour loads several MB of tiles on mobile data |
-| 3D buildings | Built (2026-10-16) | Map now includes zoom 15 (9,654 tiles), where ordinary houses are. Full tier draws them as 3D blocks |
-| T2 Styled Accra map with OSM credit | Built, phone check pending | Own Ghana palette on Protomaps layers, self-hosted Latin fonts and icons. Ready in 3.8 s in a headless desktop browser. Light mode drops buildings, land cover, icons, house numbers and shields, and caps pixel density at 1.5. Code download about 300 KB compressed. Device facts moved to /device.html |
+| T2 Styled Accra map with OSM credit | Built, phone check pending | Own Ghana palette on Protomaps layers, self-hosted Latin fonts (including Ɛ and Ɔ) and icons. Zoom 0 to 15 tiles (9,654 files), 3D buildings with painted walls and zinc or terracotta roofs |
+| T2a Quality tiers | Built (2026-10-17) | Light (data saver, 1 GB memory or software graphics): flat, 15 vehicles, no tour. Standard (most phones): 3D with roofs, 40 vehicles, pixel density 1.5. Ultra (8+ cores, plenty of memory): 100 vehicles, full density. Frame rate checked every few seconds while playing; two slow checks step down one tier; remembered only after two slow visits; never steps up. `?tier=light|standard|ultra`, `?debug` shows tier and live fps |
+| T3 Walk on real roads | Built (2026-10-17), phone check pending | Whole of Greater Accra: `scripts/build-roads-areas.mjs` cuts OpenStreetMap streets into 296 area files (0.05°, same areas as live rooms, 23.5 MB in total, not in Git). A walk loads only the areas it crosses and joins them. A* in the browser, tries a few nearby street points, walks over 6 km refused. Walk cycle with swinging limbs, 4.5 m/s walk rising to 9 m/s jog, ease in and out, camera glides after the avatar |
+| T3a / Test 1b: 3D characters | Page built (2026-10-17), cheap-phone result pending | /char-test.html: 10, 20, 30 animated low-poly characters, about 3,300 triangles each, with three.js only on that page. Verdict rule: 10 characters at 28 fps or more means real 3D for the nearest few on Standard and Ultra |
+| T4 Live server, players see each other | Built (2026-10-17), two-device check pending | One Durable Object room per area (Africa location hint, hibernation, state on sockets, cap 100, rate limits, origin check). Relay A to B measured 132 to 164 ms. Temporary Akan day-name names |
+| T5 Chat, filter, report, block, mute | Built (2026-10-17) | Server filter (English starter list; Pidgin, Twi, Ga and Ewe lists to be written by Ghanaian speakers in `apps/server/src/moderation/words.ts`), blocks phone numbers and mobile money talk, rate limits, 5 minute mute after 3 blocked messages. Reports go to one ReportBox, readable at `/reports?key=` on the server (key in `apps/server/.admin-key`) |
+| T7 Traffic | Built (2026-10-17) | 80 driving routes in central Accra, 420 vehicles (cars, taxis, trotros, tricycles) placed from the shared server clock, drawn at about twice real size. Same traffic on every phone, no messages |
+| T7a Planes | Built (2026-10-17) | Runway 21 at Kotoka (centreline from map data): arrivals on a 3° approach, departures climbing out over the city, one every 150 s from the shared clock |
+| Opening, landing, tour | Built (2026-10-16) | Akwaaba screen (Twi, Fante, English; needs checking by native speakers), glide down to Black Star Square (3D Black Star Gate and Independence Arch), one-time tour of 8 areas. Refresh within 3 hours returns to the same spot without the intro |
+| 18+ and house rules | Built (2026-10-17) | First visit: confirm 18 or older and accept the six house rules; asked again when `RULES_VERSION` changes. Full accounts and server age check are T8 |
+| In-app browsers (R5) | Built (2026-10-17) | Facebook, Instagram and other in-app browsers get "Open in Chrome" (Android) or Safari instructions (iPhone), plus Copy link |
+
+## Mobile data (measured 2026-10-17, live site, phone-sized screen, Standard)
+
+| | Downloaded |
+|---|---|
+| First visit until standing on Black Star Square | 1.5 MB (code 317 KB, tiles 647 KB, streets and traffic 388 KB, fonts and icons 152 KB) |
+| First visit plus the first minute of the tour | 2.2 MB |
+| Second visit (service worker copies on the phone) | 5 KB |
+
+Plan budget before the map shows: under 3 MB (Light), under 8 MB (Standard). Passed.
 
 ## Test results for the risk register
 
 - R2 (map file under 25 MiB), measured 2026-10-16 with Protomaps build 20261015:
-  - Greater Accra (bbox -0.55,5.45,0.72,6.10) at full detail (zoom 15): 34 MB, over the limit.
-  - Same area capped at zoom 14: 12.5 MB as one .pmtiles file. Under the limit. MapLibre overzooms past 14.
-  - Cloudflare static hosting does not serve parts of a file (Range requests return the whole file), so one .pmtiles file cannot be used directly.
-  - Fix chosen: export to plain tile files, `tiles/accra/{z}/{x}/{y}.pbf` (2,517 files, 15.1 MiB unpacked, largest 174 KiB), with `public/_headers` setting `application/x-protobuf` so Cloudflare compresses them (brotli, about 27 percent smaller). Missing tiles return 404.
-  - Rebuild: `pmtiles extract https://build.protomaps.com/<date>.pmtiles data/accra.pmtiles --bbox=-0.55,5.45,0.72,6.10 --maxzoom=14`, then `node scripts/export-tiles.mjs data/accra.pmtiles apps/web/public/tiles/accra`.
-  - Note: uploading all tiles from this PC took about 5 minutes; later deploys only upload changed files.
+  - Greater Accra (bbox -0.55,5.45,0.72,6.10) at zoom 15: 34 MB as one file, over the limit; at zoom 14: 12.5 MB.
+  - Cloudflare static hosting does not serve parts of a file, so one .pmtiles file cannot be used directly.
+  - Fix: plain tile files `tiles/accra/{z}/{x}/{y}.pbf`, now zoom 0 to 15 (9,654 files, largest 494 KiB), with `_headers` setting `application/x-protobuf` so Cloudflare compresses them. Rebuild commands are in the README.
 - R3 (round-trip time), measured 2026-10-16:
-  - Phone on mobile data: 170 ms typical round trip to a Durable Object room. Passes the 250 ms target. Network, Cloudflare city and room location not yet recorded.
-  - PC on home internet: Cloudflare city London (LHR), room in London, 232 ms typical, 111 ms fastest. Traffic from this connection goes through Europe.
-  - Server: `apps/server` (Worker `ghana-life-server`), rooms `ping/default` (placed by first visitor) and `ping/afr` (Africa location hint).
-  - Design note: keep click-to-move and animate between messages, as the plan says. 170 ms is fine for that, not for fast-reaction gameplay.
+  - Phone on mobile data: 170 ms typical. Passes the 250 ms target. Network and room location not yet recorded.
+  - PC on home internet: Cloudflare London (LHR), 232 ms typical.
+  - Design note: keep click-to-move and animate between messages.
 
 ## Changes from the master plan
 
-- Hosting: the plan says Cloudflare Pages. Wrangler 4 now deploys Pages projects as Workers with static assets, so the site is a Worker (`apps/web/wrangler.jsonc`). Still free, static requests still unlimited, 25 MiB per file still applies. Deploy with `npm run deploy` in `apps/web`.
-- Login: Wrangler uses an API token in `apps/web/.env` and `apps/server/.env` (not in Git) because the browser login kept timing out. The token must have no IP address filter: home and mobile internet addresses in Ghana change often.
+- Hosting: Wrangler 4 deploys Pages projects as Workers with static assets, so the site is a Worker (`apps/web/wrangler.jsonc`). Still free, static requests unlimited, 25 MiB per file.
+- Login: Wrangler uses an API token in `apps/web/.env` and `apps/server/.env` (not in Git). The token must have no IP address filter: internet addresses in Ghana change often.
+- Vehicles and planes are drawn at about twice real size so they read next to the screen-sized characters.
 - Dropped by the owner (2026-10-17): adding "Mr Candy Ghana" in Nationalism Park.
-- Verified live on 2026-10-17: welcome screen, no debug text on the normal link, street network served (31,758 points), tap-to-walk works in full 3D.
 
-## Test phone
+## Waiting on the owner
 
-- Not chosen yet. Open the hello page on candidate phones and note the memory shown.
+- Two-device test for T4 (phone and PC see each other walk).
+- Phone checks: map load time and smoothness, tap to walk, chat.
+- Test 1b result from the cheapest Android available (/char-test.html).
+- Test phone memory and cores (/device.html), and the mobile network for R3.
+- Native-speaker check of the Twi and Fante greetings, and the Pidgin, Twi, Ga and Ewe word lists.
+- GitHub repository visibility: make it private.

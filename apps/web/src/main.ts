@@ -111,7 +111,11 @@ async function start() {
 
   // Watch the frame rate while playing. Two slow checks in a row step down one tier
   // (Ultra to Standard to Light). With ?debug the tier and frame rate show live.
-  await new Promise<void>((resolve) => map.once('idle', () => resolve()));
+  // Wait for the street to load, but not forever: during the tour the camera never stops moving.
+  await new Promise<void>((resolve) => {
+    map.once('idle', () => resolve());
+    setTimeout(resolve, 6000);
+  });
   let slowChecks = 0;
   for (;;) {
     const fps = await measureFps(2);
