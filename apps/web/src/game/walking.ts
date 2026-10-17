@@ -1,6 +1,6 @@
 import type { GeoJSONSource, Map } from 'maplibre-gl';
-import { Avatar, WALK_SPEED_M_PER_S } from './avatar';
-import { Roads, type LngLat } from './roads';
+import { Avatar, speedFor } from './avatar';
+import { metresBetween, Roads, type LngLat } from './roads';
 import { mark } from '../net/live';
 
 const ROADS_URL = '/data/roads-central.json';
@@ -16,9 +16,14 @@ function startSpot(): LngLat {
 
 // Tap anywhere in central Accra: the avatar walks there along real streets, and the camera follows.
 // onWalk is told about every walk, so it can be shared with other players.
-export function enableWalking(map: Map, toast: (text: string) => void, onWalk: (path: LngLat[], speed: number) => void): Avatar {
+export function enableWalking(
+  map: Map,
+  toast: (text: string) => void,
+  onWalk: (path: LngLat[], speed: number) => void,
+  start: LngLat = startSpot(),
+): Avatar {
   const roadsReady = Roads.load(ROADS_URL);
-  const avatar = new Avatar(map, startSpot());
+  const avatar = new Avatar(map, start);
   let following = false;
   let walkId = 0;
 
@@ -61,9 +66,15 @@ export function enableWalking(map: Map, toast: (text: string) => void, onWalk: (
     map.easeTo({ center: avatar.position, duration: 600 });
     await arrived;
     if (id !== walkId) return; // the player tapped somewhere else meanwhile
-    onWalk(path, WALK_SPEED_M_PER_S);
-    await avatar.walk(path, (p) => {
-      if (following && id === walkId) map.jumpTo({ center: p });
+    const metres = path.slice(1).reduce((sum, p, i) => sum + metresBetween(path[i], p), 0);
+    const speed = speedFor(metres);
+    onWalk(path, speed);
+    // The camera glides after the avatar (closing a fifth of the gap each frame)
+    // instead of snapping to it, which looks smoother.
+    await avatar.walk(path, speed, ([lon, lat]) => {
+      if (!following || id !== walkId) return;
+      const c = map.getCenter();
+      map.jumpTo({ center: [c.lng + (lon - c.lng) * 0.2, c.lat + (lat - c.lat) * 0.2] });
     });
     if (id === walkId) showRoute([]);
   });

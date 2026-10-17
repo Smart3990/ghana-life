@@ -15,11 +15,14 @@ const pixelRatioFor = (tier: Tier) => Math.min(window.devicePixelRatio, tier ===
 const landingFor = (tier: Tier) =>
   tier === 'light' ? { ...ACCRA_START, zoom: 16.5, pitch: 0, bearing: 0 } : ACCRA_START;
 
-export function createMap(container: HTMLElement, tier: Tier) {
+type Camera = { center: [number, number]; zoom: number; pitch: number; bearing: number };
+
+// Starts high above Accra for the opening glide, or at a given camera (e.g. after a refresh).
+export function createMap(container: HTMLElement, tier: Tier, camera?: Camera) {
   const map = new maplibregl.Map({
     container,
     style: buildStyle(tier),
-    ...(reducedMotion ? landingFor(tier) : ACCRA_OVERVIEW),
+    ...(camera ?? (reducedMotion ? landingFor(tier) : ACCRA_OVERVIEW)),
     minZoom: 10,
     maxZoom: 19,
     maxPitch: 80,

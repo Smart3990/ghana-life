@@ -1,4 +1,4 @@
-:root {
+﻿:root {
   --gold: #e8b10d;
   --green: #0e7a3e;
   --red: #c8102e;
@@ -200,58 +200,85 @@ body {
   animation: rise 0.3s ease both;
 }
 
-/* ---------- Placeholder avatar: a little person in a kente-coloured shirt ---------- */
+/* ---------- Placeholder avatar: a figure with swinging legs and arms ---------- */
 .avatar {
   position: relative;
-  width: 26px;
-  height: 46px;
+  width: 30px;
+  height: 62px;
   pointer-events: none;
+  --stride: 0.4s;
 }
 
-.avatar-shadow {
-  position: absolute;
-  left: 3px;
-  bottom: -3px;
-  width: 20px;
-  height: 7px;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.3);
+.figure {
+  display: block;
+  overflow: visible;
+  transition: transform 0.15s ease;
 }
 
-.avatar-body {
-  position: absolute;
-  left: 5px;
-  bottom: 2px;
-  width: 16px;
-  height: 26px;
-  border-radius: 8px 8px 4px 4px;
-  background: linear-gradient(90deg, var(--gold) 0 35%, var(--green) 35% 55%, var(--red) 55% 75%, var(--gold) 75%);
-  box-shadow: inset 0 -6px 0 #3b2e20;
+/* Turning only flips the figure; the marker itself must keep MapLibre's positioning transform. */
+.avatar.facing-left .figure {
+  transform: scaleX(-1);
 }
 
-.avatar-head {
-  position: absolute;
-  left: 7px;
-  bottom: 27px;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: #6b4429;
-  box-shadow: inset 0 3px 0 #1d1d1d;
+.figure .shadow { fill: rgba(0, 0, 0, 0.28); }
+.figure .skin, .figure .limb.arm { fill: #6b4429; }
+.figure .hair { fill: #1d1d1d; }
+.figure .limb.leg { fill: #3b2e20; }
+.figure .limb.back { filter: brightness(0.75); }
+.figure .shorts { fill: #2d2a26; }
+.avatar.me .shirt { fill: url(#kente-shirt); }
+
+/* Other players: plain shirts in a few colours */
+.avatar.shirt-0 .shirt { fill: #2f6fd0; }
+.avatar.shirt-1 .shirt { fill: #c8102e; }
+.avatar.shirt-2 .shirt { fill: #7b3fa0; }
+.avatar.shirt-3 .shirt { fill: #f08a24; }
+.avatar.shirt-4 .shirt { fill: #1a9c8c; }
+
+/* Limbs swing around the hip and shoulder. */
+.figure .limb {
+  transform-box: view-box;
+}
+.figure .leg { transform-origin: 15px 38px; }
+.figure .arm { transform-origin: 15px 22px; }
+
+.avatar.walking .leg.front,
+.avatar.walking .arm.back {
+  animation: swing var(--stride) ease-in-out infinite alternate;
+}
+.avatar.walking .leg.back,
+.avatar.walking .arm.front {
+  animation: swing var(--stride) ease-in-out infinite alternate-reverse;
+}
+.avatar.walking .figure {
+  animation: bob calc(var(--stride) / 2) ease-in-out infinite alternate;
+}
+/* When standing still, breathe a little. */
+.avatar:not(.walking) .shirt {
+  transform-box: view-box;
+  transform-origin: 15px 36px;
+  animation: breathe 2.6s ease-in-out infinite alternate;
 }
 
-/* Other players: plain shirts in a few colours, and their name above them */
-.avatar.other .avatar-body { box-shadow: inset 0 -6px 0 #2b2b2b; }
-.avatar.shirt-0 .avatar-body { background: #2f6fd0; }
-.avatar.shirt-1 .avatar-body { background: #c8102e; }
-.avatar.shirt-2 .avatar-body { background: #7b3fa0; }
-.avatar.shirt-3 .avatar-body { background: #f08a24; }
-.avatar.shirt-4 .avatar-body { background: #1a9c8c; }
+@keyframes swing {
+  from { transform: rotate(-24deg); }
+  to { transform: rotate(24deg); }
+}
+
+@keyframes bob {
+  from { translate: 0 0; }
+  to { translate: 0 -2px; }
+}
+
+@keyframes breathe {
+  from { transform: scaleY(1); }
+  to { transform: scaleY(1.04); }
+}
 
 .avatar-name {
   position: absolute;
   left: 50%;
-  bottom: 44px;
+  bottom: 64px;
   transform: translateX(-50%);
   padding: 2px 6px;
   border-radius: 6px;
@@ -263,30 +290,12 @@ body {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
-/* Keep the name readable when the avatar is mirrored to walk left */
-.avatar.facing-left .avatar-name {
-  transform: translateX(-50%) scaleX(-1);
-}
-
-.avatar.walking .avatar-body,
-.avatar.walking .avatar-head {
-  animation: step 0.32s ease-in-out infinite alternate;
-}
-
-.avatar.facing-left {
-  transform: scaleX(-1);
-}
-
-@keyframes step {
-  from { transform: translateY(0) rotate(-4deg); }
-  to { transform: translateY(-3px) rotate(4deg); }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .avatar.walking .avatar-body,
-  .avatar.walking .avatar-head,
+  .avatar .figure,
+  .avatar .limb,
+  .avatar .shirt,
   #toast {
-    animation: none;
+    animation: none !important;
   }
 }
 

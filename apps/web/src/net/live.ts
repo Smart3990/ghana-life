@@ -140,7 +140,7 @@ export class Live {
       case 'walk': {
         mark('received');
         const avatar = this.others.get(msg.id);
-        if (avatar) avatar.walk(msg.path, undefined, msg.speed, this.serverNow() - msg.startedAt);
+        if (avatar) avatar.walk(msg.path, msg.speed, undefined, this.serverNow() - msg.startedAt);
         break;
       }
       case 'left':
@@ -157,7 +157,7 @@ export class Live {
     if (!start) return;
     const avatar = new Avatar(this.map, start, { name: p.name, shirt: shirtFor(p.id) });
     this.others.set(p.id, avatar);
-    if (p.path) avatar.walk(p.path, undefined, p.speed, this.serverNow() - p.startedAt);
+    if (p.path) avatar.walk(p.path, p.speed, undefined, this.serverNow() - p.startedAt);
   }
 
   private clearOthers() {
