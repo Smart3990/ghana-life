@@ -45,6 +45,44 @@
       <div id="player-menu-actions"></div>
     </section>
 
+    <!-- Opened inside Facebook, Instagram and similar apps: offer a full browser -->
+    <aside id="inapp" hidden>
+      <p id="inapp-text"></p>
+      <div class="inapp-actions">
+        <a id="inapp-open" class="inapp-button">Open in Chrome</a>
+        <button id="inapp-copy" type="button" class="inapp-button quiet">Copy link</button>
+        <button id="inapp-close" type="button" class="inapp-close" aria-label="Close">✕</button>
+      </div>
+    </aside>
+
+    <!-- First visit: 18+ and house rules -->
+    <section id="rules" aria-labelledby="rules-title" hidden>
+      <div class="kente" aria-hidden="true"></div>
+      <div class="rules-body">
+        <form id="rules-form">
+          <h2 id="rules-title">Before you play</h2>
+          <p>Ghana Life is a shared world with real people. Everyone agrees to these house rules:</p>
+          <ol class="rules-list">
+            <li>No hate speech, threats, harassment or sexual content aimed at others.</li>
+            <li>No sharing of real phone numbers, mobile money details, passwords or addresses.</li>
+            <li>No real scams or requests for real money. Sika has no cash value.</li>
+            <li>No attacks on real people, tribes, religions or parties.</li>
+            <li>Be 18 or older.</li>
+            <li>Crime and gang play stays fictional and consensual.</li>
+          </ol>
+          <p class="rules-note">Breaking the rules can get you muted or removed. Tap a player's name to mute, block or report them.</p>
+          <label class="check"><input id="rules-adult" type="checkbox" /> I am 18 or older</label>
+          <label class="check"><input id="rules-agree" type="checkbox" /> I accept the house rules</label>
+          <button id="rules-enter" type="submit" disabled>Enter Ghana Life</button>
+          <button id="rules-under" type="button" class="link">I am under 18</button>
+        </form>
+        <div id="rules-blocked" hidden>
+          <h2>Sorry, Ghana Life is for adults</h2>
+          <p>You need to be 18 or older to play. Thank you for being honest.</p>
+        </div>
+      </div>
+    </section>
+
     <section id="splash" aria-label="Welcome">
       <div class="kente" aria-hidden="true"></div>
       <div class="splash-body">

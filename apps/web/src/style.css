@@ -128,6 +128,149 @@ body {
   to { opacity: 1; }
 }
 
+/* ---------- 18+ and house rules ---------- */
+#rules {
+  position: fixed;
+  inset: 0;
+  z-index: 9; /* under the welcome screen, which fades out on top of it */
+  display: flex;
+  flex-direction: column;
+  background: var(--cream);
+  overflow-y: auto;
+  transition: opacity 0.5s ease;
+}
+
+#rules.leaving {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#rules .kente {
+  flex: none;
+  margin-top: env(safe-area-inset-top, 0px);
+}
+
+.rules-body {
+  flex: 1;
+  width: 100%;
+  max-width: 30rem;
+  margin: 0 auto;
+  padding: 20px max(18px, env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left));
+  box-sizing: border-box;
+}
+
+.rules-body h2 {
+  margin: 4px 0 8px;
+  font-size: 1.6rem;
+  color: var(--green);
+}
+
+.rules-list {
+  margin: 10px 0;
+  padding-left: 1.3rem;
+  display: grid;
+  gap: 6px;
+  line-height: 1.4;
+}
+
+.rules-note {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0;
+  font-weight: 600;
+}
+
+.check input {
+  width: 22px;
+  height: 22px;
+  accent-color: var(--green);
+}
+
+#rules-enter {
+  width: 100%;
+  margin-top: 8px;
+  padding: 14px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--green);
+  color: #fff;
+  font: 700 1.05rem system-ui, sans-serif;
+  cursor: pointer;
+}
+
+#rules-enter:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+#rules .link {
+  display: block;
+  margin: 14px auto 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  text-decoration: underline;
+  font: inherit;
+  cursor: pointer;
+}
+
+/* ---------- Opened inside another app's browser ---------- */
+#inapp {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 8px);
+  left: max(8px, env(safe-area-inset-left));
+  right: max(8px, env(safe-area-inset-right));
+  z-index: 20;
+  padding: 12px;
+  background: #111;
+  color: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+#inapp p {
+  margin: 0 0 10px;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.inapp-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.inapp-button {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 0;
+  background: var(--gold);
+  color: #111;
+  font: 700 0.85rem system-ui, sans-serif;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.inapp-button.quiet {
+  background: #333;
+  color: #fff;
+}
+
+.inapp-close {
+  margin-left: auto;
+  border: 0;
+  background: none;
+  color: #bbb;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
 /* ---------- Top bar over the map ---------- */
 .hud {
   position: fixed;

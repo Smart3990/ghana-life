@@ -137,6 +137,33 @@ const trafficFlat: LayerSpecification = {
   paint: { 'fill-color': ['get', 'colour'] },
 };
 
+// Planes near Kotoka (game/planes.ts): white jets at their height, and shadows on the ground.
+const planeShadows: LayerSpecification = {
+  id: 'plane-shadows',
+  type: 'fill',
+  source: 'planes',
+  filter: ['>', ['get', 'shadow'], 0],
+  paint: { 'fill-color': '#000000', 'fill-opacity': ['get', 'shadow'] },
+};
+const planes3d: LayerSpecification = {
+  id: 'planes',
+  type: 'fill-extrusion',
+  source: 'planes',
+  filter: ['==', ['get', 'shadow'], 0],
+  paint: {
+    'fill-extrusion-color': '#f4f6f9',
+    'fill-extrusion-base': ['get', 'base'],
+    'fill-extrusion-height': ['get', 'top'],
+  },
+};
+const planesFlat: LayerSpecification = {
+  id: 'planes',
+  type: 'fill',
+  source: 'planes',
+  filter: ['==', ['get', 'shadow'], 0],
+  paint: { 'fill-color': '#ffffff', 'fill-outline-color': '#8a96a3' },
+};
+
 // The walking route the player tapped, drawn as a dashed green line on the streets.
 const routeLayer: LayerSpecification = {
   id: 'route',
@@ -176,7 +203,7 @@ export function buildStyle(tier: Tier): StyleSpecification {
     if (l.id !== 'buildings') return [l];
     return tier === 'light' ? [buildingsFlat, ...landmarkLayers('light')] : [buildings3d, roofs3d, ...landmarkLayers('full')];
   });
-  withBuildings.push(tier === 'light' ? trafficFlat : traffic3d, routeLayer);
+  withBuildings.push(tier === 'light' ? trafficFlat : traffic3d, routeLayer, planeShadows, tier === 'light' ? planesFlat : planes3d);
   return {
     version: 8,
     glyphs: `${origin}/map/fonts/{fontstack}/{range}.pbf`,
@@ -193,6 +220,7 @@ export function buildStyle(tier: Tier): StyleSpecification {
       ...landmarkSources(),
       route: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
       traffic: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
+      planes: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
       accra: {
         type: 'vector',
         tiles: [`${origin}/tiles/accra/{z}/{x}/{y}.pbf`],

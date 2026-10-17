@@ -8,6 +8,9 @@ import { Live } from './net/live';
 import { playerName } from './net/names';
 import { openPlayerMenu, setUpChatBar } from './ui/chat';
 import { startTraffic } from './game/traffic';
+import { startPlanes } from './game/planes';
+import { houseRules } from './ui/rules';
+import { offerFullBrowser } from './ui/inapp';
 
 const SPLASH_MS = 3000;
 const MIN_FPS = 20; // below this, 3D is too heavy for the device
@@ -78,7 +81,10 @@ const splashDone = new Promise<void>((resolve) => {
 });
 
 async function start() {
-  await Promise.all([splashDone, mapLoaded]);
+  offerFullBrowser();
+  await splashDone;
+  await houseRules(); // first visit only (and again if the rules change)
+  await mapLoaded;
   hud.hidden = false;
   showDebug(`${tier} (${detected.reason}) · ${((performance.now() - started) / 1000).toFixed(1)} s`);
 
@@ -100,6 +106,7 @@ async function start() {
   });
   setUpChatBar(() => live, showToast);
   startTraffic(map, () => tier, () => live?.serverNow() ?? Date.now());
+  startPlanes(map, () => live?.serverNow() ?? Date.now());
   keepSessionSaved(map, () => me.position);
   if (tier === 'light') return;
 
