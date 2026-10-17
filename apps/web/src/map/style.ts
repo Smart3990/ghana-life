@@ -136,9 +136,9 @@ const routeLayer: LayerSpecification = {
 // Where the camera lands: on Black Star Square, looking north across the square
 // to Black Star Gate, with Nationalism Park and the city behind it.
 export const ACCRA_START = {
-  center: [-0.1928, 5.5482] as [number, number],
-  zoom: 17.6,
-  pitch: 66,
+  center: [-0.1928, 5.5479] as [number, number],
+  zoom: 18.1,
+  pitch: 77,
   bearing: -8,
 };
 

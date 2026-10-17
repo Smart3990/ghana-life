@@ -11,7 +11,7 @@ type Stop = {
 };
 
 export const TOUR: Stop[] = [
-  { name: 'Black Star Square, Accra', center: [-0.1928, 5.5482], bearing: -8, zoom: 17.6, glide: 'orbit' },
+  { name: 'Black Star Square, Accra', center: [-0.1928, 5.5479], bearing: -8, zoom: 18.1, glide: 'orbit' },
   { name: 'Jamestown', center: [-0.2125, 5.5345], bearing: 200, glide: 'slide' },
   { name: 'Makola Market', center: [-0.2069, 5.5481], bearing: 30, glide: 'slide' },
   { name: 'Osu', center: [-0.1812, 5.5566], bearing: -20, glide: 'slide' },
@@ -24,7 +24,7 @@ export const TOUR: Stop[] = [
 
 const STAY_MS = 10_000;
 const FLY_MS = 5_000;
-const SLIDE_METRES = 400;
+const SLIDE_METRES = 250; // closer camera, so a shorter slide looks the same speed
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // The point a given number of metres away in a compass direction.
@@ -50,7 +50,7 @@ export function startTour(map: Map, getTier: () => Tier, onPlace: (name: string)
 
   // Resolves when the current camera move ends (or is cut short).
   const moveDone = () => new Promise<void>((resolve) => map.once('moveend', () => resolve()));
-  const pitch = () => (getTier() === 'light' ? 0 : 65);
+  const pitch = () => (getTier() === 'light' ? 0 : 77); // low, street-level view
 
   const glide = async (s: Stop) => {
     const done = moveDone();
@@ -71,7 +71,7 @@ export function startTour(map: Map, getTier: () => Tier, onPlace: (name: string)
       const s = route[i];
       if (i > 0) {
         const done = moveDone();
-        map.flyTo({ center: s.center, zoom: s.zoom ?? 16.6, pitch: pitch(), bearing: s.bearing, duration: FLY_MS, curve: 1.2, essential: true });
+        map.flyTo({ center: s.center, zoom: s.zoom ?? 17.5, pitch: pitch(), bearing: s.bearing, duration: FLY_MS, curve: 1.2, essential: true });
         await done;
         if (stopped) break;
       }
