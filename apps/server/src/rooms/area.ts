@@ -7,6 +7,8 @@
 // - Player state lives on each socket (serializeAttachment), so it survives hibernation
 //   and needs no storage writes.
 import { DurableObject } from 'cloudflare:workers';
+import { checkChat } from '../moderation/words';
+import type { ReportBox } from '../moderation/reports';
 
 const ROOM_CAP = 100; // players per room; measure and adjust (master plan, capacity plan)
 const MIN_MS_BETWEEN_MOVES = 300; // ignore faster tapping
@@ -14,17 +16,35 @@ const MAX_MESSAGE_CHARS = 40_000;
 const MAX_PATH_POINTS = 600;
 const MAX_SPEED = 30; // metres per second
 
+// Chat rules (master plan T5): short messages, rate limits, and a mute after repeated filter hits.
+const CHAT_MAX_CHARS = 140;
+const CHAT_MIN_GAP_MS = 1500;
+const CHAT_PER_MINUTE = 10;
+const STRIKES_TO_MUTE = 3;
+const MUTE_MS = 5 * 60 * 1000;
+const MAX_REPORTS_PER_HOUR = 5;
+
 type LngLat = [number, number];
 
 type Player = {
   id: string;
   name: string; // empty until the player says hello
+  area: string;
   pos: LngLat | null; // where the current walk ends (or where they stand)
   path: LngLat[] | null; // the current walk
   startedAt: number; // server time the walk started, in ms
   speed: number;
   lastMove: number;
+  chatTimes: number[]; // when they chatted in the last minute
+  strikes: number; // filtered messages since the last mute
+  mutedUntil: number;
+  recent: string[]; // their last few messages, attached to reports for context
+  reportTimes: number[];
 };
+
+interface Env {
+  REPORTS: DurableObjectNamespace<ReportBox>;
+}
 
 // What other players are allowed to see.
 const publicView = (p: Player) => ({ id: p.id, name: p.name, pos: p.pos, path: p.path, startedAt: p.startedAt, speed: p.speed });
@@ -41,22 +61,28 @@ function cleanPath(v: unknown): LngLat[] | null {
   return v.every(isLngLat) ? (v as LngLat[]) : null;
 }
 
-export class AreaRoom extends DurableObject {
-  async fetch(): Promise<Response> {
+const cleanChat = (v: unknown) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, CHAT_MAX_CHARS) : '');
+
+export class AreaRoom extends DurableObject<Env> {
+  async fetch(request: Request): Promise<Response> {
     if (this.ctx.getWebSockets().length >= ROOM_CAP) {
       return new Response('This area is full. Try again soon.', { status: 503 });
     }
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
     this.ctx.acceptWebSocket(server);
-    const player: Player = { id: crypto.randomUUID().slice(0, 8), name: '', pos: null, path: null, startedAt: 0, speed: 0, lastMove: 0 };
+    const player: Player = {
+      id: crypto.randomUUID().slice(0, 8), name: '', area: request.headers.get('x-area') ?? '',
+      pos: null, path: null, startedAt: 0, speed: 0, lastMove: 0,
+      chatTimes: [], strikes: 0, mutedUntil: 0, recent: [], reportTimes: [],
+    };
     server.serializeAttachment(player);
     return new Response(null, { status: 101, webSocket: client });
   }
 
   async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer) {
     if (typeof raw !== 'string' || raw.length > MAX_MESSAGE_CHARS) return;
-    let msg: { type?: string; name?: unknown; pos?: unknown; path?: unknown; speed?: unknown };
+    let msg: { type?: string; name?: unknown; pos?: unknown; path?: unknown; speed?: unknown; text?: unknown; id?: unknown; reason?: unknown };
     try {
       msg = JSON.parse(raw);
     } catch {
@@ -86,6 +112,53 @@ export class AreaRoom extends DurableObject {
       return;
     }
 
+    if (msg.type === 'chat') {
+      if (!me.name) return;
+      const text = cleanChat(msg.text);
+      if (!text) return;
+      const refuse = (reason: string) => ws.send(JSON.stringify({ type: 'chat_refused', reason, until: me.mutedUntil }));
+      if (now < me.mutedUntil) return refuse('muted');
+      me.chatTimes = me.chatTimes.filter((t) => now - t < 60_000);
+      const last = me.chatTimes[me.chatTimes.length - 1] ?? 0;
+      if (now - last < CHAT_MIN_GAP_MS || me.chatTimes.length >= CHAT_PER_MINUTE) {
+        ws.serializeAttachment(me);
+        return refuse('slow');
+      }
+      const check = checkChat(text);
+      if (!check.ok) {
+        // Phone numbers and money talk are warnings for the player's own safety, not strikes.
+        if (check.reason === 'word' && ++me.strikes >= STRIKES_TO_MUTE) {
+          me.strikes = 0;
+          me.mutedUntil = now + MUTE_MS;
+        }
+        ws.serializeAttachment(me);
+        return refuse(now < me.mutedUntil ? 'muted' : check.reason);
+      }
+      me.chatTimes.push(now);
+      me.recent = [...me.recent, text].slice(-5);
+      ws.serializeAttachment(me);
+      // Everyone in the area, including the sender, sees the bubble.
+      this.broadcast(null, { type: 'chat', now, id: me.id, text });
+      return;
+    }
+
+    if (msg.type === 'report') {
+      if (!me.name || typeof msg.id !== 'string') return;
+      me.reportTimes = me.reportTimes.filter((t) => now - t < 3_600_000);
+      if (me.reportTimes.length >= MAX_REPORTS_PER_HOUR) return;
+      me.reportTimes.push(now);
+      ws.serializeAttachment(me);
+      const target = this.players().find((p) => p.id === msg.id);
+      const reason = typeof msg.reason === 'string' ? msg.reason.slice(0, 40) : 'other';
+      const box = this.env.REPORTS.get(this.env.REPORTS.idFromName('all'));
+      await box.add({
+        at: now, area: me.area, reporterName: me.name,
+        reportedId: msg.id, reportedName: target?.name ?? '(left)', reason, recentChat: target?.recent ?? [],
+      });
+      ws.send(JSON.stringify({ type: 'report_saved' }));
+      return;
+    }
+
     if (msg.type === 'ping') ws.send(JSON.stringify({ type: 'pong', now }));
   }
 
@@ -112,7 +185,7 @@ export class AreaRoom extends DurableObject {
   }
 
   // Messages out to other players are free on Cloudflare; only incoming ones count.
-  private broadcast(except: WebSocket, msg: object) {
+  private broadcast(except: WebSocket | null, msg: object) {
     const text = JSON.stringify(msg);
     for (const s of this.ctx.getWebSockets()) {
       if (s === except) continue;

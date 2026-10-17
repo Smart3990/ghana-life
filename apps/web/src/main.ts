@@ -6,6 +6,7 @@ import { enableWalking } from './game/walking';
 import { keepSessionSaved, loadSession } from './game/session';
 import { Live } from './net/live';
 import { playerName } from './net/names';
+import { openPlayerMenu, setUpChatBar } from './ui/chat';
 
 const SPLASH_MS = 3000;
 const MIN_FPS = 20; // below this, 3D is too heavy for the device
@@ -91,9 +92,12 @@ async function start() {
 
   let live: Live | null = null;
   const me = enableWalking(map, showToast, (path, speed) => live?.sendWalk(path, speed), session?.avatar);
-  live = new Live(map, me, playerName(), (count) => {
-    online.textContent = count > 1 ? `${count} here` : '';
+  live = new Live(map, me, playerName(), {
+    onCount: (count) => (online.textContent = count > 1 ? `${count} here` : ''),
+    toast: showToast,
+    openMenu: (player) => live && openPlayerMenu(player, live, showToast),
   });
+  setUpChatBar(() => live, showToast);
   keepSessionSaved(map, () => me.position);
   if (tier === 'light') return;
 

@@ -188,7 +188,7 @@ body {
   position: fixed;
   left: 50%;
   bottom: calc(env(safe-area-inset-bottom, 0px) + 44px);
-  transform: translateX(-50%);
+  translate: -50% 0; /* not "transform": the pop-in animation uses transform */
   max-width: min(90vw, 26rem);
   margin: 0;
   padding: 10px 14px;
@@ -275,11 +275,145 @@ body {
   to { transform: scaleY(1.04); }
 }
 
+/* ---------- Chat ---------- */
+.chat-bubble {
+  position: absolute;
+  left: 50%;
+  bottom: 86px;
+  translate: -50% 0; /* not "transform": the pop-in animation uses transform */
+  width: max-content;
+  max-width: 200px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: #fff;
+  color: #1a1a1a;
+  font: 600 13px/1.3 system-ui, sans-serif;
+  text-align: center;
+  overflow-wrap: anywhere;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  animation: rise 0.25s ease both;
+}
+
+.chat-bubble::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  translate: -50% 0; /* not "transform": the pop-in animation uses transform */
+  border: 6px solid transparent;
+  border-top-color: #fff;
+  border-bottom: 0;
+}
+
+/* Keep bubbles and names above other players' figures */
+.avatar.talking {
+  z-index: 2;
+}
+
+#chat-open {
+  position: fixed;
+  right: max(14px, env(safe-area-inset-right));
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 40px);
+  padding: 12px 18px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--green);
+  color: #fff;
+  font: 700 0.95rem system-ui, sans-serif;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+}
+
+#chat-form {
+  position: fixed;
+  left: max(10px, env(safe-area-inset-left));
+  right: max(10px, env(safe-area-inset-right));
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 36px);
+  display: flex;
+  gap: 6px;
+  padding: 8px;
+  background: var(--panel);
+  border-radius: 14px;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.25);
+}
+
+#chat-input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid #c9c2b4;
+  border-radius: 10px;
+  font: 16px system-ui, sans-serif; /* 16px stops phones zooming in on focus */
+}
+
+#chat-form button {
+  padding: 0 14px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--green);
+  color: #fff;
+  font: 700 0.9rem system-ui, sans-serif;
+  cursor: pointer;
+}
+
+#chat-form button.quiet {
+  background: transparent;
+  color: var(--muted);
+}
+
+/* ---------- Menu for another player ---------- */
+#player-menu {
+  position: fixed;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
+  translate: -50% 0; /* not "transform": the pop-in animation uses transform */
+  width: min(92vw, 22rem);
+  padding: 14px;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
+  z-index: 5;
+  animation: rise 0.2s ease both;
+}
+
+#player-menu h2 {
+  margin: 0 0 10px;
+  font-size: 1.05rem;
+  text-align: center;
+}
+
+#player-menu-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.menu-button {
+  padding: 11px;
+  border: 1px solid #ddd5c6;
+  border-radius: 10px;
+  background: #faf6ee;
+  font: 600 0.95rem system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.menu-button.danger {
+  color: var(--red);
+}
+
+.menu-button.quiet {
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+
 .avatar-name {
+  pointer-events: auto;
+  border: 0;
+  cursor: pointer;
   position: absolute;
   left: 50%;
   bottom: 64px;
-  transform: translateX(-50%);
+  translate: -50% 0; /* not "transform": the pop-in animation uses transform */
   padding: 2px 6px;
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.9);

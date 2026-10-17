@@ -1,5 +1,5 @@
-// T4: the live connection. Joins the room for the map area the player is in,
-// shows other players, sends our walks and plays theirs.
+// T4 and T5: the live connection. Joins the room for the map area the player is in,
+// shows other players, sends our walks and chat, and plays theirs.
 import type { Map } from 'maplibre-gl';
 import { Avatar } from '../game/avatar';
 import { metresBetween, type LngLat } from '../game/roads';
@@ -8,6 +8,7 @@ const SERVER = 'wss://ghana-life-server.ghana-life-web.workers.dev/room/';
 const AREA_DEG = 0.05; // one room per 0.05° square, about 5.5 km across
 const SIMPLIFY_METRES = 1.5;
 const MAX_POINTS = 600;
+const BLOCKED_KEY = 'gl.blocked';
 
 type PlayerView = { id: string; name: string; pos: LngLat | null; path: LngLat[] | null; startedAt: number; speed: number };
 type ServerMessage =
@@ -15,7 +16,12 @@ type ServerMessage =
   | { type: 'joined'; now: number; player: PlayerView }
   | { type: 'walk'; now: number; id: string; path: LngLat[]; startedAt: number; speed: number }
   | { type: 'left'; id: string }
+  | { type: 'chat'; now: number; id: string; text: string }
+  | { type: 'chat_refused'; reason: 'word' | 'phone' | 'money' | 'slow' | 'muted'; until: number }
+  | { type: 'report_saved' }
   | { type: 'pong'; now: number };
+
+export type PlayerMenu = { id: string; name: string };
 
 // With ?debug, record when key steps happen, for timing tests.
 const debugTimes = new URLSearchParams(window.location.search).has('debug');
@@ -62,19 +68,43 @@ function distanceToSegment(p: LngLat, a: LngLat, b: LngLat): number {
 // A stable shirt colour per player, picked from their id.
 const shirtFor = (id: string) => [...id].reduce((n, c) => n + c.charCodeAt(0), 0) % 5;
 
+// What to tell the player when the server refuses a chat message.
+const REFUSED: Record<string, string> = {
+  word: 'That message was blocked. Keep it friendly.',
+  phone: 'Never share phone numbers in the game. Stay safe.',
+  money: 'Never share mobile money details. Sika has no cash value.',
+  slow: 'Slow down a little before sending again.',
+  muted: 'You are muted for a few minutes after several blocked messages.',
+};
+
+function loadBlocked(): Set<string> {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(BLOCKED_KEY) ?? '[]') as string[]);
+  } catch {
+    return new Set();
+  }
+}
+
 export class Live {
   private ws: WebSocket | null = null;
   private area = '';
-  private others = new globalThis.Map<string, Avatar>();
+  private myId = '';
+  private others = new globalThis.Map<string, { avatar: Avatar; name: string }>();
   private clockOffset = 0; // server time minus our time
   private retryMs = 2000;
   private switching = false;
+  private muted = new Set<string>(); // player ids: no chat bubbles, this visit only
+  private blocked = loadBlocked(); // player names: hidden completely, remembered on this device
 
   constructor(
     private map: Map,
     private me: Avatar,
     private name: string,
-    private onCount: (playersHere: number) => void,
+    private ui: {
+      onCount: (playersHere: number) => void;
+      toast: (text: string) => void;
+      openMenu: (player: PlayerMenu) => void;
+    },
   ) {
     this.connect(areaOf(me.position));
     // Every few seconds, check whether the player has walked into another area's room.
@@ -90,6 +120,31 @@ export class Live {
     if (this.ws?.readyState !== WebSocket.OPEN) return;
     const route = simplify(path).slice(0, MAX_POINTS);
     this.ws.send(JSON.stringify({ type: 'move_to', path: route.map(([x, y]) => [+x.toFixed(6), +y.toFixed(6)]), speed }));
+  }
+
+  // Returns false when there is no connection, so the chat box can say so.
+  sendChat(text: string): boolean {
+    if (this.ws?.readyState !== WebSocket.OPEN) return false;
+    this.ws.send(JSON.stringify({ type: 'chat', text }));
+    return true;
+  }
+
+  mute(id: string) {
+    this.muted.add(id);
+  }
+
+  block(player: PlayerMenu) {
+    this.blocked.add(player.name);
+    try {
+      localStorage.setItem(BLOCKED_KEY, JSON.stringify([...this.blocked]));
+    } catch {
+      // Storage blocked: the block lasts for this visit.
+    }
+    this.others.get(player.id)?.avatar.setHidden(true);
+  }
+
+  report(player: PlayerMenu, reason: string) {
+    this.ws?.send(JSON.stringify({ type: 'report', id: player.id, reason }));
   }
 
   private connect(area: string) {
@@ -131,6 +186,7 @@ export class Live {
     if ('now' in msg) this.clockOffset = msg.now - Date.now();
     switch (msg.type) {
       case 'snapshot':
+        this.myId = msg.you;
         this.clearOthers();
         msg.players.forEach((p) => this.add(p));
         break;
@@ -139,31 +195,51 @@ export class Live {
         break;
       case 'walk': {
         mark('received');
-        const avatar = this.others.get(msg.id);
-        if (avatar) avatar.walk(msg.path, msg.speed, undefined, this.serverNow() - msg.startedAt);
+        const other = this.others.get(msg.id);
+        if (other) other.avatar.walk(msg.path, msg.speed, undefined, this.serverNow() - msg.startedAt);
         break;
       }
       case 'left':
-        this.others.get(msg.id)?.remove();
+        this.others.get(msg.id)?.avatar.remove();
         this.others.delete(msg.id);
         break;
+      case 'chat': {
+        if (msg.id === this.myId) {
+          this.me.say(msg.text);
+          break;
+        }
+        const other = this.others.get(msg.id);
+        if (other && !this.muted.has(msg.id) && !this.blocked.has(other.name)) other.avatar.say(msg.text);
+        break;
+      }
+      case 'chat_refused':
+        this.ui.toast(REFUSED[msg.reason] ?? 'That message was not sent.');
+        break;
+      case 'report_saved':
+        this.ui.toast('Thanks. Your report was sent and will be reviewed.');
+        break;
     }
-    this.onCount(this.others.size + 1);
+    this.ui.onCount(this.others.size + 1);
   }
 
   private add(p: PlayerView) {
-    this.others.get(p.id)?.remove();
+    this.others.get(p.id)?.avatar.remove();
     const start = p.path?.[0] ?? p.pos;
     if (!start) return;
-    const avatar = new Avatar(this.map, start, { name: p.name, shirt: shirtFor(p.id) });
-    this.others.set(p.id, avatar);
+    const avatar = new Avatar(this.map, start, {
+      name: p.name,
+      shirt: shirtFor(p.id),
+      onNameTap: () => this.ui.openMenu({ id: p.id, name: p.name }),
+    });
+    avatar.setHidden(this.blocked.has(p.name));
+    this.others.set(p.id, { avatar, name: p.name });
     if (p.path) avatar.walk(p.path, p.speed, undefined, this.serverNow() - p.startedAt);
   }
 
   private clearOthers() {
-    this.others.forEach((a) => a.remove());
+    this.others.forEach((o) => o.avatar.remove());
     this.others.clear();
-    this.onCount(1);
+    this.ui.onCount(1);
   }
 
   private serverNow() {

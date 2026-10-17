@@ -6,12 +6,14 @@
   "durable_objects": {
     "bindings": [
       { "name": "ROOMS", "class_name": "PingRoom" },
-      { "name": "AREAS", "class_name": "AreaRoom" }
+      { "name": "AREAS", "class_name": "AreaRoom" },
+      { "name": "REPORTS", "class_name": "ReportBox" }
     ]
   },
   // The free plan needs SQLite-backed Durable Objects.
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["PingRoom"] },
-    { "tag": "v2", "new_sqlite_classes": ["AreaRoom"] }
+    { "tag": "v2", "new_sqlite_classes": ["AreaRoom"] },
+    { "tag": "v3", "new_sqlite_classes": ["ReportBox"] }
   ]
 }

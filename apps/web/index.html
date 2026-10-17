@@ -31,6 +31,20 @@
 
     <p id="toast" role="status" hidden></p>
 
+    <!-- Chat: a button that opens a one-line message box -->
+    <button id="chat-open" type="button" hidden>Chat</button>
+    <form id="chat-form" hidden>
+      <input id="chat-input" type="text" maxlength="140" autocomplete="off" enterkeyhint="send" placeholder="Say something to people nearby" aria-label="Chat message" />
+      <button type="submit">Send</button>
+      <button id="chat-cancel" type="button" class="quiet" aria-label="Close chat">✕</button>
+    </form>
+
+    <!-- Menu for another player: mute, block, report -->
+    <section id="player-menu" role="dialog" aria-labelledby="player-menu-name" hidden>
+      <h2 id="player-menu-name"></h2>
+      <div id="player-menu-actions"></div>
+    </section>
+
     <section id="splash" aria-label="Welcome">
       <div class="kente" aria-hidden="true"></div>
       <div class="splash-body">

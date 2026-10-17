@@ -47,18 +47,51 @@ export class Avatar {
   private frame = 0;
   private facingLeft = false;
 
-  constructor(private map: maplibregl.Map, start: LngLat, options: { name?: string; shirt?: number } = {}) {
+  private bubble: HTMLElement;
+  private bubbleTimer = 0;
+
+  constructor(
+    private map: maplibregl.Map,
+    start: LngLat,
+    options: { name?: string; shirt?: number; onNameTap?: () => void } = {},
+  ) {
     this.pos = start;
     this.element = document.createElement('div');
     this.element.className = options.name ? `avatar other shirt-${options.shirt ?? 0}` : 'avatar me';
     this.element.innerHTML = FIGURE;
     if (options.name) {
-      const label = document.createElement('span');
+      // Tapping a name opens the mute / block / report menu.
+      const label = document.createElement('button');
+      label.type = 'button';
       label.className = 'avatar-name';
       label.textContent = options.name;
+      label.addEventListener('click', (e) => {
+        e.stopPropagation();
+        options.onNameTap?.();
+      });
       this.element.append(label);
     }
+    this.bubble = document.createElement('span');
+    this.bubble.className = 'chat-bubble';
+    this.bubble.hidden = true;
+    this.element.append(this.bubble);
     this.marker = new maplibregl.Marker({ element: this.element, anchor: 'bottom' }).setLngLat(start).addTo(map);
+  }
+
+  // Shows a chat message above the head for a few seconds.
+  say(text: string) {
+    this.bubble.textContent = text;
+    this.bubble.hidden = false;
+    this.element.classList.add('talking');
+    clearTimeout(this.bubbleTimer);
+    this.bubbleTimer = window.setTimeout(() => {
+      this.bubble.hidden = true;
+      this.element.classList.remove('talking');
+    }, 6000);
+  }
+
+  setHidden(hidden: boolean) {
+    this.element.hidden = hidden;
   }
 
   get position(): LngLat {
