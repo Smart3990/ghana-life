@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>3D character test · Ghana Life</title>
+    <style>
+      html, body { margin: 0; height: 100%; font-family: system-ui, sans-serif; }
+      #map { position: fixed; inset: 0; }
+      #panel {
+        position: fixed; left: 10px; right: 10px; top: calc(env(safe-area-inset-top, 0px) + 10px);
+        background: rgba(255, 255, 255, 0.95); border-radius: 12px; padding: 12px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2); max-width: 28rem; margin: 0 auto;
+      }
+      #panel h1 { margin: 0 0 6px; font-size: 1.05rem; color: #0e7a3e; }
+      #panel p { margin: 4px 0; font-size: 0.85rem; color: #444; }
+      .buttons { display: flex; gap: 8px; margin: 8px 0; }
+      .buttons button { flex: 1; padding: 9px; border: 0; border-radius: 8px; background: #0e7a3e; color: #fff; font-weight: 700; }
+      table { width: 100%; border-collapse: collapse; font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+      td, th { padding: 4px; border-bottom: 1px solid #ddd; text-align: left; }
+      #verdict { font-weight: 700; margin-top: 8px; }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+    <section id="panel">
+      <h1>Test 1b: 3D characters</h1>
+      <p>Measures the frame rate with 10, 20 and 30 walking 3D characters over the map. Run it on the cheapest Android you have, then send the table to Claude.</p>
+      <div class="buttons">
+        <button id="run-all" type="button">Run test (about 25 s)</button>
+      </div>
+      <table>
+        <tr><th>Characters</th><th>Frames per second</th></tr>
+        <tr><td>10</td><td id="fps-10">–</td></tr>
+        <tr><td>20</td><td id="fps-20">–</td></tr>
+        <tr><td>30</td><td id="fps-30">–</td></tr>
+      </table>
+      <p id="verdict"></p>
+      <p id="device"></p>
+    </section>
+    <script type="module" src="/src/test/charTest.ts"></script>
+  </body>
+</html>
