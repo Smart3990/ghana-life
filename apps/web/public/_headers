@@ -10,3 +10,11 @@
   Cache-Control: public, max-age=604800
 /map/sprites/*
   Cache-Control: public, max-age=604800
+
+# Street and traffic data: rebuilt rarely.
+/data/*
+  Cache-Control: public, max-age=86400
+
+# The service worker must always be fresh, so updates reach phones.
+/sw.js
+  Cache-Control: no-cache

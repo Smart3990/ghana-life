@@ -93,7 +93,8 @@ async function start() {
     await flyIn(map, tier);
     // Let the square finish loading, then start the tour of Accra (it begins by circling the monument).
     await new Promise<void>((resolve) => map.once('idle', () => resolve()));
-    startTour(map, () => tier, showPlace);
+    // The tour downloads many map tiles; Light (data saver, weak phones) skips it.
+    if (tier !== 'light') startTour(map, () => tier, showPlace);
   }
 
   let live: Live | null = null;
@@ -129,3 +130,10 @@ async function start() {
 }
 
 start();
+
+// Keep map and game files on the phone, so later visits are faster and use less data.
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  navigator.serviceWorker.register('/sw.js').catch(() => {
+    // Not supported or blocked: the game works without it.
+  });
+}
