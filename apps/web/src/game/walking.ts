@@ -1,14 +1,24 @@
 import type { GeoJSONSource, Map } from 'maplibre-gl';
-import { Avatar } from './avatar';
+import { Avatar, WALK_SPEED_M_PER_S } from './avatar';
 import { Roads, type LngLat } from './roads';
+import { mark } from '../net/live';
 
 const ROADS_URL = '/data/roads-central.json';
 const BLACK_STAR_SQUARE: LngLat = [-0.1926, 5.5474];
 
+// Each player starts somewhere on the square, up to about 40 m from its centre,
+// so new arrivals do not stand on top of each other.
+function startSpot(): LngLat {
+  const a = Math.random() * 2 * Math.PI;
+  const r = Math.random() * 0.00036;
+  return [BLACK_STAR_SQUARE[0] + r * Math.cos(a), BLACK_STAR_SQUARE[1] + r * Math.sin(a)];
+}
+
 // Tap anywhere in central Accra: the avatar walks there along real streets, and the camera follows.
-export function enableWalking(map: Map, toast: (text: string) => void) {
+// onWalk is told about every walk, so it can be shared with other players.
+export function enableWalking(map: Map, toast: (text: string) => void, onWalk: (path: LngLat[], speed: number) => void): Avatar {
   const roadsReady = Roads.load(ROADS_URL);
-  const avatar = new Avatar(map, BLACK_STAR_SQUARE);
+  const avatar = new Avatar(map, startSpot());
   let following = false;
   let walkId = 0;
 
@@ -23,6 +33,7 @@ export function enableWalking(map: Map, toast: (text: string) => void) {
   };
 
   map.on('click', async (e) => {
+    mark('tapped');
     const target: LngLat = [e.lngLat.lng, e.lngLat.lat];
     let roads: Roads;
     try {
@@ -50,9 +61,12 @@ export function enableWalking(map: Map, toast: (text: string) => void) {
     map.easeTo({ center: avatar.position, duration: 600 });
     await arrived;
     if (id !== walkId) return; // the player tapped somewhere else meanwhile
+    onWalk(path, WALK_SPEED_M_PER_S);
     await avatar.walk(path, (p) => {
       if (following && id === walkId) map.jumpTo({ center: p });
     });
     if (id === walkId) showRoute([]);
   });
+
+  return avatar;
 }

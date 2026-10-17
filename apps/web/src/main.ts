@@ -3,6 +3,8 @@ import { applyLight, createMap, flyIn } from './map/createMap';
 import { detectTier, forcedTier, measureFps, recordSlowRun } from './map/tier';
 import { startTour } from './map/tour';
 import { enableWalking } from './game/walking';
+import { Live } from './net/live';
+import { playerName } from './net/names';
 
 const SPLASH_MS = 3000;
 const MIN_FPS = 20; // below this, 3D is too heavy for the device
@@ -20,6 +22,7 @@ if (debug) (window as unknown as { gameMap: typeof map }).gameMap = map; // for 
 const splash = document.getElementById('splash')!;
 const hud = document.querySelector<HTMLElement>('.hud')!;
 const place = document.getElementById('place')!;
+const online = document.getElementById('online')!;
 const debugLine = document.getElementById('debug')!;
 const showDebug = (text: string) => {
   if (!debug) return;
@@ -70,7 +73,11 @@ async function start() {
   // Let the square finish loading, then start the tour of Accra (it begins by circling the monument).
   await new Promise<void>((resolve) => map.once('idle', () => resolve()));
   startTour(map, () => tier, showPlace);
-  enableWalking(map, showToast);
+  let live: Live | null = null;
+  const me = enableWalking(map, showToast, (path, speed) => live?.sendWalk(path, speed));
+  live = new Live(map, me, playerName(), (count) => {
+    online.textContent = count > 1 ? `${count} here` : '';
+  });
   if (tier === 'light') return;
 
   // Watch the frame rate during the first seconds of the tour. Only repeated slowness switches to Light.

@@ -2,20 +2,27 @@ import * as maplibregl from 'maplibre-gl';
 import { metresBetween, type LngLat } from './roads';
 
 // Game speed: a few times faster than real walking, so crossing town takes seconds, not minutes.
-const SPEED_M_PER_S = 14;
+export const WALK_SPEED_M_PER_S = 14;
 
 // A placeholder person (the real Ghanaian characters come later), walking along a route.
+// The player's own avatar wears kente colours; other players get a different shirt and a name label.
 export class Avatar {
   private marker: maplibregl.Marker;
   private element: HTMLElement;
   private pos: LngLat;
   private frame = 0;
 
-  constructor(private map: maplibregl.Map, start: LngLat) {
+  constructor(private map: maplibregl.Map, start: LngLat, options: { name?: string; shirt?: number } = {}) {
     this.pos = start;
     this.element = document.createElement('div');
-    this.element.className = 'avatar';
+    this.element.className = options.name ? `avatar other shirt-${options.shirt ?? 0}` : 'avatar me';
     this.element.innerHTML = '<span class="avatar-shadow"></span><span class="avatar-body"></span><span class="avatar-head"></span>';
+    if (options.name) {
+      const label = document.createElement('span');
+      label.className = 'avatar-name';
+      label.textContent = options.name;
+      this.element.append(label);
+    }
     this.marker = new maplibregl.Marker({ element: this.element, anchor: 'bottom' }).setLngLat(start).addTo(map);
   }
 
@@ -23,8 +30,9 @@ export class Avatar {
     return this.pos;
   }
 
-  // Walks the route; calls onStep with each new position so the camera can follow.
-  walk(path: LngLat[], onStep: (p: LngLat) => void): Promise<void> {
+  // Walks the route. If the walk began earlier (another player's walk we joined late),
+  // pass how long ago it started and the avatar picks up from the right spot.
+  walk(path: LngLat[], onStep: (p: LngLat) => void = () => {}, speed = WALK_SPEED_M_PER_S, startedAgoMs = 0): Promise<void> {
     cancelAnimationFrame(this.frame);
     if (path.length < 2) return Promise.resolve();
     const lengths = path.slice(1).map((p, i) => metresBetween(path[i], p));
@@ -32,9 +40,9 @@ export class Avatar {
     this.element.classList.add('walking');
 
     return new Promise((resolve) => {
-      const started = performance.now();
+      const started = performance.now() - Math.max(0, startedAgoMs);
       const step = (now: number) => {
-        let travelled = ((now - started) / 1000) * SPEED_M_PER_S;
+        let travelled = ((now - started) / 1000) * speed;
         if (travelled >= total) {
           this.place(path[path.length - 1]);
           onStep(this.pos);
@@ -54,6 +62,11 @@ export class Avatar {
       };
       this.frame = requestAnimationFrame(step);
     });
+  }
+
+  remove() {
+    cancelAnimationFrame(this.frame);
+    this.marker.remove();
   }
 
   private place(p: LngLat) {

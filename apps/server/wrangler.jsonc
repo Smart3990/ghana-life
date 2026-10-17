@@ -4,8 +4,14 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
   "durable_objects": {
-    "bindings": [{ "name": "ROOMS", "class_name": "PingRoom" }]
+    "bindings": [
+      { "name": "ROOMS", "class_name": "PingRoom" },
+      { "name": "AREAS", "class_name": "AreaRoom" }
+    ]
   },
   // The free plan needs SQLite-backed Durable Objects.
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["PingRoom"] }]
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["PingRoom"] },
+    { "tag": "v2", "new_sqlite_classes": ["AreaRoom"] }
+  ]
 }
