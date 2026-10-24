@@ -65,6 +65,16 @@ Next steps, in order (brief section 23):
 Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/streetTest.ts`).
 
 - **What it does:** a 3D person at Kwame Nkrumah Circle, seen from close behind, walks or runs with a touch joystick, W A S D or arrow keys, or a game controller. They get on and off an okada with the OKADA button, E, or X / □ on a controller. The bike leans in corners, its wheels turn, and the rider sits on it. The camera follows behind and turns after you. Place names fade in as you pass.
+- **3D quality pass 1 (2026-10-24, lessons from other games, brief 4.1a):**
+  - **Quality presets** (`PRESET` in `streetTest.ts`, pixel density in `createMap.ts`):
+    - Light: a steady 30 fps cap, pixel density up to 1.25, no shadows, simple light.
+    - Standard: 60 fps, density 1.5, sun shadows (1024 map), light from a sky model, smooth crowd frames.
+    - Ultra: as Standard, with density 2 and a 2048 shadow map.
+  - **Sky light:** a physical sky model is rendered once into a small environment, which lights and reflects on every surface (no download). The warm low sun sits in the same place as the sky's sun.
+  - **Sun shadows** (Standard and Ultra): you, the okada, buildings, vehicles, trees and kiosks cast shadows. They fall on the street through an invisible shadow-only sheet that follows the player. Crowd people keep their soft round shadows.
+  - **Smoother crowds:** on Standard and Ultra, the crowd blends between stored animation frames.
+  - **Pinch to zoom** on phones (and the mouse wheel on computers).
+  - **Cloud check:** no errors, and the main game is clean. Light is back to its earlier speed now that it skips the sky light.
 - **Choked city pass (2026-10-24, owner: "it must look choked"):**
   - **Traffic:** two lanes each way on main roads, nose to tail. Each lane has a vehicle every 9 to 14 m, at rush-hour crawl (2 to 6.5 m/s). The kerb lane sits further out (`OUTER_LANE` in `traffic.ts`).
   - **Every street:** every major and minor road the game loads from the map tiles also gets two-way traffic (`Traffic.addRoads`: one lane each way on minor roads). The streets the 80 fixed routes miss are no longer empty. That added traffic is worked out on each phone, so it isn't identical between players; the fixed routes still are.
@@ -125,7 +135,7 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
 
 ## Waiting on the owner
 
-- Street test on the cheap Android: open `/street-test.html?debug` after the next deploy, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.
+- Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.
 
 - Two-device test for T4 (phone and PC see each other walk).
 - Phone checks: map load time and smoothness, tap to walk, chat.

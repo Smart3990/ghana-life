@@ -5,6 +5,7 @@
 // follow camera, the 3D player and okada (through a three.js layer inside the map) and the controls.
 import * as THREE from 'three';
 import * as maplibregl from 'maplibre-gl';
+import { Sky } from 'three/examples/jsm/objects/Sky.js';
 import { createMap } from '../map/createMap';
 import { detectTier, measureFps } from '../map/tier';
 import { loadTraffic, type Traffic } from '../game/traffic';
@@ -85,12 +86,48 @@ const toLngLat = (x: number, z: number): [number, number] => [START[0] + x / M_L
 
 // ---------- The 3D scene ----------
 
+// Quality presets, per tier: pixel density is set by the map (createMap.ts); here, the frame-rate cap
+// and the sun's shadows. A steady 30 frames a second feels smoother on a cheap phone than a
+// jumpy 40 to 60, and saves battery.
+const PRESET = {
+  light: { fps: 30, shadows: false, shadowMap: 0, smoothCrowd: false, skyLight: false },
+  standard: { fps: 60, shadows: true, shadowMap: 1024, smoothCrowd: true, skyLight: true },
+  ultra: { fps: 60, shadows: true, shadowMap: 2048, smoothCrowd: true, skyLight: true },
+}[tier];
+
 const scene = new THREE.Scene();
-// Late-afternoon Accra light: a warm low sun and a soft sky.
-scene.add(new THREE.HemisphereLight(0xfff1dc, 0x6b4f3a, 1.5));
-const sun = new THREE.DirectionalLight(0xffcf9a, 2.4);
-sun.position.set(-40, 35, 25);
-scene.add(sun);
+// Late-afternoon Accra light. The sky itself lights everything (image-based light, made in code
+// from a sky model when the game starts), plus a warm low sun that casts shadows.
+const SUN_DIR = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToRad(90 - 16), THREE.MathUtils.degToRad(-115));
+// Light phones skip the sky light (it costs a little on every pixel) and use a brighter simple fill instead.
+const hemi = new THREE.HemisphereLight(0xfff1dc, 0x6b4f3a, PRESET.skyLight ? 0.9 : 1.4);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xffcb94, 2.3);
+sun.position.copy(SUN_DIR).multiplyScalar(80);
+scene.add(sun, sun.target);
+if (PRESET.shadows) {
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(PRESET.shadowMap, PRESET.shadowMap);
+  const c = sun.shadow.camera;
+  [c.left, c.right, c.top, c.bottom, c.near, c.far] = [-45, 45, 45, -45, 1, 220];
+  sun.shadow.bias = -0.0006;
+  sun.shadow.normalBias = 0.04;
+  sun.shadow.radius = 3;
+}
+// The street itself is drawn by the map, so shadows fall on an invisible sheet that only shows shadow.
+const shadowCatcher = new THREE.Mesh(new THREE.PlaneGeometry(130, 130).rotateX(-Math.PI / 2), new THREE.ShadowMaterial({ opacity: 0.3 }));
+shadowCatcher.position.y = 0.025;
+shadowCatcher.receiveShadow = true;
+shadowCatcher.visible = PRESET.shadows;
+scene.add(shadowCatcher);
+
+// Keeps the sun's shadow area centred on the player.
+function followSun(x: number, z: number) {
+  sun.target.position.set(x, 0, z);
+  sun.position.set(x + SUN_DIR.x * 90, SUN_DIR.y * 90, z + SUN_DIR.z * 90);
+  shadowCatcher.position.x = x;
+  shadowCatcher.position.z = z;
+}
 
 // A soft round shadow under people and the okada: cheap, and it grounds them on the street.
 function blobShadow(width: number, length: number): THREE.Mesh {
@@ -176,6 +213,7 @@ function buildOkada(): Okada {
 }
 
 const okada = buildOkada();
+okada.lean.traverse((o) => (o.castShadow = PRESET.shadows));
 scene.add(okada.root);
 
 // ---------- The player ----------
@@ -194,6 +232,9 @@ async function loadPlayer(): Promise<Player> {
   }
   const shadow = blobShadow(0.55, 0.55);
   person.root.add(shadow);
+  // With real sun shadows the player casts their own; the soft round one stays only on Light.
+  person.model.traverse((o) => (o.castShadow = PRESET.shadows));
+  shadow.visible = !PRESET.shadows;
 
   // Where the hips are in the riding pose, so the rider can be put exactly on the seat.
   const ride = person.actions.ride;
@@ -228,7 +269,28 @@ const layer: maplibregl.CustomLayerInterface = {
     renderer.autoClear = false;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.05;
+    renderer.toneMappingExposure = 0.86;
+    if (PRESET.shadows) {
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    }
+    // Light from the sky: render a sky model once into a small "environment" that every surface reflects.
+    if (!PRESET.skyLight) return;
+    const skyScene = new THREE.Scene();
+    const skyDome = new Sky();
+    skyDome.scale.setScalar(1000);
+    const u = skyDome.material.uniforms;
+    u.turbidity.value = 7;
+    u.rayleigh.value = 1.6;
+    u.mieCoefficient.value = 0.006;
+    u.mieDirectionalG.value = 0.82;
+    u.sunPosition.value.copy(SUN_DIR);
+    skyScene.add(skyDome);
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    scene.environment = pmrem.fromScene(skyScene, 0.02).texture;
+    scene.environmentIntensity = 0.16; // the sky model is very bright: a little goes a long way
+    pmrem.dispose();
+    renderer.resetState();
   },
   render(_gl, args) {
     const projection = new THREE.Matrix4().fromArray(args.defaultProjectionData.mainMatrix as unknown as number[]);
@@ -283,6 +345,26 @@ lookZone.addEventListener('pointermove', (e) => {
   look.idle = 0;
 });
 for (const ev of ['pointerup', 'pointercancel']) lookZone.addEventListener(ev, (e) => (e as PointerEvent).pointerId === look.id && (look.id = -1));
+// Pinch with two fingers (or the mouse wheel) to bring the camera closer or further.
+const pinch = { zoom: 0, start: 0, base: 0 };
+const fingers = new Map<number, { x: number; y: number }>();
+const spread = () => {
+  const [a, b] = [...fingers.values()];
+  return Math.hypot(a.x - b.x, a.y - b.y);
+};
+for (const zone of [lookZone, document.getElementById('stick-zone')!]) {
+  zone.addEventListener('pointerdown', (e) => {
+    fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (fingers.size === 2) [pinch.start, pinch.base] = [spread(), pinch.zoom];
+  });
+  zone.addEventListener('pointermove', (e) => {
+    if (!fingers.has(e.pointerId)) return;
+    fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (fingers.size === 2 && pinch.start > 0) pinch.zoom = Math.max(-1.6, Math.min(0.8, pinch.base + Math.log2(spread() / pinch.start)));
+  });
+  for (const ev of ['pointerup', 'pointercancel']) zone.addEventListener(ev, (e) => fingers.delete((e as PointerEvent).pointerId));
+}
+window.addEventListener('wheel', (e) => (pinch.zoom = Math.max(-1.6, Math.min(0.8, pinch.zoom - e.deltaY * 0.0015))), { passive: true });
 
 // Controllers (standard mapping, Xbox / PlayStation): left stick moves, right trigger accelerates,
 // left trigger brakes, A / ✕ jumps, B / ○ sprints (hold), Y / △ gets on or off, left stick press sounds the horn.
@@ -511,7 +593,7 @@ function step(player: Player, dt: number, t: number) {
     if (player.root.parent !== scene) scene.add(player.root);
     player.root.position.set(state.x, state.y, state.z);
     player.root.rotation.set(0, Math.PI - state.heading, 0);
-    player.shadow.visible = true;
+    player.shadow.visible = !PRESET.shadows;
   }
 
   // Animation: blend idle, walk and run by speed; on the okada, ride.
@@ -558,12 +640,13 @@ function step(player: Player, dt: number, t: number) {
   map.jumpTo({
     center: here,
     bearing: ((state.camHeading + look.yaw) * 180) / Math.PI,
-    zoom: state.zoom + fit,
+    zoom: state.zoom + fit + pinch.zoom,
     pitch: Math.min(85, state.pitch + look.pitch),
     padding: { top: height * PLAYER_SCREEN_DROP, bottom: 0, left: 0, right: 0 },
   });
   checkPlace(here);
   buildings.update(here, state.x, state.z);
+  followSun(state.x, state.z);
   life?.update(state.x, state.z, dt, performance.now() / 1000);
   sky.update(Date.now() / 1000);
   streetTraffic?.update(here[0], here[1], Date.now() / 1000, TRAFFIC_LANE_M, state);
@@ -636,11 +719,11 @@ const buildings = new StreetBuildings(
   },
 );
 scene.add(buildings.group);
-life = new StreetLife((x, z, m) => buildings.blocked(x, z, m), {
+life = new StreetLife((x, z, m) => buildings.blocked(x, z, m), { ...{
   light: { radiusM: 140, people: 110, props: 250 },
   standard: { radiusM: 200, people: 320, props: 600 },
   ultra: { radiusM: 280, people: 560, props: 1200 },
-}[tier]);
+}[tier], smoothCrowd: PRESET.smoothCrowd });
 scene.add(life.group);
 // Planes on the Kotoka flight paths and helicopters circling over the city.
 const sky = new SkyTraffic((lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT]);
@@ -694,8 +777,11 @@ async function start() {
   document.getElementById('loading')!.remove();
   setTimeout(() => (help.style.opacity = '0'), 7000);
   let last = performance.now();
+  const frameMs = 1000 / PRESET.fps;
   const loop = (now: number) => {
     requestAnimationFrame(loop);
+    // Light phones run at a steady 30 frames a second: skip every other screen refresh.
+    if (now - last < frameMs - 2) return;
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     step(player, dt, now / 1000);

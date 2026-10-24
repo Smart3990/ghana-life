@@ -165,13 +165,14 @@ export class StreetLife {
 
   constructor(
     private blocked: (x: number, z: number, margin: number) => boolean,
-    private opts: { radiusM: number; people: number; props: number },
+    private opts: { radiusM: number; people: number; props: number; smoothCrowd?: boolean },
   ) {
     const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0.05 });
     const make = (geometry: Part, tint: boolean) => {
       const mesh = new THREE.InstancedMesh(geometry, mat, opts.props);
       mesh.count = 0;
       mesh.frustumCulled = false;
+      mesh.castShadow = true;
       if (tint) mesh.setColorAt(0, this.colour.set(0xffffff));
       this.group.add(mesh);
       const b: Batch = { mesh, all: [], tint };
@@ -211,8 +212,8 @@ export class StreetLife {
   // Everyone who will be out on the streets, with their looks fixed for the session.
   private async makePeople() {
     const [male, female] = await Promise.all([
-      CrowdBatch.create('male', this.opts.people, this.time),
-      CrowdBatch.create('female', this.opts.people, this.time),
+      CrowdBatch.create('male', this.opts.people, this.time, this.opts.smoothCrowd),
+      CrowdBatch.create('female', this.opts.people, this.time, this.opts.smoothCrowd),
     ]);
     this.crowds = { male, female };
     this.group.add(male.mesh, female.mesh);

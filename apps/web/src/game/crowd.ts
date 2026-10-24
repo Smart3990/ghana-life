@@ -104,8 +104,9 @@ async function bake(body: CrowdBody): Promise<Baked> {
 }
 
 // The shared crowd material: the body texture's clothes mask, coloured per person.
-function crowdMaterial(baked: Baked, time: { value: number }) {
+function crowdMaterial(baked: Baked, time: { value: number }, smooth: boolean) {
   const material = new THREE.MeshStandardMaterial({ map: baked.map, roughness: 0.8, metalness: 0 });
+  if (smooth) material.defines = { SMOOTH_FRAMES: '' };
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uBones = { value: baked.bones };
     shader.uniforms.uTime = time;
@@ -137,10 +138,18 @@ mat4 boneAt(float row, float bone) {
 void main() {
   vSkinC = unpackColour(aColA.x); vTopC = unpackColour(aColA.y); vBottomC = unpackColour(aColA.z);
   vShoesC = unpackColour(aColA.w); vHairC = unpackColour(aHair); vPart = part;
-  float frame = mod(floor((uTime - aAnim.w) * aAnim.z), aAnim.y);
+  float f = (uTime - aAnim.w) * aAnim.z;
+  float frame = mod(floor(f), aAnim.y);
   float row = aAnim.x + frame;
   mat4 skin = boneAt(row, skinIndex.x) * skinWeight.x + boneAt(row, skinIndex.y) * skinWeight.y
-            + boneAt(row, skinIndex.z) * skinWeight.z + boneAt(row, skinIndex.w) * skinWeight.w;`,
+            + boneAt(row, skinIndex.z) * skinWeight.z + boneAt(row, skinIndex.w) * skinWeight.w;
+#ifdef SMOOTH_FRAMES
+  // Blend towards the next stored frame, so movement is smooth at 60 frames a second.
+  float row2 = aAnim.x + mod(frame + 1.0, aAnim.y);
+  mat4 skin2 = boneAt(row2, skinIndex.x) * skinWeight.x + boneAt(row2, skinIndex.y) * skinWeight.y
+             + boneAt(row2, skinIndex.z) * skinWeight.z + boneAt(row2, skinIndex.w) * skinWeight.w;
+  skin = skin + (skin2 - skin) * fract(f);
+#endif`,
       )
       .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\n  // The bone matrices carry the file\'s compression scale (not the same on every axis), so normals\n  // need the inverse-transpose to stay at right angles to the surface.\n  objectNormal = normalize(transpose(inverse(mat3(skin))) * objectNormal);')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\n  transformed = (skin * vec4(transformed, 1.0)).xyz;');
@@ -169,7 +178,7 @@ void main() {
       )
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n  roughnessFactor = vPart > 0.5 ? 0.9 : dot(partWeights, vec4(0.55, 0.85, 0.92, 0.6)) + soleWeight * 0.8;');
   };
-  material.customProgramCacheKey = () => 'ghanaverse-crowd';
+  material.customProgramCacheKey = () => `ghanaverse-crowd-${smooth}`;
   return material;
 }
 
@@ -186,7 +195,7 @@ export class CrowdBatch {
   private hair: THREE.InstancedBufferAttribute;
   count = 0;
 
-  private constructor(private baked: Baked, capacity: number, time: { value: number }) {
+  private constructor(private baked: Baked, capacity: number, time: { value: number }, smooth: boolean) {
     const g = baked.geometry.clone();
     this.anim = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 4), 4);
     this.colA = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 4), 4);
@@ -194,13 +203,14 @@ export class CrowdBatch {
     g.setAttribute('aAnim', this.anim);
     g.setAttribute('aColA', this.colA);
     g.setAttribute('aHair', this.hair);
-    this.mesh = new THREE.InstancedMesh(g, crowdMaterial(baked, time), capacity);
+    this.mesh = new THREE.InstancedMesh(g, crowdMaterial(baked, time, smooth), capacity);
     this.mesh.count = 0;
     this.mesh.frustumCulled = false;
   }
 
-  static async create(body: CrowdBody, capacity: number, time: { value: number }) {
-    return new CrowdBatch(await bake(body), capacity, time);
+  /** smooth: blend between stored frames (costs twice the bone lookups; off on Light phones). */
+  static async create(body: CrowdBody, capacity: number, time: { value: number }, smooth = false) {
+    return new CrowdBatch(await bake(body), capacity, time, smooth);
   }
 
   /** Sets person i's look and move (only when they change: it's a buffer upload). */

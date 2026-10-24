@@ -9,7 +9,7 @@ maplibregl.setWorkerUrl(workerUrl);
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // Light mode draws fewer pixels: phones gain little from full density.
-const pixelRatioFor = (tier: Tier) => Math.min(window.devicePixelRatio, tier === 'ultra' ? 2 : 1.5);
+const pixelRatioFor = (tier: Tier) => Math.min(window.devicePixelRatio, tier === 'ultra' ? 2 : tier === 'standard' ? 1.5 : 1.25);
 
 // Light looks straight down at flat buildings; Full tilts to show them in 3D.
 const landingFor = (tier: Tier) =>

@@ -328,6 +328,7 @@ export class StreetBuildings {
       g.setAttribute('facade', new THREE.Float32BufferAttribute(p.fac, 3));
       g.computeBoundingSphere();
       const mesh = new THREE.Mesh(g, this.material);
+      mesh.castShadow = mesh.receiveShadow = true; // used only where shadows are switched on
       const [cx, cz] = key.split(',').map((n) => (Number(n) + 0.5) * CELL_M);
       mesh.userData.centre = new THREE.Vector2(cx, cz);
       if (cell.mesh) {

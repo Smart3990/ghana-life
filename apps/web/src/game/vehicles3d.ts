@@ -326,6 +326,7 @@ export class StreetTraffic {
       for (const mesh of [body, fixed]) {
         mesh.count = 0;
         mesh.frustumCulled = false; // instances spread far beyond the shape's own bounds
+        mesh.castShadow = true;
         mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         this.group.add(mesh);
       }
