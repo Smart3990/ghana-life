@@ -65,6 +65,26 @@ Next steps, in order (brief section 23):
 Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/streetTest.ts`).
 
 - **What it does:** a 3D person at Kwame Nkrumah Circle, seen from close behind, walks or runs with a touch joystick, W A S D or arrow keys, or a game controller. They get on and off an okada with the OKADA button, E, or X / □ on a controller. The bike leans in corners, its wheels turn, and the rider sits on it. The camera follows behind and turns after you. Place names fade in as you pass.
+- **Alive city pass (2026-10-24, owner: "their characters and cities feel alive"):**
+  - **Moves:** both people now have 26 everyday moves, adding Quaternius' CC0 "Universal Animation Library 2" (no weapon moves). The new ones include phone calls, eating and drinking, a seller's folded arms, carrying, yes, no, calling out, sitting, dancing, serving, bending to pick up, pushing a cart and kneeling to fix. Crowd models (`*-mass.glb`) carry 19 street moves. The crowd system stores them at half precision to save memory.
+  - **Life at places** (`src/game/streetScenes.ts`), set up at the places nearest the player:
+    - kiosks get a seller at the counter (waiting, calling out, serving, handing over) and customers who chat, nod, shake their heads, pay and drink;
+    - about one kiosk in five plays music, with 3 to 5 people dancing in front;
+    - umbrella stalls get a seller (waiting, bending to the goods, calling out) and coloured plastic chairs, with people sitting and chatting;
+    - children kick a football about on open ground beside side streets, where there is room;
+    - people change what they are doing every few seconds.
+
+    Roadsides now have more kiosks and stalls, on minor roads too. Scene people use reserved slots in the crowd batches (24 / 60 / 100), so they need no extra draws.
+  - **People notice you:** within 5 m, people at places turn to face you, and now and then someone calls out in a speech bubble. Sellers call "Pure water! Pure water!", "Waakye dey!" and similar; others say "Chale!", "How far?", "Akwaaba!" and so on.
+  - **Sound of Accra** (`src/game/streetSound.ts`, all made in code, no files):
+    - a traffic rumble and a crowd murmur that follow how busy it is around you;
+    - horns from vehicles around you, from the right side;
+    - your okada's engine rising with speed;
+    - a highlife groove (guitar picking over I-IV-V-I, bass, bell and shaker) from music kiosks, louder as you get close.
+
+    It starts on the first tap, and there is a sound on/off button top left.
+  - **Cloud check:** no errors, and the main game is clean. Triangles at full busy-ness are about 222,000 (Light) and 687,000 (Standard). The automatic step-down will thin the walkers first; the people at places always stay.
+  - **Not yet:** voices (real recorded Ghanaian voice lines come later, per brief 15.3); football only appears where there is open ground near the player.
 - **3D quality pass 1 (2026-10-24, lessons from other games, brief 4.1a):**
   - **Quality presets** (`PRESET` in `streetTest.ts`, pixel density in `createMap.ts`):
     - Light: a steady 30 fps cap, pixel density up to 1.25, no shadows, simple light.

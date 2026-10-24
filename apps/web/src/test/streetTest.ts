@@ -14,6 +14,7 @@ import { StreetBuildings } from '../game/streetBuildings';
 import { applyStreetStyle } from '../map/streetStyle';
 import { StreetLife } from '../game/streetLife';
 import { SkyTraffic } from '../game/sky3d';
+import { StreetSound } from '../game/streetSound';
 import { createPerson, type Move, type Person } from '../game/person';
 import { Minimap } from '../hud/minimap';
 import { TouchControls } from '../hud/touchControls';
@@ -649,6 +650,29 @@ function step(player: Player, dt: number, t: number) {
   followSun(state.x, state.z);
   life?.update(state.x, state.z, dt, performance.now() / 1000);
   sky.update(Date.now() / 1000);
+  placeBubbles(performance.now() / 1000);
+  streetSound.update({
+    x: state.x,
+    z: state.z,
+    heading: state.camHeading + look.yaw,
+    riding: state.onOkada,
+    speed: Math.abs(state.speed),
+    vehicles: (streetTraffic?.placed ?? []).map((p) => {
+      const [vx, vz] = [(p.lon - START[0]) * M_LON, (START[1] - p.lat) * M_LAT];
+      return { x: vx, z: vz };
+    }),
+    people: life?.nearCount ?? 0,
+    music: life?.scenes?.musicSpots ?? [],
+  });
+  if (life?.scenes && !life.scenes.onSpeak) {
+    life.scenes.onSpeak = (x, z, height, text) => {
+      const el = document.createElement('div');
+      el.className = 'bubble';
+      el.textContent = text;
+      document.body.appendChild(el);
+      bubbles.push({ el, at: new THREE.Vector3(x, height + 0.25, z), until: performance.now() / 1000 + 2.6 });
+    };
+  }
   streetTraffic?.update(here[0], here[1], Date.now() / 1000, TRAFFIC_LANE_M, state);
   minimap?.update(state.x, state.z, state.camHeading + look.yaw, state.onOkada ? [] : [{ x: state.okadaX, z: state.okadaZ, color: '#c8442e', size: 5 }]);
   void t;
@@ -720,11 +744,39 @@ const buildings = new StreetBuildings(
 );
 scene.add(buildings.group);
 life = new StreetLife((x, z, m) => buildings.blocked(x, z, m), { ...{
-  light: { radiusM: 140, people: 110, props: 250 },
-  standard: { radiusM: 200, people: 320, props: 600 },
-  ultra: { radiusM: 280, people: 560, props: 1200 },
+  light: { radiusM: 140, people: 110, props: 250, scenes: 24 },
+  standard: { radiusM: 200, people: 320, props: 600, scenes: 60 },
+  ultra: { radiusM: 280, people: 560, props: 1200, scenes: 100 },
 }[tier], smoothCrowd: PRESET.smoothCrowd });
 scene.add(life.group);
+// The sound of Accra (starts on the first tap), with a button to switch it off.
+const streetSound = new StreetSound();
+const soundButton = document.getElementById('btn-sound')!;
+soundButton.addEventListener('click', () => {
+  streetSound.setMuted(!streetSound.muted);
+  soundButton.classList.toggle('off', streetSound.muted);
+});
+
+// Speech bubbles: people at places call out to you as you pass.
+const bubbles: { el: HTMLElement; at: THREE.Vector3; until: number }[] = [];
+const projected = new THREE.Vector4();
+function placeBubbles(now: number) {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  for (let i = bubbles.length - 1; i >= 0; i--) {
+    const b = bubbles[i];
+    if (now > b.until) {
+      b.el.remove();
+      bubbles.splice(i, 1);
+      continue;
+    }
+    projected.set(b.at.x, b.at.y, b.at.z, 1).applyMatrix4(camera3d.projectionMatrix);
+    const visible = projected.w > 0;
+    b.el.style.opacity = visible && now < b.until - 0.3 ? '1' : '0';
+    if (visible) b.el.style.transform = `translate(${((projected.x / projected.w + 1) / 2) * w}px, ${((1 - projected.y / projected.w) / 2) * h}px) translate(-50%, -100%)`;
+  }
+}
+
 // Planes on the Kotoka flight paths and helicopters circling over the city.
 const sky = new SkyTraffic((lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT]);
 scene.add(sky.group);
@@ -771,7 +823,7 @@ async function start() {
     streetTraffic = new StreetTraffic(traffic, (lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT], limit, { light: 150, standard: 190, ultra: 240 }[tier]);
     scene.add(streetTraffic.group);
     streetTraffic.onHoot = (x, z) => honk(Math.hypot(x - state.x, z - state.z), true);
-    if (debug) Object.assign(window, { __street: { state, sky, look, traffic: streetTraffic, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
+    if (debug) Object.assign(window, { __street: { state, sky, look, life, traffic: streetTraffic, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
   });
 
   document.getElementById('loading')!.remove();

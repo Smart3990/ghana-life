@@ -15,8 +15,11 @@ const lite = mode === 'lite';
 const mass = mode === 'mass'; // very light, for big crowds drawn all at once
 const doc = await io.read(src);
 const root = doc.getRoot();
+// Street moves for crowds (the "mass" models also get the moves people do at places).
 const KEEP = ['Idle_Loop', 'Walk_Loop', 'Idle_Talking_Loop'];
-if (!lite) for (const a of root.listAnimations()) if (!KEEP.includes(a.getName())) a.dispose();
+const MASS_KEEP = [...KEEP, 'Jog_Fwd_Loop', 'Idle_TalkingPhone_Loop', 'Consume', 'Idle_FoldArms_Loop', 'Walk_Carry_Loop', 'Yes', 'Idle_No_Loop',
+  'Idle_Rail_Call', 'Sitting_Idle_Loop', 'Sitting_Talking_Loop', 'Dance_Loop', 'PickUp_Table', 'Farm_Harvest', 'Push_Loop', 'Fixing_Kneeling', 'Interact'];
+if (!lite) for (const a of root.listAnimations()) if (!(mass ? MASS_KEEP : KEEP).includes(a.getName())) a.dispose();
 // The eyes are tiny at crowd distance: drop them.
 if (!lite) for (const n of root.listNodes()) if (n.getMesh() && /Face\.001/.test(n.getMesh().getName())) n.getMesh().dispose();
 await doc.transform(

@@ -34,7 +34,13 @@
 
       /* Phone, top left */
       #btn-phone { position: fixed; left: var(--safe-l); top: var(--safe-t); width: 44px; height: 44px; border-radius: 14px; border: 1.5px solid var(--edge); background: var(--card); display: grid; place-items: center; z-index: 7; padding: 0; }
-      #btn-phone svg { width: 22px; height: 22px; }
+      #btn-phone svg, #btn-sound svg { width: 22px; height: 22px; }
+      #btn-sound { position: fixed; left: calc(var(--safe-l) + 54px); top: var(--safe-t); width: 44px; height: 44px; border-radius: 14px; border: 1.5px solid var(--edge); background: var(--card); display: grid; place-items: center; z-index: 7; padding: 0; color: var(--text); }
+      #btn-sound.off .waves { display: none; }
+      #btn-sound:not(.off) .cross { display: none; }
+      /* Speech bubbles when people call out to you */
+      .bubble { position: fixed; left: 0; top: 0; z-index: 4; pointer-events: none; transform: translate(-50%, -100%); background: #fbf7ee; color: #121a14; font-weight: 800; font-size: 13px; padding: 5px 10px; border-radius: 12px; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,.25); transition: opacity .3s; }
+      .bubble::after { content: ''; position: absolute; left: 50%; bottom: -6px; margin-left: -6px; border: 6px solid transparent; border-top-color: #fbf7ee; border-bottom: 0; }
 
       /* Time and money, top right */
       #hud-top { position: fixed; right: var(--safe-r); top: var(--safe-t); text-align: right; font-variant-numeric: tabular-nums; z-index: 5; line-height: 1.15; }
@@ -103,6 +109,9 @@
 
     <button id="btn-phone" class="shadow" type="button" aria-label="Phone">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M10.5 18.5h3"/></svg>
+    </button>
+    <button id="btn-sound" class="shadow" type="button" aria-label="Sound on or off">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v4h3l5 4V6L7 10z" fill="currentColor" fill-opacity=".25"/><g class="waves"><path d="M15.5 9.5a3.5 3.5 0 010 5"/><path d="M18 7a7 7 0 010 10"/></g><g class="cross"><path d="M16 9l5 6"/><path d="M21 9l-5 6"/></g></svg>
     </button>
     <div id="hud-top" class="shadow"><div id="clock">18:42</div><div id="money">₵ 1,280</div><div id="debug" hidden></div></div>
     <div id="place" class="shadow" aria-live="polite"></div>

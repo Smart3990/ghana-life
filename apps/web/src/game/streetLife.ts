@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { box, merge, paint, shadowTexture } from './vehicles3d';
 import type { Roof, StreetLine } from './streetBuildings';
 import { CrowdBatch, lookFor, MIX, type Clip, type CrowdBody, type Kind as PersonKind, type Look } from './crowd';
+import { StreetScenes } from './streetScenes';
 
 type Part = THREE.BufferGeometry;
 type Spot = { x: number; z: number; angle: number; scale: number; colour: number };
@@ -152,8 +153,16 @@ export class StreetLife {
   /** Share of the crowd to show (1 = everyone): lowered automatically when the phone struggles. */
   setDensity(d: number) {
     this.density = Math.max(0.2, Math.min(1, d));
-    for (const b of Object.values(this.crowds)) if (b) b.mesh.count = Math.floor(b.count * this.density);
+    // The places' people (the first slots) always stay; walkers thin out.
+    for (const [body, b] of Object.entries(this.crowds) as [CrowdBody, CrowdBatch][]) {
+      const reserved = this.sceneSlots[body];
+      b.mesh.count = reserved + Math.floor((b.count - reserved) * this.density);
+    }
   }
+  /** People at places: sellers, customers, people sitting, dancers, children playing football. */
+  scenes: StreetScenes | null = null;
+  private sceneSlots: Record<CrowdBody, number> = { male: 0, female: 0 };
+  private footballSpots: { x: number; z: number }[] = [];
   private lastRefresh = { x: Infinity, z: Infinity };
   private m = new THREE.Matrix4();
   private q = new THREE.Quaternion();
@@ -165,7 +174,7 @@ export class StreetLife {
 
   constructor(
     private blocked: (x: number, z: number, margin: number) => boolean,
-    private opts: { radiusM: number; people: number; props: number; smoothCrowd?: boolean },
+    private opts: { radiusM: number; people: number; props: number; scenes: number; smoothCrowd?: boolean },
   ) {
     const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0.05 });
     const make = (geometry: Part, tint: boolean) => {
@@ -211,12 +220,24 @@ export class StreetLife {
 
   // Everyone who will be out on the streets, with their looks fixed for the session.
   private async makePeople() {
+    // The first slots of each batch are kept for the people at places (scenes), the rest walk.
+    const reserve = Math.ceil(this.opts.scenes * 0.65);
     const [male, female] = await Promise.all([
-      CrowdBatch.create('male', this.opts.people, this.time, this.opts.smoothCrowd),
-      CrowdBatch.create('female', this.opts.people, this.time, this.opts.smoothCrowd),
+      CrowdBatch.create('male', this.opts.people + reserve, this.time, this.opts.smoothCrowd),
+      CrowdBatch.create('female', this.opts.people + reserve, this.time, this.opts.smoothCrowd),
     ]);
     this.crowds = { male, female };
     this.group.add(male.mesh, female.mesh);
+    this.sceneSlots = { male: reserve, female: reserve };
+    male.count = female.count = reserve;
+    const freeSlots = { male: Array.from({ length: reserve }, (_, i) => reserve - 1 - i), female: Array.from({ length: reserve }, (_, i) => reserve - 1 - i) };
+    const hidden = new THREE.Matrix4().makeScale(0, 0, 0);
+    for (let i = 0; i < reserve; i++) {
+      male.mesh.setMatrixAt(i, hidden);
+      female.mesh.setMatrixAt(i, hidden);
+    }
+    this.scenes = new StreetScenes({ male, female }, freeSlots, this.opts.scenes);
+    this.group.add(this.scenes.group);
     const total = MIX.reduce((n, [, w]) => n + w, 0);
     for (let i = 0; i < this.opts.people; i++) {
       // School children come in groups of three or four; friends walk together in twos and threes.
@@ -247,6 +268,7 @@ export class StreetLife {
       });
     }
     this.setDensity(this.density);
+    this.lastRefresh = { x: Infinity, z: Infinity }; // set up the places' people straight away
   }
 
   // Road pieces in a grid of 25 m squares, so things are never put on a road.
@@ -314,16 +336,17 @@ export class StreetLife {
             const [lx, lz] = [x - dz * (size.half + GUTTER + 0.3) * side, z + dx * (size.half + GUTTER + 0.3) * side];
             if (!this.onRoad(lx, lz, 0.1)) this.lights.all.push({ x: lx, z: lz, angle: facing + Math.PI, scale: 1, colour: 0 });
           }
-          if (r < 0.22) {
+          // Accra's roadsides: trees, then kiosks and umbrella stalls almost everywhere.
+          if (r < 0.18) {
             const [tx, tz] = at(1.2);
             if (this.free(tx, tz, 1.2)) {
               const b = r < 0.08 ? this.palms : this.trees;
               b.all.push({ x: tx, z: tz, angle: r * 40, scale: 0.85 + hash(tx, tz) * 0.45, colour: 0xffffff });
             }
-          } else if (r < 0.34 && road.kind !== 'minor_road') {
+          } else if (r < 0.38) {
             const [kx, kz] = at(1.5);
             if (this.free(kx, kz, 1.6)) this.kiosks.all.push({ x: kx, z: kz, angle: facing, scale: 1, colour: KIOSK_COLOURS[Math.floor(hash(kx, kz) * KIOSK_COLOURS.length)] });
-          } else if (r < 0.42) {
+          } else if (r < 0.56) {
             const [ux, uz] = at(-size.walk / 2);
             if (this.free(ux, uz, 0.9)) this.umbrellas.all.push({ x: ux, z: uz, angle: r * 30, scale: 1, colour: UMBRELLA_COLOURS[Math.floor(hash(ux, uz) * UMBRELLA_COLOURS.length)] });
           }
@@ -344,6 +367,18 @@ export class StreetLife {
       }
     }
     for (const k of this.kiosks.all.concat(this.umbrellas.all)) this.gatherings.push({ x: k.x, z: k.z, face: k.angle });
+    // Open ground beside side streets, where children kick a ball about.
+    for (const road of roads) {
+      if (road.kind !== 'minor_road') continue;
+      for (let i = 0; i + 3 < road.pts.length; i += 8) {
+        const [x1, z1, x2, z2] = [road.pts[i], road.pts[i + 1], road.pts[i + 2], road.pts[i + 3]];
+        const len = Math.hypot(x2 - x1, z2 - z1) || 1;
+        const off = HALF.minor_road.half + GUTTER + HALF.minor_road.walk + 4;
+        const x = x1 - ((z2 - z1) / len) * off;
+        const z = z1 + ((x2 - x1) / len) * off;
+        if (hash(x, z) < 0.6 && this.free(x, z, 2.5)) this.footballSpots.push({ x, z });
+      }
+    }
     for (const roof of roofs) {
       if (hash(roof.x, roof.z) < 0.35) this.tanks.all.push({ x: roof.x, z: roof.z, angle: roof.id, scale: 1, colour: 0, y: roof.top } as Spot & { y: number });
     }
@@ -402,6 +437,7 @@ export class StreetLife {
     this.time.value = t;
     if (Math.hypot(x - this.lastRefresh.x, z - this.lastRefresh.z) > 30) this.refresh(x, z);
     this.movePeople(x, z, t);
+    this.scenes?.update(t, x, z);
     void dt;
   }
 
@@ -423,6 +459,13 @@ export class StreetLife {
       return false;
     });
     this.nearSpots = this.gatherings.filter((g) => Math.hypot(g.x - x, g.z - z) < reach);
+    // The places nearest the player get their people (sellers, customers, chairs, dancers, football).
+    if (this.scenes) {
+      const byDistance = <T extends { x: number; z: number }>(list: T[], max: number) =>
+        list.filter((s) => Math.hypot(s.x - x, s.z - z) < 70).sort((a, b) => Math.hypot(a.x - x, a.z - z) - Math.hypot(b.x - x, b.z - z)).slice(0, max);
+      const share = Math.max(2, Math.floor(this.opts.scenes / 6));
+      this.scenes.rebuild(byDistance(this.kiosks.all, share), byDistance(this.umbrellas.all, share), byDistance(this.footballSpots, 1), this.time.value);
+    }
     const r2 = this.opts.radiusM ** 2;
     let shadows = 0;
     for (const b of this.batches) {
@@ -470,8 +513,12 @@ export class StreetLife {
     return [x1 + (x2 - x1) * k, z1 + (z2 - z1) * k, Math.atan2(x2 - x1, -(z2 - z1))];
   }
 
+  /** How many walkers are within 25 m of the player (for the crowd's sound). */
+  nearCount = 0;
+
   private movePeople(x: number, z: number, t: number) {
     let shadows = this.propShadows;
+    let close = 0;
     const loadCount = { basin: 0, tray: 0 };
     const far = Math.min(85, this.opts.radiusM * 0.8);
     for (const [i, a] of this.agents.entries()) {
@@ -519,6 +566,7 @@ export class StreetLife {
       this.q.setFromAxisAngle(this.up, Math.PI - heading);
       this.m.compose(this.p.set(px, 0, pz), this.q, this.sc.setScalar(a.look.scale));
       batch.mesh.setMatrixAt(a.slot, this.m);
+      if (Math.abs(px - x) < 25 && Math.abs(pz - z) < 25) close++;
       if (a.look.load) {
         const top = (a.look.body === 'female' ? 1.74 : 1.8) * a.look.scale;
         const bob = a.still ? 0 : Math.abs(Math.sin(t * Math.PI * 2 * (a.speed / 1.35))) * 0.025;
@@ -538,6 +586,7 @@ export class StreetLife {
     }
     this.shadowBatch.count = shadows;
     this.shadowBatch.instanceMatrix.needsUpdate = true;
+    this.nearCount = close;
   }
 
   // Far from the player now (checked a few times a second per person, not every frame).

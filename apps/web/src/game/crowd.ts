@@ -9,9 +9,31 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { SKIN_TONES } from './person';
 
 export type CrowdBody = 'male' | 'female';
-export type Clip = 'walk' | 'idle' | 'talk';
-const CLIP_NAMES: Record<Clip, string> = { walk: 'Walk_Loop', idle: 'Idle_Loop', talk: 'Idle_Talking_Loop' };
-const CLIP_FPS: Record<Clip, number> = { walk: 30, idle: 12, talk: 12 };
+// Everything people in the street can be seen doing.
+const CLIP_NAMES = {
+  walk: 'Walk_Loop',
+  idle: 'Idle_Loop',
+  talk: 'Idle_Talking_Loop',
+  jog: 'Jog_Fwd_Loop',
+  phone: 'Idle_TalkingPhone_Loop',
+  eat: 'Consume', // eating or drinking
+  sell: 'Idle_FoldArms_Loop', // a seller waiting for customers
+  carry: 'Walk_Carry_Loop',
+  yes: 'Yes',
+  no: 'Idle_No_Loop',
+  call: 'Idle_Rail_Call', // calling out, waving someone over
+  sit: 'Sitting_Idle_Loop',
+  sitTalk: 'Sitting_Talking_Loop',
+  dance: 'Dance_Loop',
+  serve: 'PickUp_Table', // picking something up from a table
+  pick: 'Farm_Harvest', // bending down to pick up goods
+  push: 'Push_Loop', // pushing a cart
+  fix: 'Fixing_Kneeling',
+  hand: 'Interact', // handing something over
+} as const;
+export type Clip = keyof typeof CLIP_NAMES;
+// Moving clips need smooth frames; standing ones look fine with fewer (saves memory).
+const CLIP_FPS = (clip: Clip) => (clip === 'walk' || clip === 'jog' || clip === 'carry' || clip === 'push' || clip === 'dance' ? 30 : 12);
 const URL: Record<CrowdBody, string> = { male: '/models/person-mass.glb', female: '/models/person-female-mass.glb' };
 
 /** How one person looks. Colours are CSS colours; scale 1 is an adult (children about 0.62). */
@@ -79,7 +101,7 @@ async function bake(body: CrowdBody): Promise<Baked> {
     const action = mixer.clipAction(source);
     mixer.stopAllAction();
     action.play();
-    const fps = CLIP_FPS[clip];
+    const fps = CLIP_FPS(clip);
     const frames = Math.max(1, Math.round(source.duration * fps));
     clips[clip] = { row: rows.length, frames, fps, length: source.duration };
     for (let f = 0; f < frames; f++) {
@@ -94,9 +116,12 @@ async function bake(body: CrowdBody): Promise<Baked> {
     }
   }
   const width = bones.length * 4;
-  const data = new Float32Array(width * rows.length * 4);
-  rows.forEach((r, y) => data.set(r, y * width * 4));
-  const tex = new THREE.DataTexture(data, width, rows.length, THREE.RGBAFormat, THREE.FloatType);
+  // Half-precision numbers: half the memory, and still accurate to about a millimetre here.
+  const data = new Uint16Array(width * rows.length * 4);
+  rows.forEach((r, y) => {
+    for (let i = 0; i < r.length; i++) data[y * width * 4 + i] = THREE.DataUtils.toHalfFloat(r[i]);
+  });
+  const tex = new THREE.DataTexture(data, width, rows.length, THREE.RGBAFormat, THREE.HalfFloatType);
   tex.minFilter = tex.magFilter = THREE.NearestFilter;
   tex.needsUpdate = true;
   const map = (bodyMesh.material as THREE.MeshStandardMaterial).map;

@@ -6,7 +6,7 @@
 #    channel marks each texel as skin (16), shirt (76), trousers (136), shoes (196) or soles (255), so the game
 #    can recolour skin and clothes cheaply in the shader (many different people, one texture).
 #  - the animations the game needs (no weapon ones)
-# Usage: blender -b --python build_person.py -- <body.gltf> <hair.gltf> <animations.glb> <out.glb> <texdir> <male|female>
+# Usage: blender -b --python build_person.py -- <body.gltf> <hair.gltf> <animations.glb[|more.glb]> <out.glb> <texdir> <male|female>
 import bpy, sys, math, re
 import numpy as np
 from mathutils import Vector
@@ -14,8 +14,12 @@ from mathutils import Vector
 argv = sys.argv[sys.argv.index('--') + 1:]
 BODY, HAIR, ANIMS, OUT, TEXDIR, BUILD = argv[:6]
 FEMALE = BUILD == 'female'
-KEEP = ['Idle_Loop', 'Walk_Loop', 'Jog_Fwd_Loop', 'Sprint_Loop', 'Driving_Loop', 'Sitting_Idle_Loop',
-        'Jump_Start', 'Jump_Loop', 'Jump_Land', 'Idle_Talking_Loop', 'Interact', 'Dance_Loop', 'Punch_Jab', 'Hit_Chest']
+# Everyday moves only (no weapons). From library 1: moving, riding, sitting, talking, dancing, work.
+# From library 2: phone calls, eating and drinking, sellers' folded arms, carrying, yes and no, calling out, bending to pick.
+KEEP = ['Idle_Loop', 'Walk_Loop', 'Jog_Fwd_Loop', 'Sprint_Loop', 'Driving_Loop', 'Sitting_Idle_Loop', 'Sitting_Talking_Loop',
+        'Jump_Start', 'Jump_Loop', 'Jump_Land', 'Idle_Talking_Loop', 'Interact', 'Dance_Loop', 'Punch_Jab', 'Hit_Chest',
+        'PickUp_Table', 'Push_Loop', 'Fixing_Kneeling',
+        'Idle_TalkingPhone_Loop', 'Consume', 'Idle_FoldArms_Loop', 'Walk_Carry_Loop', 'Yes', 'Idle_No_Loop', 'Idle_Rail_Call', 'Farm_Harvest']
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
 
@@ -41,8 +45,8 @@ for m in hair.modifiers:
         m.object = arm
 drop([o for o in hair_objs if o is not hair])
 
-anim_objs = imported(ANIMS)
-drop(anim_objs)
+for anim_file in ANIMS.split('|'):
+    drop(imported(anim_file))
 for a in list(bpy.data.actions):
     base = a.name.split('_Armature')[0]
     if base in KEEP:
