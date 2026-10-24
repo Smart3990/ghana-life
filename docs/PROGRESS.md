@@ -65,6 +65,19 @@ Next steps, in order (brief section 23):
 Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/streetTest.ts`).
 
 - **What it does:** a 3D person at Kwame Nkrumah Circle, seen from close behind, walks or runs with a touch joystick, W A S D or arrow keys, or a game controller. They get on and off an okada with the OKADA button, E, or X / □ on a controller. The bike leans in corners, its wheels turn, and the rider sits on it. The camera follows behind and turns after you. Place names fade in as you pass.
+- **Busy city pass (2026-10-24):**
+  - **Crowds** (`src/game/crowd.ts`): hundreds of people, drawn in one batch per body (man, woman). Their walk, idle and talk moves are worked out once at the start and stored in a small texture, and the graphics card animates everyone from it. The kinds of people:
+    - everyday men and women;
+    - Muslim men in pale kaftans and white caps, and Muslim women in headscarves and long dresses;
+    - people in church clothes;
+    - children, and school children in mustard-and-brown uniform walking in groups of three or four;
+    - kayayei with aluminium basins on their heads, and hawkers with trays.
+
+    They walk both ways along the pavements and stand chatting at kiosks and umbrellas. Most stay within about 90 m of the player. The models are `person-mass.glb` (about 900 triangles) and `person-female-mass.glb` (about 1,300, after a lighter skirt). Numbers: 80 / 200 / 400 people (Light / Standard / Ultra).
+  - **Traffic** (`traffic.ts`): from 420 vehicles to about 20,000, one every 20 to 40 m on every route. Each route has its own pace. A vehicle is just "route plus slot", so nothing is stored per vehicle, and only the stretches of road near the player are worked out. New kinds, all built in code: okadas with riders (about 15% of traffic), buses, cargo trucks with wooden sides, pickups and SUVs. Every vehicle keeps a gap to whatever is ahead in its lane, even on another route, so queues form instead of overlapping. Draw limits: 30 / 80 / 160 (raised from 15 / 40 / 100; batching keeps it cheap).
+  - **Sky** (`src/game/sky3d.ts`): 3D jets on the same Kotoka arrival and departure paths as the overview map, and three helicopters circling over Circle, Makola and Ridge.
+  - **Looking around:** drag on the right side of the screen (or anywhere with the mouse), or use the right stick, to turn and tilt the view up to the sky. It settles back behind you after a moment.
+  - **Cloud check:** about 124,000 triangles on Light and 303,000 on Standard, with no errors and the main game still clean. This is heavy: if the cheap phone is slow, lower Light's people (80) and vehicles (30) first.
 - **Street quality pass (2026-10-24):**
   - **Buildings** (`src/game/streetBuildings.ts`): the buildings near the player are real 3D, built from the same map tiles (nothing new to download). They use the map's Accra wall and roof colours and its guessed heights. The shader draws shop shutters, doors, framed windows and louvres floor by floor, with dust near the ground. The map's own blocks are switched off at street level. Building is spread over frames (5 ms each), so new streets don't make the game stutter. You can no longer walk or ride through walls; you slide along them.
   - **Ground** (`src/map/streetStyle.ts`): roads are their real width in metres (major roads 10 m, minor roads 6.5 m), with pavements, open gutters, kerbs and a dashed centre line on two-way main roads. The ground is dusty laterite, and the floating labels (house numbers, road names, icons) are switched off, which also stops them flickering.

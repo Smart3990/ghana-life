@@ -49,7 +49,7 @@ export type Person = {
 type Loaded = { scene: THREE.Object3D; animations: THREE.AnimationClip[] };
 // Detail: "full" for the player, "lite" (a third of the triangles, every move) for the player on
 // Light phones, "crowd" (a sixth, only idle, walk and talk) for people in the street.
-export type Detail = 'full' | 'lite' | 'crowd';
+export type Detail = 'full' | 'lite' | 'crowd' | 'mass';
 const MODEL_URL = (body: Body, detail: Detail) => `/models/${body === 'female' ? 'person-female' : 'person'}${detail === 'full' ? '' : `-${detail}`}.glb`;
 const loading = new Map<string, Promise<Loaded>>();
 function loadModel(body: Body, detail: Detail = 'full'): Promise<Loaded> {

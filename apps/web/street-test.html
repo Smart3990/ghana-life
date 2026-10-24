@@ -58,6 +58,9 @@
       #stick.active { opacity: 1; background: rgba(18,26,20,.32); }
       #knob { position: absolute; left: 35px; top: 35px; width: 50px; height: 50px; border-radius: 50%; background: rgba(242,239,230,.88); box-shadow: 0 2px 6px rgba(0,0,0,.35); }
       html:not(.touch) #stick, html:not(.touch) #stick-zone { display: none; }
+      /* Drag on the right side (or with the mouse on a computer) to look around */
+      #look-zone { position: fixed; right: 0; top: 0; bottom: 0; width: 50%; z-index: 3; touch-action: none; cursor: grab; }
+      html:not(.touch) #look-zone { width: 100%; }
 
       /* Action buttons, bottom right: round, icon-only, the thumb's arc */
       .act { position: fixed; border-radius: 50%; border: 2px solid var(--edge); background: var(--card); color: var(--text); padding: 0; display: grid; place-items: center; z-index: 6; touch-action: none; transition: transform .12s, opacity .2s, background .12s; }
@@ -109,6 +112,7 @@
       <div id="energy" aria-label="Energy"><div class="kente"></div></div>
     </div>
 
+    <div id="look-zone" aria-hidden="true"></div>
     <div id="stick-zone" aria-hidden="true"></div>
     <div id="stick" aria-hidden="true"><div id="knob"></div></div>
 
@@ -134,7 +138,7 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h4a2 2 0 012 2v12a2 2 0 01-2 2h-4"/><path d="M10 8l-4 4 4 4"/><path d="M6 12h10"/></svg>
     </button>
 
-    <p id="help"><span class="keys"><b>W A S D</b> move · <b>Shift</b> sprint · <b>Space</b> jump · <b>F</b> okada · <b>H</b> horn · controllers work too</span><span class="touchtip">Touch the left side to move</span></p>
+    <p id="help"><span class="keys"><b>W A S D</b> move · <b>Shift</b> sprint · <b>Space</b> jump · <b>F</b> okada · <b>H</b> horn · drag to look around · controllers work too</span><span class="touchtip">Left side: move · right side: look around</span></p>
 
     <div id="gate">
       <div>

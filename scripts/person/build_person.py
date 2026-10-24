@@ -317,7 +317,7 @@ if FEMALE:
     centre = bones['pelvis'][0]
     left_sign = 1.0 if bones['thigh_l'][0].x > centre.x else -1.0
     body_now = np.array([tuple(mw @ v.co) for v in mesh.vertices])
-    N, RINGS = 36, 9
+    N, RINGS = 24, 6
     angles = np.linspace(0, 2 * np.pi, N, endpoint=False)
     zs = list(np.linspace(z_skirt_top, z_skirt_bottom, RINGS))
     # How far the body reaches out at each angle, between the hips and the hem.

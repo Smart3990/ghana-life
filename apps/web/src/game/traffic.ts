@@ -5,7 +5,9 @@ import type { GeoJSONSource, Map } from 'maplibre-gl';
 import type { Tier } from '../map/style';
 
 const ROUTES_URL = '/data/traffic-central.json';
-const VEHICLES = 420; // across the whole area; only the nearest few are drawn
+// Busy Accra: on each route a vehicle every 20 to 40 metres (about 20,000 vehicles in all).
+// Only the ones near the player are ever worked out.
+const SPACING_M: [number, number] = [20, 40];
 // Vehicles are drawn about twice real size, like most map games, so they read clearly
 // next to the (screen-sized) characters.
 const SIZE = 2.1;
@@ -18,7 +20,7 @@ const LANE_OFFSET_M = 3.2; // Ghana drives on the right (wider than real, to mat
 const M_LAT = 110574;
 const M_LON = 111320 * Math.cos((5.56 * Math.PI) / 180);
 
-export type Kind = 'car' | 'taxi' | 'trotro' | 'tricycle';
+export type Kind = 'car' | 'taxi' | 'trotro' | 'tricycle' | 'okada' | 'bus' | 'truck' | 'pickup' | 'suv';
 
 // Sizes in metres, speeds in metres per second, and Accra-looking colours.
 export const KINDS: Record<Kind, { length: number; width: number; height: number; speed: number; colours: string[]; cabin?: string }> = {
@@ -26,9 +28,20 @@ export const KINDS: Record<Kind, { length: number; width: number; height: number
   taxi: { length: 4.4, width: 1.8, height: 1.45, speed: 9, colours: ['#f2a922'], cabin: '#33404d' },
   trotro: { length: 6.2, width: 2.1, height: 2.4, speed: 7.5, colours: ['#f1ece0', '#e9e4d6', '#d9dde0'] },
   tricycle: { length: 2.6, width: 1.3, height: 1.7, speed: 6, colours: ['#1f8a5b', '#2f6fd0', '#c8102e'] },
+  okada: { length: 2.0, width: 0.8, height: 1.6, speed: 9, colours: ['#c8442e', '#1f5fa8', '#e3a92b', '#2f7d55', '#151515', '#f2efe6'] },
+  bus: { length: 11, width: 2.5, height: 3.1, speed: 7, colours: ['#f2efe6', '#e3a92b', '#1f5fa8'] },
+  truck: { length: 8, width: 2.4, height: 3.0, speed: 6.5, colours: ['#c8442e', '#1f5fa8', '#2f7d55', '#e3a92b'] },
+  pickup: { length: 5.2, width: 1.85, height: 1.8, speed: 9, colours: ['#f4f4f2', '#c0c4c8', '#2b2f36', '#7a1f2b'], cabin: '#33404d' },
+  suv: { length: 4.8, width: 1.9, height: 1.8, speed: 10, colours: ['#151515', '#f4f4f2', '#2b2f36', '#c0c4c8', '#5a1f1f'], cabin: '#33404d' },
 };
-// Roughly how Accra's streets mix: many cars and taxis, plenty of trotros, some tricycles.
-const MIX: Kind[] = ['car', 'car', 'car', 'taxi', 'taxi', 'trotro', 'trotro', 'tricycle'];
+// Roughly how Accra's streets mix (out of 100).
+const MIX_WEIGHTS: [Kind, number][] = [['car', 28], ['taxi', 17], ['trotro', 14], ['okada', 15], ['tricycle', 6], ['bus', 3], ['truck', 5], ['pickup', 6], ['suv', 6]];
+const MIX_TOTAL = MIX_WEIGHTS.reduce((n, [, w]) => n + w, 0);
+const kindFor = (r: number): Kind => {
+  let left = r * MIX_TOTAL;
+  for (const [k, w] of MIX_WEIGHTS) if ((left -= w) < 0) return k;
+  return 'car';
+};
 
 type VehicleShape = {
   type: 'Feature';
@@ -113,44 +126,73 @@ export async function loadTraffic(): Promise<Traffic | null> {
   }
   if (!routes.length) return null;
 
-  // Vehicles on the same route share its speed and are spaced out evenly, so they never drive
-  // through each other (each route has its own pace: some roads are faster than others).
-  const perRoute = new globalThis.Map<number, number>();
-  const vehicles: Vehicle[] = Array.from({ length: VEHICLES }, (_, i) => {
-    const kind = MIX[Math.floor(hash(i * 3 + 1) * MIX.length)];
-    const k = KINDS[kind];
-    const route = i % routes.length;
-    const slot = perRoute.get(route) ?? 0;
-    perRoute.set(route, slot + 1);
-    return {
-      id: i,
-      route,
-      kind,
-      colour: k.colours[Math.floor(hash(i * 3 + 2) * k.colours.length)],
-      offset: slot,
-      speed: 7 + hash(route * 13 + 5) * 4,
-    };
+  // Each route: its own pace and its own spacing. Vehicles on a route share its speed and are
+  // spaced evenly (with a little jitter), so they never drive through each other. A vehicle is
+  // known by its route and its slot, so nothing needs storing for the 20,000 of them.
+  const pace = routes.map((r, i) => {
+    const spacing = SPACING_M[0] + hash(i * 17 + 3) * (SPACING_M[1] - SPACING_M[0]);
+    const slots = Math.max(1, Math.floor(r.total / spacing));
+    return { speed: 7 + hash(i * 13 + 5) * 4, slots, gap: r.total / slots };
   });
-  for (const v of vehicles) {
-    const n = perRoute.get(v.route)!;
-    v.offset = ((v.offset + 0.35 * hash(v.id * 3 + 3)) / n) * routes[v.route].total;
-  }
+  const vehicle = (route: number, slot: number): Vehicle => {
+    const id = route * 100000 + slot;
+    const kind = kindFor(hash(id * 3 + 1));
+    const k = KINDS[kind];
+    const p = pace[route];
+    return { id, route, kind, colour: k.colours[Math.floor(hash(id * 3 + 2) * k.colours.length)], offset: (slot + 0.3 * hash(id * 3 + 3)) * p.gap, speed: p.speed };
+  };
+
+  // Which stretches of each route are near a point (worked out again after moving 40 m).
+  let cache: { lon: number; lat: number; radius: number; spans: [number, number, number][] } | null = null;
+  const spansNear = (lon: number, lat: number, radiusM: number) => {
+    if (cache && cache.radius === radiusM && Math.hypot((cache.lon - lon) * M_LON, (cache.lat - lat) * M_LAT) < 40) return cache.spans;
+    const reach = radiusM + 40;
+    const spans: [number, number, number][] = [];
+    routes.forEach((r, ri) => {
+      let start = -1;
+      for (let i = 0; i < r.at.length; i++) {
+        const d = Math.hypot((r.lon[i] - lon) * M_LON, (r.lat[i] - lat) * M_LAT);
+        const seg = i + 1 < r.at.length ? r.at[i + 1] - r.at[i] : 0;
+        const inside = d < reach + seg;
+        if (inside && start < 0) start = Math.max(0, r.at[i] - seg);
+        if (!inside && start >= 0) {
+          spans.push([ri, start, r.at[i]]);
+          start = -1;
+        }
+      }
+      if (start >= 0) spans.push([ri, start, r.total]);
+    });
+    cache = { lon, lat, radius: radiusM, spans };
+    return spans;
+  };
 
   const near: Traffic['near'] = (lon, lat, t, radiusM, limit, lane = LANE_OFFSET_M) => {
     const found: Placed[] = [];
-    for (const v of vehicles) {
-      const r = routes[v.route];
-      const s = (v.offset + v.speed * t) % r.total;
-      const p = placeOn(r, s, lane);
-      const d = Math.hypot((p.lon - lon) * M_LON, (p.lat - lat) * M_LAT);
-      if (d > radiusM) continue;
-      // Facing: along the road a few metres either side, so turns are smooth instead of snapping.
-      const ahead = placeOn(r, Math.min(r.total, s + 3), lane);
-      const behind = placeOn(r, Math.max(0, s - 3), lane);
-      const heading = Math.atan2((ahead.lon - behind.lon) * M_LON, (ahead.lat - behind.lat) * M_LAT);
-      found.push({ v, d, lon: p.lon, lat: p.lat, heading, s });
+    for (const [ri, a, b] of spansNear(lon, lat, radiusM)) {
+      const r = routes[ri];
+      const p = pace[ri];
+      const base = (p.speed * t) % r.total;
+      // Slots whose vehicle is between a and b right now (allowing for the jitter).
+      {
+        const first = Math.floor((a - base) / p.gap) - 1;
+        const last = Math.ceil((b - base) / p.gap) + 1;
+        for (let m = first; m <= last; m++) {
+          const slot = ((m % p.slots) + p.slots) % p.slots;
+          const v = vehicle(ri, slot);
+          const s = (((v.offset + base) % r.total) + r.total) % r.total;
+          if (s < a || s > b) continue;
+          const pos = placeOn(r, s, lane);
+          const d = Math.hypot((pos.lon - lon) * M_LON, (pos.lat - lat) * M_LAT);
+          if (d > radiusM) continue;
+          // Facing: along the road a few metres either side, so turns are smooth instead of snapping.
+          const ahead = placeOn(r, Math.min(r.total, s + 3), lane);
+          const behind = placeOn(r, Math.max(0, s - 3), lane);
+          const heading = Math.atan2((ahead.lon - behind.lon) * M_LON, (ahead.lat - behind.lat) * M_LAT);
+          found.push({ v, d, lon: pos.lon, lat: pos.lat, heading, s });
+        }
+      }
     }
-    found.sort((a, b) => a.d - b.d);
+    found.sort((x, y) => x.d - y.d);
     return found.slice(0, limit);
   };
   const at: Traffic['at'] = (v, s, lane = LANE_OFFSET_M) => {

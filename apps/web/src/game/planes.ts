@@ -66,6 +66,17 @@ function flight(k: number, t: number): { at: [number, number]; altitude: number 
   return { at, altitude: airborne * CLIMB };
 }
 
+/** Every plane in the air (or on the runway) near Accra at time `now` (seconds of shared time). */
+export function planesAt(now: number): { at: [number, number]; altitude: number; headingDeg: number; arriving: boolean }[] {
+  const latest = Math.floor(now / EVERY_S);
+  const out = [];
+  for (let k = latest; k > latest - 4; k--) {
+    const f = flight(k, now - k * EVERY_S);
+    if (f) out.push({ ...f, headingDeg: HEADING_DEG, arriving: k % 2 === 0 });
+  }
+  return out;
+}
+
 export function startPlanes(map: Map, serverNow: () => number) {
   const frame = () => {
     requestAnimationFrame(frame);

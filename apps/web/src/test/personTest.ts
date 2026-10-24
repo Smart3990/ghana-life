@@ -1,7 +1,7 @@
 // Person test: the Ghanaverse people up close, in several skin tones and outfits, all from one
 // model file. Shows what the character creator will be able to change, and how many triangles it costs.
 import * as THREE from 'three';
-import { createPerson, SKIN_TONES, type Body, type Move, type Outfit } from '../game/person';
+import { createPerson, SKIN_TONES, type Body, type Detail, type Move, type Outfit } from '../game/person';
 
 const LOOKS: (Partial<Outfit> & { move: Move; body: Body })[] = [
   { body: 'male', skin: SKIN_TONES.deep, shirt: '#2f7d55', trousers: '#2a3446', shoes: '#2b2b2e', move: 'idle' },
@@ -37,13 +37,34 @@ const resize = () => {
 window.addEventListener('resize', resize);
 resize();
 
-const people = await Promise.all(LOOKS.map(({ move, body, ...outfit }) => createPerson(outfit, body).then((p) => ({ p, move }))));
+// ?detail=lite|crowd|mass shows the lighter versions.
+const detail = (new URLSearchParams(location.search).get('detail') ?? 'full') as Detail;
+const people = await Promise.all(LOOKS.map(({ move, body, ...outfit }) => createPerson(outfit, body, detail).then((p) => ({ p, move }))));
 people.forEach(({ p, move }, i) => {
   p.root.position.x = (i - (people.length - 1) / 2) * 0.95;
   p.root.rotation.y = (i - 1.5) * -0.12;
   p.actions[move].play();
   scene.add(p.root);
 });
+
+// ?crowd: the same people drawn by the crowd system (one batch, animated by the graphics card), beside the normal ones.
+if (new URLSearchParams(location.search).has('crowd')) {
+  const { CrowdBatch } = await import('../game/crowd');
+  const time = { value: 0 };
+  const male = await CrowdBatch.create('male', 4, time);
+  const female = await CrowdBatch.create('female', 4, time);
+  LOOKS.forEach(({ body, skin, shirt, trousers, shoes }, i) => {
+    const b = body === 'female' ? female : male;
+    const slot = b.count++;
+    b.setLook(slot, { body, skin: skin!, top: shirt!, bottom: trousers!, shoes: shoes!, hair: '#141110', scale: 1 }, i % 2 ? 'talk' : 'walk', 0);
+    b.mesh.setMatrixAt(slot, new THREE.Matrix4().makeTranslation((i - 1.5) * 0.95, 0, -1.6));
+  });
+  for (const b of [male, female]) {
+    b.mesh.count = b.count;
+    scene.add(b.mesh);
+  }
+  setInterval(() => (time.value = performance.now() / 1000), 16);
+}
 
 const clock = new THREE.Clock();
 const info = document.getElementById('info')!;

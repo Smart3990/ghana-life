@@ -12,6 +12,7 @@ import { StreetTraffic } from '../game/vehicles3d';
 import { StreetBuildings } from '../game/streetBuildings';
 import { applyStreetStyle } from '../map/streetStyle';
 import { StreetLife } from '../game/streetLife';
+import { SkyTraffic } from '../game/sky3d';
 import { createPerson, type Move, type Person } from '../game/person';
 import { Minimap } from '../hud/minimap';
 import { TouchControls } from '../hud/touchControls';
@@ -73,6 +74,7 @@ const map = createMap(document.getElementById('map')!, tier, {
 });
 if (debug) (window as unknown as { __map: maplibregl.Map }).__map = map; // for test scripts
 map.setMaxZoom(24);
+map.setMaxPitch(85); // looking up at the sky
 // The camera belongs to the player, so the usual map gestures are switched off.
 for (const handler of [map.dragPan, map.scrollZoom, map.boxZoom, map.dragRotate, map.keyboard, map.doubleClickZoom, map.touchZoomRotate, map.touchPitch]) {
   handler.disable();
@@ -264,6 +266,24 @@ const touch = new TouchControls(document.getElementById('stick-zone')!, document
 });
 btn('btn-phone').addEventListener('click', () => showHint('The phone is coming soon'));
 
+// Looking around: drag on the right side (touch) or anywhere (mouse); the right stick on a controller.
+// The view turns and tilts, then settles back behind the player a moment after you let go.
+const look = { yaw: 0, pitch: 0, id: -1, lastX: 0, lastY: 0, idle: 0 };
+const lookZone = document.getElementById('look-zone')!;
+lookZone.addEventListener('pointerdown', (e) => {
+  look.id = e.pointerId;
+  lookZone.setPointerCapture(e.pointerId);
+  [look.lastX, look.lastY] = [e.clientX, e.clientY];
+});
+lookZone.addEventListener('pointermove', (e) => {
+  if (e.pointerId !== look.id) return;
+  look.yaw += (e.clientX - look.lastX) * 0.006;
+  look.pitch = Math.max(-16, Math.min(11, look.pitch - (e.clientY - look.lastY) * 0.12));
+  [look.lastX, look.lastY] = [e.clientX, e.clientY];
+  look.idle = 0;
+});
+for (const ev of ['pointerup', 'pointercancel']) lookZone.addEventListener(ev, (e) => (e as PointerEvent).pointerId === look.id && (look.id = -1));
+
 // Controllers (standard mapping, Xbox / PlayStation): left stick moves, right trigger accelerates,
 // left trigger brakes, A / ✕ jumps, B / ○ sprints (hold), Y / △ gets on or off, left stick press sounds the horn.
 const padWas: Record<string, boolean> = {};
@@ -296,6 +316,13 @@ function readInput() {
     if (Math.hypot(px, forward) > Math.hypot(x, y)) [x, y] = [px, forward];
     if (stop > 0.2) brake = true;
     if (pad.buttons[1]?.pressed) sprint = true;
+    const rx = dead(pad.axes[2] ?? 0);
+    const ry = dead(pad.axes[3] ?? 0);
+    if (rx || ry) {
+      look.yaw += rx * 0.04;
+      look.pitch = Math.max(-16, Math.min(11, look.pitch - ry * 1.2));
+      look.idle = 0;
+    }
     padTap(pad, 0, 'jump');
     padTap(pad, 3, 'ride');
     padTap(pad, 10, 'horn');
@@ -517,22 +544,30 @@ function step(player: Player, dt: number, t: number) {
   const speedPull = state.onOkada ? Math.min(0.5, state.speed / 30) : 0; // pull back a little at speed
   state.zoom += (view.zoom - speedPull - state.zoom) * Math.min(1, dt * 2.5);
   state.pitch += (view.pitch - state.pitch) * Math.min(1, dt * 2.5);
+  // After looking around, the view drifts back behind the player (sooner when moving).
+  if (look.id === -1) {
+    look.idle += dt;
+    const settle = look.idle > (Math.abs(state.speed) > 0.5 ? 0.8 : 2.5) ? Math.min(1, dt * 2) : 0;
+    look.yaw *= 1 - settle;
+    look.pitch *= 1 - settle;
+  }
   const here = toLngLat(state.x, state.z);
   const height = map.getContainer().clientHeight;
   // Keep the player the same share of the screen on short (sideways) and tall screens.
   const fit = Math.log2(Math.max(280, height) / 820);
   map.jumpTo({
     center: here,
-    bearing: (state.camHeading * 180) / Math.PI,
+    bearing: ((state.camHeading + look.yaw) * 180) / Math.PI,
     zoom: state.zoom + fit,
-    pitch: state.pitch,
+    pitch: Math.min(85, state.pitch + look.pitch),
     padding: { top: height * PLAYER_SCREEN_DROP, bottom: 0, left: 0, right: 0 },
   });
   checkPlace(here);
   buildings.update(here, state.x, state.z);
   life?.update(state.x, state.z, dt, performance.now() / 1000);
+  sky.update(Date.now() / 1000);
   streetTraffic?.update(here[0], here[1], Date.now() / 1000, TRAFFIC_LANE_M, state);
-  minimap?.update(state.x, state.z, state.camHeading, state.onOkada ? [] : [{ x: state.okadaX, z: state.okadaZ, color: '#c8442e', size: 5 }]);
+  minimap?.update(state.x, state.z, state.camHeading + look.yaw, state.onOkada ? [] : [{ x: state.okadaX, z: state.okadaZ, color: '#c8442e', size: 5 }]);
   void t;
 }
 
@@ -589,11 +624,14 @@ const buildings = new StreetBuildings(
 );
 scene.add(buildings.group);
 life = new StreetLife((x, z, m) => buildings.blocked(x, z, m), {
-  light: { radiusM: 140, people: 5, props: 250 },
-  standard: { radiusM: 200, people: 12, props: 600 },
-  ultra: { radiusM: 280, people: 24, props: 1200 },
+  light: { radiusM: 140, people: 80, props: 250 },
+  standard: { radiusM: 200, people: 200, props: 600 },
+  ultra: { radiusM: 280, people: 400, props: 1200 },
 }[tier]);
 scene.add(life.group);
+// Planes on the Kotoka flight paths and helicopters circling over the city.
+const sky = new SkyTraffic((lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT]);
+scene.add(sky.group);
 let streetTraffic: StreetTraffic | null = null;
 const TRAFFIC_LANE_M = 2.4; // from the middle of the road to the middle of the lane (Ghana drives on the right)
 
@@ -630,11 +668,12 @@ async function start() {
   // Real 3D vehicles at street level (the overview map's blocks are not used here).
   loadTraffic().then((traffic) => {
     if (!traffic) return;
-    const limit = { light: 15, standard: 40, ultra: 100 }[tier];
+    // Busy roads (raised from the first budget of 15 / 40 / 100: they are drawn in batches, so they cost little).
+    const limit = { light: 30, standard: 80, ultra: 160 }[tier];
     streetTraffic = new StreetTraffic(traffic, (lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT], limit, 260);
     scene.add(streetTraffic.group);
     streetTraffic.onHoot = (x, z) => honk(Math.hypot(x - state.x, z - state.z), true);
-    if (debug) Object.assign(window, { __street: { state, traffic: streetTraffic, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
+    if (debug) Object.assign(window, { __street: { state, sky, look, traffic: streetTraffic, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
   });
 
   document.getElementById('loading')!.remove();
