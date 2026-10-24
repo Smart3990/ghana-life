@@ -50,6 +50,16 @@ Plan budget before the map shows: under 3 MB (Light), under 8 MB (Standard). Pas
 - Vehicles and planes are drawn at about twice real size so they read next to the screen-sized characters.
 - Dropped by the owner (2026-10-17): adding "Mr Candy Ghana" in Nationalism Park.
 
+## New direction: Ghanaverse (2026-10-24)
+
+The design is now set out in `docs/GHANAVERSE_DESIGN_BRIEF.md`: the game is called Ghanaverse, with a third-person open-world feel, a Season 1 story ("From your village to Accra"), missions, heists, police, a free world of jobs, cinematic rides and flights inside Greater Accra, Explore Ghana with real sites, friends and nearby voice, a Royal Kente interface, moving ads and a style-only shop.
+
+Next steps, in order (brief section 23):
+
+1. Finish the checks below.
+2. Rendering prototype A from brief section 22.1: a close follow camera, 3D player and nearby vehicles through a three.js layer in MapLibre, joystick and okada control, tested on the cheap Android.
+3. Royal Kente three-tap start screen, clean on-screen display, controller and keyboard input.
+
 ## Waiting on the owner
 
 - Two-device test for T4 (phone and PC see each other walk).
