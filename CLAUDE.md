@@ -12,6 +12,7 @@ The game is now called **Ghanaverse**. "Ghana Life" is the old working title.
 
 - **Performance first, then fun, then realism.** A task is not done until the Light tier stays inside its budget on a cheap Android phone.
 - Never name or reference GTA or any other game, anywhere.
+- Other Accra games exist (see brief 4.1a). Never copy their map, layout, art or characters. Learn only their 3D smoothness, lighting, animation and phone controls, and use those ideas in our own real-Accra open world.
 - No weapons. 18+. Anonymous: nicknames only, never real names, numbers, photos or location.
 - All money is decided on the server, with caps.
 - Fictional banks, police, gangs and businesses. No real people or brands without permission.

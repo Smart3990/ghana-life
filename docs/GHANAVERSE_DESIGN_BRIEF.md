@@ -90,6 +90,19 @@ This brief records every design decision made after the master plan's revision 2
 - **Realism means "beautiful and believable," not photoreal everywhere.** Detail only where the eye goes; simpler far away.
 - **Faces:** keep close-ups on hands, objects and body language; show faces at a little distance, in good light, briefly.
 
+### 4.1a Lessons from other Accra games (owner's decision, 2026-10-24)
+
+Other browser games set in Accra exist (for example accralife.cc). **We do not copy them.**
+
+- **Never their map.** Their city is a small model town seen from above, where you tap pins to go to places. That is not our game. Ours is a third-person open world on the real streets of Accra.
+- **Learn their 3D quality, and use it in our own world:**
+  - smooth, steady frame rates;
+  - warm, consistent lighting from the sky, with soft shadows;
+  - good-looking animation;
+  - easy phone controls: joystick, drag to turn, pinch to zoom, clean bottom panels;
+  - quality presets (low, medium, high) that change pixel density, the frame-rate cap, shadows and smoothing of edges.
+- **Promotional art** (the hero picture, store images) is our own. It may share the warm, busy, golden-hour Accra spirit, but never their scene, layout or characters.
+
 ### 4.2 The game's interface: Royal Kente
 
 The kente colours are for the interface, title cards and branding, never for tinting the city. The city keeps natural colours.
