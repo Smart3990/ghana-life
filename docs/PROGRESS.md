@@ -67,18 +67,19 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
 - **What it does:** a 3D person at Kwame Nkrumah Circle, seen from close behind, walks or runs with a touch joystick, W A S D or arrow keys, or a game controller. They get on and off an okada with the OKADA button, E, or X / □ on a controller. The bike leans in corners, its wheels turn, and the rider sits on it. The camera follows behind and turns after you. Place names fade in as you pass.
 - **Look:** an evening Accra sky, warm light, a soft shadow under the player. At street level the roads are tarmac grey with kerbs and the ground is dusty, instead of the bright overview colours. Road widths keep growing past zoom 18, so roads stay the right size up close.
 - **Traffic:** the live traffic is drawn at real size here (`startTraffic(..., size)`, new optional argument; the main game is unchanged).
-- **Assets:** `public/models/player.glb`, a 425 KB placeholder person. Its source and licence are in `public/models/LICENSES.md`. The okada is built in code, so there is no file to download.
+- **Assets:** `public/models/person.glb` (550 KB), a Ghanaian man in a T-shirt, trousers and trainers, with 14 animations. It's built from Quaternius' free CC0 packs by `scripts/person` (see its README). The source and licence are in `public/models/LICENSES.md`. The okada is built in code, so there is no file to download.
+- **People in code** (`src/game/person.ts`): one shared model and one shared shader for everyone. Skin tone, shirt, trousers, shoes and hair colours are numbers, so crowds can all look different at no download cost. Moves ready: idle, walk, jog, sprint, ride, sit, talk, dance, interact and jump. On the okada the rider uses the riding animation with the knees opened, and sits exactly on the seat.
+- **People test page:** `/person-test.html` shows four outfits side by side.
 - **Size:** the page's own code is 25 KB gzipped, and three.js is 144 KB gzipped (the same as /char-test.html).
 - **Test hooks:** `?debug` shows the frame rate and triangle count, `?auto` rides and walks by itself and writes the result into the page, and `?tier=light|standard|ultra` forces a tier.
 - **Cloud check (software graphics, no GPU, so the numbers are not the phone's):**
   - It loads with no errors.
-  - The scene is about 7,000–9,000 triangles.
+  - The scene is about 16,000 triangles (the person is about 15,000 of them; crowds will need a lighter version).
   - 8–11 fps under software drawing.
   - Screenshots look right on foot and on the okada.
 - **Known limits:**
   - There is no collision yet, so you can walk through buildings.
-  - The person is a grey-model placeholder, tinted.
-  - The riding pose is approximate.
+  - There is only one body so far: a male body. A female body and a lighter crowd version are still to come.
   - Light tier shows flat buildings, which look poor at street level. If the cheap phone gets Light, street view will need low walls in Light (decide after the phone test).
 - **Done when:** on the cheapest Android, `/street-test.html?debug` shows 30 fps or more while walking and riding round Circle, and the controls feel right.
 

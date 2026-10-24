@@ -2,6 +2,8 @@
 
 | File | What it is | Source | Licence | Notes |
 |---|---|---|---|---|
-| `player.glb` | Placeholder animated person (idle, walk, run) | `examples/models/gltf/Xbot.glb` from the three.js repository (r186), originally a Mixamo character from Adobe | Mixamo terms: characters and animations may be used royalty-free in games; not to be redistributed as standalone assets | Simplified to about 7,000 triangles, unused animations removed, meshopt-compressed (2.9 MB → 425 KB). Colours are tinted in code. A placeholder only: the real Ghanaian characters follow the master plan's character method |
+| `person.glb` | The 3D person: male body, short hair, T-shirt, trousers and trainers, with 14 animations | Quaternius, "Universal Base Characters [Standard]" (male body, Buzzed hair) and "Universal Animation Library [Standard]" (animations), https://quaternius.com | CC0 1.0 (public domain); credit is not required but given here | Clothes painted on and reshaped, weapon animations removed, shrunk to about 550 KB. Built by `scripts/person` (see its README). Skin tone and clothes colours are set in code. |
 
 The okada in `src/test/streetTest.ts` is built in code from simple shapes, so it needs no licence.
+
+Removed: `player.glb` (a Mixamo test figure, the three.js "Xbot"), replaced by `person.glb` on 2026-10-24.

@@ -5,18 +5,17 @@
 // follow camera, the 3D player and okada (through a three.js layer inside the map) and the controls.
 import * as THREE from 'three';
 import * as maplibregl from 'maplibre-gl';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { createMap } from '../map/createMap';
 import { detectTier, measureFps } from '../map/tier';
 import { startTraffic } from '../game/traffic';
+import { createPerson, type Move, type Person } from '../game/person';
 
 // ---------- Where and how big ----------
 
 const START: [number, number] = [-0.2166, 5.5694]; // Kwame Nkrumah Circle
 const M_LAT = 110574;
 const M_LON = 111320 * Math.cos((START[1] * Math.PI) / 180);
-const PLAYER_HEIGHT_M = 1.75;
+const OKADA_SEAT = new THREE.Vector3(0, 0.86, -0.24); // top of the seat, in the bike's space
 
 // Camera: close and low behind the player on foot, a little higher on the okada.
 const VIEW = {
@@ -51,6 +50,10 @@ const PLACES: { name: string; at: [number, number] }[] = [
 const params = new URLSearchParams(location.search);
 const debug = params.has('debug');
 const autoTest = params.has('auto');
+// ?closer=0.8 moves the camera in (for checking the characters up close).
+const closer = Math.min(1, Number(params.get('closer')) || 0);
+VIEW.walk.zoom += closer;
+VIEW.okada.zoom += closer;
 const { tier, reason } = detectTier();
 
 // ---------- The map ----------
@@ -167,59 +170,31 @@ scene.add(okada.root);
 
 // ---------- The player ----------
 
-type Player = {
-  root: THREE.Group;
-  body: THREE.Object3D;
-  mixer: THREE.AnimationMixer;
-  actions: Record<'idle' | 'walk' | 'run', THREE.AnimationAction>;
-  bones: Record<string, THREE.Bone>;
-};
+type Player = Person & { seat: THREE.Vector3; shadow: THREE.Object3D };
+
+// Blended moves: walking and running mix by speed, riding fades in on the okada.
+const BLENDED: Move[] = ['idle', 'walk', 'run', 'ride'];
 
 async function loadPlayer(): Promise<Player> {
-  const loader = new GLTFLoader();
-  loader.setMeshoptDecoder(MeshoptDecoder);
-  const gltf = await loader.loadAsync('/models/player.glb');
-  const body = gltf.scene;
-  // Placeholder colours: warm brown skin and a gold top (the real Ghanaian characters come later).
-  body.traverse((o) => {
-    const mesh = o as THREE.Mesh;
-    if (!mesh.isMesh) return;
-    const joints = /joint/i.test((mesh.material as THREE.Material).name);
-    mesh.material = new THREE.MeshStandardMaterial({
-      color: joints ? 0xe3a92b : 0x5b3a26,
-      roughness: joints ? 0.55 : 0.65,
-      metalness: 0.05,
-    });
-    mesh.frustumCulled = false; // skinned meshes move away from their stored bounds while animating
-  });
-  // Scale to a real person's height, whatever units the file uses.
-  const size = new THREE.Box3().setFromObject(body).getSize(new THREE.Vector3());
-  if (size.y > 0) body.scale.multiplyScalar(PLAYER_HEIGHT_M / size.y);
-
-  const root = new THREE.Group();
-  root.add(body, blobShadow(0.55, 0.55));
-  const mixer = new THREE.AnimationMixer(body);
-  const clip = (name: string) => {
-    const found = THREE.AnimationClip.findByName(gltf.animations, name);
-    if (!found) throw new Error(`player.glb has no "${name}" animation`);
-    return found;
-  };
-  const actions = {
-    idle: mixer.clipAction(clip('idle')),
-    walk: mixer.clipAction(clip('walk')),
-    run: mixer.clipAction(clip('run')),
-  };
-  for (const a of Object.values(actions)) {
-    a.play();
-    a.setEffectiveWeight(0);
+  const person = await createPerson();
+  for (const move of BLENDED) {
+    person.actions[move].play();
+    person.actions[move].setEffectiveWeight(move === 'idle' ? 1 : 0);
   }
-  actions.idle.setEffectiveWeight(1);
+  const shadow = blobShadow(0.55, 0.55);
+  person.root.add(shadow);
 
-  const bones: Record<string, THREE.Bone> = {};
-  body.traverse((o) => {
-    if ((o as THREE.Bone).isBone) bones[o.name.replace(/^mixamorig:?/, '')] = o as THREE.Bone;
-  });
-  return { root, body, mixer, actions, bones };
+  // Where the hips are in the riding pose, so the rider can be put exactly on the seat.
+  const ride = person.actions.ride;
+  ride.setEffectiveWeight(1);
+  person.actions.idle.setEffectiveWeight(0);
+  person.mixer.update(0);
+  person.root.updateMatrixWorld(true);
+  const seat = person.bones.pelvis.getWorldPosition(new THREE.Vector3());
+  person.root.worldToLocal(seat);
+  ride.setEffectiveWeight(0);
+  person.actions.idle.setEffectiveWeight(1);
+  return { ...person, seat, shadow };
 }
 
 // ---------- Drawing the 3D scene inside the map ----------
@@ -382,6 +357,10 @@ const state = {
   pitch: VIEW.walk.pitch,
 };
 
+let rideBlend = 0;
+const LEG_OUT_AXIS = new THREE.Vector3(0, 0, 1);
+const RIDE_KNEES_OUT = 0.3;
+
 const angleDiff = (a: number, b: number) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 
 function step(player: Player, dt: number, t: number) {
@@ -437,30 +416,34 @@ function step(player: Player, dt: number, t: number) {
   if (state.onOkada) {
     // Seated on the bike: the player rides with it, leaning into corners.
     if (player.root.parent !== okada.lean) okada.lean.add(player.root);
-    player.root.position.set(0, -0.14, -0.2);
+    player.root.position.copy(OKADA_SEAT).sub(player.seat); // hips on the seat
     player.root.rotation.set(0, 0, 0);
-    (player.root.children[1] as THREE.Object3D).visible = false; // the bike's shadow is enough
+    player.shadow.visible = false; // the bike's shadow is enough
   } else {
     if (player.root.parent !== scene) scene.add(player.root);
     player.root.position.set(state.x, 0, state.z);
     player.root.rotation.set(0, Math.PI - state.heading, 0);
-    (player.root.children[1] as THREE.Object3D).visible = true;
+    player.shadow.visible = true;
   }
 
-  // Animation: blend idle, walk and run by speed; on the okada, sit.
+  // Animation: blend idle, walk and run by speed; on the okada, ride.
   const s = state.onOkada ? 0 : Math.abs(state.speed);
+  rideBlend += ((state.onOkada ? 1 : 0) - rideBlend) * Math.min(1, dt * 8);
+  const onFoot = 1 - rideBlend;
   const w = {
     idle: Math.max(0, 1 - s / 1.0),
     walk: s < WALK_SPEED ? Math.min(1, s / 1.0) : Math.max(0, 1 - (s - WALK_SPEED) / (RUN_SPEED - WALK_SPEED)),
     run: Math.max(0, Math.min(1, (s - WALK_SPEED) / (RUN_SPEED - WALK_SPEED))),
   };
-  player.actions.idle.setEffectiveWeight(w.idle);
-  player.actions.walk.setEffectiveWeight(w.walk);
-  player.actions.run.setEffectiveWeight(w.run);
-  player.actions.walk.setEffectiveTimeScale(Math.max(0.6, s / 1.5));
-  player.actions.run.setEffectiveTimeScale(Math.max(0.7, s / 4.2));
+  player.actions.idle.setEffectiveWeight(w.idle * onFoot);
+  player.actions.walk.setEffectiveWeight(w.walk * onFoot);
+  player.actions.run.setEffectiveWeight(w.run * onFoot);
+  player.actions.ride.setEffectiveWeight(rideBlend);
+  // The clips are made for about 1.4 m/s walking and 3.8 m/s jogging: match the feet to the ground.
+  player.actions.walk.setEffectiveTimeScale(Math.max(0.6, s / 1.4));
+  player.actions.run.setEffectiveTimeScale(Math.max(0.7, s / 3.8));
   player.mixer.update(dt);
-  if (state.onOkada) sitPose(player);
+  if (rideBlend > 0.01) ridePose(player, rideBlend);
 
   // Camera: follows behind the player, turning a little after them, closer on foot.
   state.camHeading += angleDiff(state.heading, state.camHeading) * Math.min(1, dt * (state.onOkada ? 2.6 : 3.2));
@@ -481,24 +464,15 @@ function step(player: Player, dt: number, t: number) {
   void t;
 }
 
-// Bend hips, knees and arms into a riding position, on top of the idle animation.
-function sitPose(player: Player) {
-  const b = player.bones;
-  const bend = (name: string, x: number, y = 0, z = 0) => {
-    const bone = b[name];
-    if (!bone) return;
-    bone.rotateX(x);
-    if (y) bone.rotateY(y);
-    if (z) bone.rotateZ(z);
-  };
-  bend('LeftUpLeg', -1.35, 0, -0.25);
-  bend('RightUpLeg', -1.35, 0, 0.25);
-  bend('LeftLeg', 1.45);
-  bend('RightLeg', 1.45);
-  bend('LeftArm', -0.9, 0, 0.35);
-  bend('RightArm', -0.9, 0, -0.35);
-  bend('LeftForeArm', -0.5);
-  bend('RightForeArm', -0.5);
+// The riding clip is for a car seat; an okada is ridden astride, so open the knees a little.
+const legOut = new THREE.Quaternion();
+function ridePose(player: Player, amount: number) {
+  for (const [name, side] of [['thigh_l', 1], ['thigh_r', -1]] as const) {
+    const bone = player.bones[name];
+    if (!bone) continue;
+    legOut.setFromAxisAngle(LEG_OUT_AXIS, side * RIDE_KNEES_OUT * amount);
+    bone.quaternion.premultiply(legOut);
+  }
 }
 
 let hintTimer = 0;
