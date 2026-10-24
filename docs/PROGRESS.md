@@ -65,6 +65,15 @@ Next steps, in order (brief section 23):
 Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/streetTest.ts`).
 
 - **What it does:** a 3D person at Kwame Nkrumah Circle, seen from close behind, walks or runs with a touch joystick, W A S D or arrow keys, or a game controller. They get on and off an okada with the OKADA button, E, or X / □ on a controller. The bike leans in corners, its wheels turn, and the rider sits on it. The camera follows behind and turns after you. Place names fade in as you pass.
+- **Screen layout (2026-10-24, landscape):**
+  - On phones, "Tap to play" goes full screen and locks the screen sideways where the browser allows it (Android Chrome). Held upright, a "Turn your phone" card covers the game (iPhones cannot be locked).
+  - Bottom left: a round minimap with a kente energy bar under it. It is drawn from the street data the map already loaded (roads, water, parks, buildings), so there are no extra downloads. It turns with you, shows north, and marks the okada.
+  - Left half: a floating joystick. Touch anywhere and drag; it follows your thumb if you go past the edge.
+  - Right side: round icon buttons that change with what you're doing. On foot: sprint (hold) and jump, plus the okada button, which pops up only when you're next to the bike. On the okada: brake (hold), horn and get off.
+  - Top left: the phone button (coming soon). Top right: time and money.
+  - Keys: W A S D move, Shift sprints, Space jumps, F gets on and off, H sounds the horn.
+  - Controllers: left stick moves, right and left triggers accelerate and brake, A / ✕ jumps, B / ○ sprints, Y / △ gets on and off, and pressing the left stick sounds the horn.
+  - New code: `src/hud/minimap.ts`, `src/hud/touchControls.ts` and `src/hud/landscape.ts`, ready to move into the main game.
 - **Look:** an evening Accra sky, warm light, a soft shadow under the player. At street level the roads are tarmac grey with kerbs and the ground is dusty, instead of the bright overview colours. Road widths keep growing past zoom 18, so roads stay the right size up close.
 - **Traffic:** the live traffic is drawn at real size here (`startTraffic(..., size)`, new optional argument; the main game is unchanged).
 - **Assets:** `public/models/person.glb` (550 KB), a Ghanaian man in a T-shirt, trousers and trainers, with 14 animations. It's built from Quaternius' free CC0 packs by `scripts/person` (see its README). The source and licence are in `public/models/LICENSES.md`. The okada is built in code, so there is no file to download.
@@ -80,12 +89,13 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
 - **Known limits:**
   - There is no collision yet, so you can walk through buildings.
   - There is only one body so far: a male body. A female body and a lighter crowd version are still to come.
+  - Traffic vehicles are plain boxes, which look like moving blocks at street level. Real 3D vehicles are still to come.
   - Light tier shows flat buildings, which look poor at street level. If the cheap phone gets Light, street view will need low walls in Light (decide after the phone test).
 - **Done when:** on the cheapest Android, `/street-test.html?debug` shows 30 fps or more while walking and riding round Circle, and the controls feel right.
 
 ## Waiting on the owner
 
-- Street test on the cheap Android: open `/street-test.html?debug` after the next deploy, walk and ride for a minute, and report the fps number and how it feels.
+- Street test on the cheap Android: open `/street-test.html?debug` after the next deploy, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.
 
 - Two-device test for T4 (phone and PC see each other walk).
 - Phone checks: map load time and smoothness, tap to walk, chat.

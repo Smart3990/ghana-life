@@ -4,66 +4,155 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
     <meta name="theme-color" content="#121A14" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <title>Street test · Ghanaverse</title>
     <style>
       :root {
         --night: #121a14;
-        --card: rgba(18, 26, 20, 0.72);
+        --card: rgba(18, 26, 20, 0.62);
         --gold: #e3a92b;
         --red: #c8442e;
         --green: #2f8f57;
+        --blue: #1f5fa8;
         --text: #f2efe6;
         --soft: #c9d3cb;
+        --edge: rgba(242, 239, 230, 0.55);
+        --safe-l: max(14px, env(safe-area-inset-left));
+        --safe-r: max(14px, env(safe-area-inset-right));
+        --safe-b: max(12px, env(safe-area-inset-bottom));
+        --safe-t: max(10px, env(safe-area-inset-top));
+        --map: clamp(104px, 30vh, 148px);
       }
-      html, body { margin: 0; height: 100%; overflow: hidden; background: var(--night); font-family: system-ui, sans-serif; color: var(--text); touch-action: none; -webkit-user-select: none; user-select: none; }
-      /* The far distance beyond the drawn streets shows this colour: match the evening haze */
+      html, body { margin: 0; height: 100%; overflow: hidden; background: var(--night); font-family: system-ui, sans-serif; color: var(--text); touch-action: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
       #map { position: fixed; inset: 0; background: #f1d7b6; }
-      .maplibregl-ctrl-bottom-right { display: none; }
+      .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left { display: none; }
+      .shadow { text-shadow: 0 1px 3px rgba(0,0,0,.65); }
 
       /* Thin kente strip across the top: the Ghanaverse signature */
-      .strip { position: fixed; left: 0; right: 0; top: 0; height: 4px; z-index: 5;
-        background: repeating-linear-gradient(90deg, var(--gold) 0 18px, var(--night) 18px 22px, var(--red) 22px 34px, var(--night) 34px 38px, var(--green) 38px 50px, var(--night) 50px 54px, #1f5fa8 54px 60px, var(--night) 60px 64px); }
+      .kente { background: repeating-linear-gradient(90deg, var(--gold) 0 18px, var(--night) 18px 22px, var(--red) 22px 34px, var(--night) 34px 38px, var(--green) 38px 50px, var(--night) 50px 54px, var(--blue) 54px 60px, var(--night) 60px 64px); }
+      .strip { position: fixed; left: 0; right: 0; top: 0; height: 3px; z-index: 5; }
+
+      /* Phone, top left */
+      #btn-phone { position: fixed; left: var(--safe-l); top: var(--safe-t); width: 44px; height: 44px; border-radius: 14px; border: 1.5px solid var(--edge); background: var(--card); display: grid; place-items: center; z-index: 7; padding: 0; }
+      #btn-phone svg { width: 22px; height: 22px; }
 
       /* Time and money, top right */
-      #hud-top { position: fixed; right: max(14px, env(safe-area-inset-right)); top: calc(env(safe-area-inset-top, 0px) + 14px); text-align: right; text-shadow: 0 1px 3px rgba(0,0,0,.6); font-variant-numeric: tabular-nums; z-index: 5; }
+      #hud-top { position: fixed; right: var(--safe-r); top: var(--safe-t); text-align: right; font-variant-numeric: tabular-nums; z-index: 5; line-height: 1.15; }
       #clock { font-size: 15px; font-weight: 700; }
-      #money { font-size: 17px; font-weight: 800; color: #9fe0b4; }
-      #debug { font-size: 12px; color: var(--soft); margin-top: 4px; }
+      #money { font-size: 19px; font-weight: 800; color: #9fe0b4; letter-spacing: .3px; }
+      #debug { font-size: 11px; color: var(--soft); margin-top: 4px; }
 
       /* Place name that fades in as you pass */
-      #place { position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 18px); transform: translateX(-50%); font-weight: 800; letter-spacing: 1px; text-transform: uppercase; font-size: 14px; text-shadow: 0 1px 4px rgba(0,0,0,.7); opacity: 0; transition: opacity .6s; z-index: 5; white-space: nowrap; }
+      #place { position: fixed; left: 50%; top: calc(var(--safe-t) + 6px); transform: translateX(-50%); font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; font-size: 14px; opacity: 0; transition: opacity .6s; z-index: 5; white-space: nowrap; }
       #place.on { opacity: 1; }
 
-      /* Joystick, bottom left */
-      #stick { position: fixed; left: max(22px, env(safe-area-inset-left)); bottom: calc(env(safe-area-inset-bottom, 0px) + 22px); width: 128px; height: 128px; border-radius: 50%; background: rgba(18,26,20,.35); border: 2px solid rgba(242,239,230,.35); z-index: 6; touch-action: none; }
-      #knob { position: absolute; left: 39px; top: 39px; width: 50px; height: 50px; border-radius: 50%; background: rgba(242,239,230,.85); box-shadow: 0 2px 6px rgba(0,0,0,.35); }
+      /* Minimap, bottom left, with the energy bar under it */
+      #radar { position: fixed; left: var(--safe-l); bottom: calc(var(--safe-b) + 10px); width: var(--map); z-index: 6; }
+      #minimap { display: block; width: var(--map); height: var(--map); border-radius: 50%; border: 2.5px solid rgba(18,26,20,.9); box-shadow: 0 0 0 1.5px var(--edge), 0 3px 10px rgba(0,0,0,.35); }
+      #energy { margin: 7px auto 0; width: 86%; height: 5px; border-radius: 3px; background: rgba(18,26,20,.7); overflow: hidden; box-shadow: 0 0 0 1px rgba(242,239,230,.3); }
+      #energy > div { height: 100%; width: 100%; transition: width .3s; }
 
-      /* Action buttons, bottom right */
-      #actions { position: fixed; right: max(22px, env(safe-area-inset-right)); bottom: calc(env(safe-area-inset-bottom, 0px) + 28px); display: flex; flex-direction: column; gap: 14px; align-items: flex-end; z-index: 6; }
-      .action { width: 74px; height: 74px; border-radius: 50%; border: 2px solid rgba(242,239,230,.5); background: var(--card); color: var(--text); font-weight: 800; font-size: 13px; letter-spacing: .5px; touch-action: none; }
-      .action.on { background: var(--gold); color: var(--night); border-color: var(--gold); }
-      .action:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+      /* Floating joystick: touch anywhere on the left side */
+      #stick-zone { position: fixed; left: 0; top: 0; bottom: 0; width: 50%; z-index: 4; touch-action: none; }
+      #stick { position: fixed; left: calc(var(--safe-l) + var(--map) + 92px); top: calc(100% - var(--safe-b) - 86px); width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; background: rgba(18,26,20,.22); border: 2px solid rgba(242,239,230,.28); z-index: 5; pointer-events: none; opacity: .55; transition: opacity .2s; }
+      #stick.active { opacity: 1; background: rgba(18,26,20,.32); }
+      #knob { position: absolute; left: 35px; top: 35px; width: 50px; height: 50px; border-radius: 50%; background: rgba(242,239,230,.88); box-shadow: 0 2px 6px rgba(0,0,0,.35); }
+      html:not(.touch) #stick, html:not(.touch) #stick-zone { display: none; }
 
-      /* Short help, fades after a few seconds */
-      #help { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 170px); transform: translateX(-50%); background: var(--card); border-radius: 12px; padding: 8px 14px; font-size: 13px; color: var(--soft); text-align: center; transition: opacity .8s; z-index: 5; max-width: 86vw; }
+      /* Action buttons, bottom right: round, icon-only, the thumb's arc */
+      .act { position: fixed; border-radius: 50%; border: 2px solid var(--edge); background: var(--card); color: var(--text); padding: 0; display: grid; place-items: center; z-index: 6; touch-action: none; transition: transform .12s, opacity .2s, background .12s; }
+      .act svg { width: 52%; height: 52%; }
+      .act.down { transform: scale(.92); background: rgba(227,169,43,.85); color: var(--night); border-color: var(--gold); }
+      .act.big { width: 78px; height: 78px; right: var(--safe-r); bottom: calc(var(--safe-b) + 22px); }
+      .act.mid { width: 60px; height: 60px; }
+      #btn-jump, #btn-horn { right: calc(var(--safe-r) + 92px); bottom: calc(var(--safe-b) + 14px); }
+      #btn-ride, #btn-exit { right: calc(var(--safe-r) + 16px); bottom: calc(var(--safe-b) + 116px); border-color: var(--gold); }
+      #btn-ride { animation: pop .35s ease-out; }
+      @keyframes pop { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+      .hidden { display: none !important; }
+      body:not(.riding) .ride-only, body.riding .walk-only { display: none !important; }
+
+      /* Keyboard help (computers only), fades after a few seconds */
+      #help { position: fixed; left: 50%; bottom: calc(var(--safe-b) + 10px); transform: translateX(-50%); background: var(--card); border-radius: 12px; padding: 7px 14px; font-size: 13px; color: var(--soft); text-align: center; transition: opacity .8s; z-index: 5; max-width: 60vw; }
       #help b { color: var(--gold); }
+      html.touch #help { bottom: auto; top: calc(var(--safe-t) + 34px); }
+      html.touch #help .keys { display: none; }
+      html:not(.touch) #help .touchtip { display: none; }
 
-      #loading { position: fixed; inset: 0; display: grid; place-items: center; background: var(--night); z-index: 10; font-weight: 700; color: var(--gold); letter-spacing: 1px; }
+      /* Start: tap to play (goes full screen, sideways) */
+      #gate, #turn { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: var(--night); text-align: center; padding: 24px; }
+      .brand { font-weight: 900; letter-spacing: 4px; font-size: 26px; color: var(--gold); }
+      .bar { width: 150px; height: 6px; margin: 14px auto 18px; border-radius: 3px; }
+      .lead { color: var(--soft); font-size: 15px; line-height: 1.45; }
+      .play { margin-top: 22px; display: inline-block; padding: 14px 34px; border-radius: 999px; background: var(--gold); color: var(--night); font-weight: 900; letter-spacing: 1.5px; }
+      .phone-icon { width: 56px; height: 56px; margin: 0 auto 16px; animation: rotate 2.2s ease-in-out infinite; }
+      @keyframes rotate { 0%, 25% { transform: rotate(0); } 55%, 100% { transform: rotate(-90deg); } }
+      /* Held upright on a phone: ask to turn it (shown on top of everything) */
+      #turn { display: none; z-index: 30; }
+      @media (orientation: portrait) { html.touch #turn { display: grid; } }
+
+      #loading { position: fixed; inset: 0; display: grid; place-items: center; background: var(--night); z-index: 10; font-weight: 700; color: var(--gold); letter-spacing: 2px; }
     </style>
   </head>
   <body>
     <div id="map"></div>
-    <div class="strip" aria-hidden="true"></div>
-    <div id="hud-top"><div id="clock">18:42</div><div id="money">₵ 1,280</div><div id="debug" hidden></div></div>
-    <div id="place" aria-live="polite"></div>
+    <div class="strip kente" aria-hidden="true"></div>
 
-    <div id="stick" aria-hidden="true"><div id="knob"></div></div>
-    <div id="actions">
-      <button id="btn-okada" class="action" type="button" aria-label="Get on or off the okada">OKADA</button>
-      <button id="btn-run" class="action" type="button" aria-label="Run">RUN</button>
+    <button id="btn-phone" class="shadow" type="button" aria-label="Phone">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M10.5 18.5h3"/></svg>
+    </button>
+    <div id="hud-top" class="shadow"><div id="clock">18:42</div><div id="money">₵ 1,280</div><div id="debug" hidden></div></div>
+    <div id="place" class="shadow" aria-live="polite"></div>
+
+    <div id="radar">
+      <canvas id="minimap" aria-label="Map of the streets around you"></canvas>
+      <div id="energy" aria-label="Energy"><div class="kente"></div></div>
     </div>
 
-    <p id="help">Joystick or <b>W A S D</b> to move · <b>Shift</b> to run · <b>E</b> for the okada · controllers work too</p>
+    <div id="stick-zone" aria-hidden="true"></div>
+    <div id="stick" aria-hidden="true"><div id="knob"></div></div>
+
+    <!-- On foot -->
+    <button id="btn-sprint" class="act big walk-only" type="button" aria-label="Sprint (hold)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="14.5" cy="4" r="2" fill="currentColor" stroke="none"/><path d="M9 21l3-6 3 2v4"/><path d="M12 15l1-6"/><path d="M6.5 10.5l3-2.5 3.5 1 2.5 3.5 3 .5"/><path d="M13 9l-4 5H5"/></svg>
+    </button>
+    <button id="btn-jump" class="act mid walk-only" type="button" aria-label="Jump">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4"/><path d="M7 9l5-5 5 5"/><path d="M5 20h14"/></svg>
+    </button>
+    <button id="btn-ride" class="act mid walk-only hidden" type="button" aria-label="Get on the okada">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="16.5" r="3.5"/><circle cx="18.5" cy="16.5" r="3.5"/><path d="M5.5 16.5L9 10h6l3.5 6.5"/><path d="M15 10l-1.5-3H16"/><path d="M9 10l2.5 6.5h3"/></svg>
+    </button>
+
+    <!-- On the okada -->
+    <button id="btn-brake" class="act big ride-only" type="button" aria-label="Brake (hold)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 7l6 5 6-5"/><path d="M6 13l6 5 6-5"/></svg>
+    </button>
+    <button id="btn-horn" class="act mid ride-only" type="button" aria-label="Horn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v4h3l6 4V6L7 10z" fill="currentColor" fill-opacity=".25"/><path d="M16.5 9.5a3.5 3.5 0 010 5"/><path d="M19 7a7 7 0 010 10"/></svg>
+    </button>
+    <button id="btn-exit" class="act mid ride-only" type="button" aria-label="Get off the okada">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h4a2 2 0 012 2v12a2 2 0 01-2 2h-4"/><path d="M10 8l-4 4 4 4"/><path d="M6 12h10"/></svg>
+    </button>
+
+    <p id="help"><span class="keys"><b>W A S D</b> move · <b>Shift</b> sprint · <b>Space</b> jump · <b>F</b> okada · <b>H</b> horn · controllers work too</span><span class="touchtip">Touch the left side to move</span></p>
+
+    <div id="gate">
+      <div>
+        <svg class="phone-icon" viewBox="0 0 24 24" fill="none" stroke="#e3a92b" stroke-width="1.6" stroke-linecap="round"><rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M10.5 18.5h3"/></svg>
+        <div class="brand">GHANAVERSE</div>
+        <div class="bar kente"></div>
+        <div class="lead">Turn your phone sideways to play.</div>
+        <div class="play">TAP TO PLAY</div>
+      </div>
+    </div>
+    <div id="turn">
+      <div>
+        <svg class="phone-icon" viewBox="0 0 24 24" fill="none" stroke="#e3a92b" stroke-width="1.6" stroke-linecap="round"><rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M10.5 18.5h3"/></svg>
+        <div class="brand">TURN YOUR PHONE</div>
+        <div class="bar kente"></div>
+        <div class="lead">Ghanaverse is played sideways.</div>
+      </div>
+    </div>
     <div id="loading">LOADING ACCRA…</div>
 
     <script type="module" src="/src/test/streetTest.ts"></script>

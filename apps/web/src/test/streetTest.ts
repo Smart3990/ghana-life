@@ -9,6 +9,9 @@ import { createMap } from '../map/createMap';
 import { detectTier, measureFps } from '../map/tier';
 import { startTraffic } from '../game/traffic';
 import { createPerson, type Move, type Person } from '../game/person';
+import { Minimap } from '../hud/minimap';
+import { TouchControls } from '../hud/touchControls';
+import { landscapeGate } from '../hud/landscape';
 
 // ---------- Where and how big ----------
 
@@ -64,6 +67,7 @@ const map = createMap(document.getElementById('map')!, tier, {
   pitch: VIEW.walk.pitch,
   bearing: 0,
 });
+if (debug) (window as unknown as { __map: maplibregl.Map }).__map = map; // for test scripts
 map.setMaxZoom(24);
 // The camera belongs to the player, so the usual map gestures are switched off.
 for (const handler of [map.dragPan, map.scrollZoom, map.boxZoom, map.dragRotate, map.keyboard, map.doubleClickZoom, map.touchZoomRotate, map.touchPitch]) {
@@ -227,58 +231,43 @@ const layer: maplibregl.CustomLayerInterface = {
   },
 };
 
-// ---------- Controls: joystick, keyboard and game controllers ----------
+// ---------- Controls: touch, keyboard and game controllers ----------
 
-const input = { x: 0, y: 0, run: false };
+const input = { x: 0, y: 0, sprint: false, brake: false };
 const keys = new Set<string>();
-let okadaPressed = false;
+const tapped = new Set<'ride' | 'jump' | 'horn'>(); // one-off actions, used once per press
 
 window.addEventListener('keydown', (e) => {
   keys.add(e.code);
-  if (e.code === 'KeyE' && !e.repeat) okadaPressed = true;
+  if (e.repeat) return;
+  if (e.code === 'KeyF' || e.code === 'KeyE') tapped.add('ride');
+  if (e.code === 'Space') tapped.add('jump');
+  if (e.code === 'KeyH') tapped.add('horn');
 });
 window.addEventListener('keyup', (e) => keys.delete(e.code));
 window.addEventListener('blur', () => keys.clear());
 
-// Touch joystick: drag the knob; its offset from the centre is the direction.
-const stick = document.getElementById('stick')!;
-const knob = document.getElementById('knob')!;
-const touch = { x: 0, y: 0, id: -1 };
-const STICK_RADIUS = 46;
-const moveKnob = (e: PointerEvent) => {
-  const r = stick.getBoundingClientRect();
-  let dx = e.clientX - (r.left + r.width / 2);
-  let dy = e.clientY - (r.top + r.height / 2);
-  const d = Math.hypot(dx, dy);
-  if (d > STICK_RADIUS) [dx, dy] = [(dx / d) * STICK_RADIUS, (dy / d) * STICK_RADIUS];
-  knob.style.transform = `translate(${dx}px, ${dy}px)`;
-  touch.x = dx / STICK_RADIUS;
-  touch.y = -dy / STICK_RADIUS;
-};
-stick.addEventListener('pointerdown', (e) => {
-  touch.id = e.pointerId;
-  stick.setPointerCapture(e.pointerId);
-  moveKnob(e);
+const btn = (id: string) => document.getElementById(id) as HTMLButtonElement;
+const rideButton = btn('btn-ride');
+const touch = new TouchControls(document.getElementById('stick-zone')!, document.getElementById('stick')!, document.getElementById('knob')!, {
+  sprint: btn('btn-sprint'),
+  jump: btn('btn-jump'),
+  ride: rideButton,
+  brake: btn('btn-brake'),
+  horn: btn('btn-horn'),
+  exit: btn('btn-exit'),
 });
-stick.addEventListener('pointermove', (e) => e.pointerId === touch.id && moveKnob(e));
-const releaseStick = (e: PointerEvent) => {
-  if (e.pointerId !== touch.id) return;
-  touch.id = -1;
-  touch.x = touch.y = 0;
-  knob.style.transform = '';
-};
-stick.addEventListener('pointerup', releaseStick);
-stick.addEventListener('pointercancel', releaseStick);
+btn('btn-phone').addEventListener('click', () => showHint('The phone is coming soon'));
 
-const runButton = document.getElementById('btn-run')!;
-let runHeld = false;
-runButton.addEventListener('pointerdown', () => (runHeld = true));
-for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) runButton.addEventListener(ev, () => (runHeld = false));
-const okadaButton = document.getElementById('btn-okada')!;
-okadaButton.addEventListener('click', () => (okadaPressed = true));
-
-// Controllers (Xbox, PlayStation and most pads): left stick moves, A / ✕ runs, X / □ gets on or off.
-let padOkadaWasDown = false;
+// Controllers (standard mapping, Xbox / PlayStation): left stick moves, right trigger accelerates,
+// left trigger brakes, A / ✕ jumps, B / ○ sprints (hold), Y / △ gets on or off, left stick press sounds the horn.
+const padWas: Record<string, boolean> = {};
+function padTap(pad: Gamepad, index: number, name: 'ride' | 'jump' | 'horn') {
+  const down = !!pad.buttons[index]?.pressed;
+  const key = `${pad.index}:${index}`;
+  if (down && !padWas[key]) tapped.add(name);
+  padWas[key] = down;
+}
 function readInput() {
   let x = 0;
   let y = 0;
@@ -286,26 +275,53 @@ function readInput() {
   if (keys.has('KeyS') || keys.has('ArrowDown')) y -= 1;
   if (keys.has('KeyA') || keys.has('ArrowLeft')) x -= 1;
   if (keys.has('KeyD') || keys.has('ArrowRight')) x += 1;
-  let run = keys.has('ShiftLeft') || keys.has('ShiftRight') || runHeld;
-
+  let sprint = keys.has('ShiftLeft') || keys.has('ShiftRight') || touch.isHeld('sprint');
+  let brake = keys.has('KeyS') || keys.has('ArrowDown') || touch.isHeld('brake');
   if (Math.hypot(touch.x, touch.y) > Math.hypot(x, y)) [x, y] = [touch.x, touch.y];
+  for (const name of ['ride', 'jump', 'horn'] as const) if (touch.took(name)) tapped.add(name);
+  if (touch.took('exit')) tapped.add('ride');
 
   for (const pad of navigator.getGamepads?.() ?? []) {
     if (!pad) continue;
-    const [px, py] = [pad.axes[0] ?? 0, -(pad.axes[1] ?? 0)];
     const dead = (v: number) => (Math.abs(v) < 0.15 ? 0 : v);
-    // Triggers accelerate and brake when they exist (standard mapping: buttons 7 and 6).
-    const throttle = (pad.buttons[7]?.value ?? 0) - (pad.buttons[6]?.value ?? 0);
-    const pyAll = Math.abs(throttle) > Math.abs(py) ? throttle : py;
-    if (Math.hypot(dead(px), dead(pyAll)) > Math.hypot(x, y)) [x, y] = [dead(px), dead(pyAll)];
-    if (pad.buttons[0]?.pressed) run = true;
-    const okadaDown = !!pad.buttons[2]?.pressed;
-    if (okadaDown && !padOkadaWasDown) okadaPressed = true;
-    padOkadaWasDown = okadaDown;
+    const [px, py] = [dead(pad.axes[0] ?? 0), dead(-(pad.axes[1] ?? 0))];
+    const gas = pad.buttons[7]?.value ?? 0;
+    const stop = pad.buttons[6]?.value ?? 0;
+    const forward = state.onOkada && gas > Math.abs(py) ? gas : py;
+    if (Math.hypot(px, forward) > Math.hypot(x, y)) [x, y] = [px, forward];
+    if (stop > 0.2) brake = true;
+    if (pad.buttons[1]?.pressed) sprint = true;
+    padTap(pad, 0, 'jump');
+    padTap(pad, 3, 'ride');
+    padTap(pad, 10, 'horn');
   }
   input.x = Math.max(-1, Math.min(1, x));
   input.y = Math.max(-1, Math.min(1, y));
-  input.run = run;
+  input.sprint = sprint;
+  input.brake = brake;
+}
+
+// An okada horn, made in code (two short beeps, no sound file to download).
+let audio: AudioContext | null = null;
+function honk() {
+  try {
+    audio ??= new AudioContext();
+    const t = audio.currentTime;
+    for (const start of [0, 0.16]) {
+      const osc = audio.createOscillator();
+      const gain = audio.createGain();
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(430, t + start);
+      gain.gain.setValueAtTime(0.0001, t + start);
+      gain.gain.exponentialRampToValueAtTime(0.12, t + start + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + start + 0.12);
+      osc.connect(gain).connect(audio.destination);
+      osc.start(t + start);
+      osc.stop(t + start + 0.13);
+    }
+  } catch {
+    // No sound available: the horn is silent.
+  }
 }
 
 // ---------- On-screen bits: clock, place names, help, debug ----------
@@ -314,7 +330,6 @@ const clock = document.getElementById('clock')!;
 const placeLabel = document.getElementById('place')!;
 const debugLine = document.getElementById('debug')!;
 const help = document.getElementById('help')!;
-setTimeout(() => (help.style.opacity = '0'), 7000);
 
 const updateClock = () => {
   const now = new Date(); // Ghana time is UTC
@@ -346,6 +361,8 @@ const state = {
   x: 2.5, // the player starts beside the okada
   z: 1.5,
   heading: 0, // radians clockwise from north
+  y: 0, // height above the street while jumping
+  vy: 0,
   speed: 0,
   onOkada: false,
   okadaX: 0,
@@ -358,6 +375,10 @@ const state = {
 };
 
 let rideBlend = 0;
+let airBlend = 0;
+let landing = 0; // fades from 1 to 0 after touching down
+const JUMP_SPEED = 3.4; // about half a metre high
+const GRAVITY = 11;
 const LEG_OUT_AXIS = new THREE.Vector3(0, 0, 1);
 const RIDE_KNEES_OUT = 0.3;
 
@@ -367,8 +388,9 @@ function step(player: Player, dt: number, t: number) {
   readInput();
 
   // Getting on or off the okada.
-  if (okadaPressed) {
-    okadaPressed = false;
+  const nearOkada = !state.onOkada && Math.hypot(state.x - state.okadaX, state.z - state.okadaZ) < MOUNT_DISTANCE_M;
+  rideButton.classList.toggle('hidden', !nearOkada);
+  if (tapped.delete('ride')) {
     if (state.onOkada) {
       state.onOkada = false;
       state.speed = 0;
@@ -376,25 +398,40 @@ function step(player: Player, dt: number, t: number) {
       state.x = state.okadaX - Math.cos(state.okadaHeading) * 0.9;
       state.z = state.okadaZ - Math.sin(state.okadaHeading) * 0.9;
       state.heading = state.okadaHeading;
-    } else if (Math.hypot(state.x - state.okadaX, state.z - state.okadaZ) < MOUNT_DISTANCE_M) {
+    } else if (nearOkada && state.y === 0) {
       state.onOkada = true;
       state.speed = 0;
       state.heading = state.okadaHeading;
-    } else {
-      showHint('Walk to the okada to get on');
+    } else if (!nearOkada) {
+      showHint('Walk up to the okada to get on');
     }
-    okadaButton.classList.toggle('on', state.onOkada);
+    document.body.classList.toggle('riding', state.onOkada);
+  }
+  if (tapped.delete('horn') && state.onOkada) honk();
+  if (tapped.delete('jump') && !state.onOkada && state.y === 0) {
+    state.vy = JUMP_SPEED;
+    landing = 0;
+  }
+  // In the air: rise and fall; landing plays a short "land" move.
+  if (state.y > 0 || state.vy > 0) {
+    state.vy -= GRAVITY * dt;
+    state.y = Math.max(0, state.y + state.vy * dt);
+    if (state.y === 0) {
+      state.vy = 0;
+      landing = 1;
+      player.actions.jumpLand.reset().play();
+    }
   }
 
   if (state.onOkada) {
-    const target = input.y > 0 ? input.y * OKADA_TOP_SPEED : 0;
-    const rate = input.y < 0 ? OKADA_BRAKE : state.speed < target ? OKADA_ACCEL : 2.5; // engine braking
+    const target = input.y > 0 && !input.brake ? input.y * OKADA_TOP_SPEED : 0;
+    const rate = input.brake ? OKADA_BRAKE : state.speed < target ? OKADA_ACCEL : 2.5; // engine braking
     state.speed += Math.sign(target - state.speed) * Math.min(Math.abs(target - state.speed), rate * dt);
     const grip = Math.min(1, Math.max(0.25, state.speed / 4));
     state.heading += input.x * OKADA_TURN * grip * dt;
     state.lean += (-input.x * 0.38 * Math.min(1, state.speed / 7) - state.lean) * Math.min(1, dt * 6);
   } else {
-    const top = input.run ? RUN_SPEED : WALK_SPEED;
+    const top = input.sprint ? RUN_SPEED : WALK_SPEED;
     const target = input.y >= 0 ? Math.hypot(input.x, input.y) > 0.2 ? Math.max(input.y, Math.abs(input.x) * 0.4) * top : 0 : input.y * 1.0;
     state.speed += (target - state.speed) * Math.min(1, dt * 8);
     state.heading += input.x * WALK_TURN * dt;
@@ -421,7 +458,7 @@ function step(player: Player, dt: number, t: number) {
     player.shadow.visible = false; // the bike's shadow is enough
   } else {
     if (player.root.parent !== scene) scene.add(player.root);
-    player.root.position.set(state.x, 0, state.z);
+    player.root.position.set(state.x, state.y, state.z);
     player.root.rotation.set(0, Math.PI - state.heading, 0);
     player.shadow.visible = true;
   }
@@ -435,10 +472,15 @@ function step(player: Player, dt: number, t: number) {
     walk: s < WALK_SPEED ? Math.min(1, s / 1.0) : Math.max(0, 1 - (s - WALK_SPEED) / (RUN_SPEED - WALK_SPEED)),
     run: Math.max(0, Math.min(1, (s - WALK_SPEED) / (RUN_SPEED - WALK_SPEED))),
   };
-  player.actions.idle.setEffectiveWeight(w.idle * onFoot);
-  player.actions.walk.setEffectiveWeight(w.walk * onFoot);
-  player.actions.run.setEffectiveWeight(w.run * onFoot);
+  airBlend += ((state.y > 0 ? 1 : 0) - airBlend) * Math.min(1, dt * 14);
+  landing = Math.max(0, landing - dt * 3);
+  const ground = onFoot * (1 - airBlend) * (1 - landing);
+  player.actions.idle.setEffectiveWeight(w.idle * ground);
+  player.actions.walk.setEffectiveWeight(w.walk * ground);
+  player.actions.run.setEffectiveWeight(w.run * ground);
   player.actions.ride.setEffectiveWeight(rideBlend);
+  player.actions.jumpLoop.setEffectiveWeight(airBlend * onFoot);
+  player.actions.jumpLand.setEffectiveWeight(landing * onFoot * (1 - airBlend));
   // The clips are made for about 1.4 m/s walking and 3.8 m/s jogging: match the feet to the ground.
   player.actions.walk.setEffectiveTimeScale(Math.max(0.6, s / 1.4));
   player.actions.run.setEffectiveTimeScale(Math.max(0.7, s / 3.8));
@@ -453,14 +495,17 @@ function step(player: Player, dt: number, t: number) {
   state.pitch += (view.pitch - state.pitch) * Math.min(1, dt * 2.5);
   const here = toLngLat(state.x, state.z);
   const height = map.getContainer().clientHeight;
+  // Keep the player the same share of the screen on short (sideways) and tall screens.
+  const fit = Math.log2(Math.max(280, height) / 820);
   map.jumpTo({
     center: here,
     bearing: (state.camHeading * 180) / Math.PI,
-    zoom: state.zoom,
+    zoom: state.zoom + fit,
     pitch: state.pitch,
     padding: { top: height * PLAYER_SCREEN_DROP, bottom: 0, left: 0, right: 0 },
   });
   checkPlace(here);
+  minimap?.update(state.x, state.z, state.camHeading, state.onOkada ? [] : [{ x: state.okadaX, z: state.okadaZ, color: '#c8442e', size: 5 }]);
   void t;
 }
 
@@ -478,6 +523,7 @@ function ridePose(player: Player, amount: number) {
 let hintTimer = 0;
 function showHint(text: string) {
   help.textContent = text;
+  help.hidden = false;
   help.style.opacity = '1';
   clearTimeout(hintTimer);
   hintTimer = window.setTimeout(() => (help.style.opacity = '0'), 2500);
@@ -485,17 +531,16 @@ function showHint(text: string) {
 
 // Automatic test (?auto): ride the okada in a long gentle curve and measure the frame rate.
 async function runAutoTest() {
-  okadaPressed = false;
-  state.x = state.okadaX;
+  state.x = state.okadaX + 1;
   state.z = state.okadaZ;
-  okadaPressed = true;
+  tapped.add('ride');
   keys.add('KeyW');
   setTimeout(() => keys.add('KeyD'), 4000);
   setTimeout(() => keys.delete('KeyD'), 6000);
   await new Promise((r) => setTimeout(r, 3000));
   const riding = await measureFps(8);
   keys.clear();
-  okadaPressed = true;
+  tapped.add('ride');
   await new Promise((r) => setTimeout(r, 1500));
   keys.add('KeyW');
   keys.add('ShiftLeft');
@@ -539,8 +584,24 @@ function widenForStreetLevel() {
   paint('landuse_park', 'fill-color', '#93a86c');
 }
 
+let minimap: Minimap | null = null;
+
 async function start() {
-  const [player] = await Promise.all([loadPlayer(), new Promise<void>((r) => map.once('load', () => r()))]);
+  const [player] = await Promise.all([
+    loadPlayer(),
+    new Promise<void>((r) => map.once('load', () => r())),
+    landscapeGate(document.getElementById('gate')!, autoTest),
+  ]);
+  for (const move of ['jumpLoop', 'jumpLand'] as const) {
+    player.actions[move].play();
+    player.actions[move].setEffectiveWeight(0);
+  }
+  player.actions.jumpLand.setLoop(THREE.LoopOnce, 1);
+  player.actions.jumpLand.clampWhenFinished = true;
+  minimap = new Minimap(document.getElementById('minimap') as HTMLCanvasElement, map, (lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT], {
+    buildings: tier !== 'light',
+    pixelRatio: Math.min(devicePixelRatio, tier === 'light' ? 1 : 2),
+  });
   scene.add(player.root);
   widenForStreetLevel();
   map.addLayer(layer);
@@ -557,6 +618,7 @@ async function start() {
   startTraffic(map, () => tier, () => Date.now(), 1); // real-size vehicles at street level
 
   document.getElementById('loading')!.remove();
+  setTimeout(() => (help.style.opacity = '0'), 7000);
   let last = performance.now();
   const loop = (now: number) => {
     requestAnimationFrame(loop);
