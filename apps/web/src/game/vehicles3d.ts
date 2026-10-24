@@ -313,7 +313,7 @@ export class StreetTraffic {
   constructor(
     private traffic: Traffic,
     private toLocal: (lon: number, lat: number) => [number, number],
-    private limit: number,
+    public limit: number,
     private radiusM: number,
   ) {
     const paintMat = new THREE.MeshStandardMaterial({ roughness: 0.38, metalness: 0.25 });
@@ -365,9 +365,11 @@ export class StreetTraffic {
     // Front of each route first, so the ones behind can keep their distance.
     const byRoute = new Map<number, Placed[]>();
     for (const p of placed) {
-      const list = byRoute.get(p.v.route) ?? [];
+      // Each lane of each route queues on its own.
+      const key = p.v.route * 2 + p.v.lane;
+      const list = byRoute.get(key) ?? [];
       list.push(p);
-      byRoute.set(p.v.route, list);
+      byRoute.set(key, list);
     }
     for (const list of byRoute.values()) {
       list.sort((a, b) => b.s - a.s);
@@ -392,7 +394,7 @@ export class StreetTraffic {
         if (stopped) held = Math.max(held, p.s - (this.lastS.get(p.v.id) ?? p.s - held));
         else held = Math.max(0, held - p.v.speed * 0.35 * dt); // then catch up gently
         // Keep a gap to the vehicle in front.
-        const gap = frontHalf + half + 2.5;
+        const gap = frontHalf + half + 1.6; // nose to tail, Accra style
         if (p.s - held > frontS - gap) held = p.s - (frontS - gap);
         s = p.s - held;
         if (held > 0.01) {
@@ -428,8 +430,8 @@ export class StreetTraffic {
           const dx = b.x - a.x;
           const dz = b.z - a.z;
           const ahead = dx * a.fx + dz * a.fz;
-          if (ahead <= 0 || Math.abs(dx * -a.fz + dz * a.fx) > 1.6) continue;
-          const need = a.half + b.half + 2.2;
+          if (ahead <= 0 || Math.abs(dx * -a.fz + dz * a.fx) > 1.3) continue;
+          const need = a.half + b.half + 1.5;
           // The one further along its own route (or the lower number) goes first.
           if (ahead < need) push = Math.max(push, need - ahead);
         }

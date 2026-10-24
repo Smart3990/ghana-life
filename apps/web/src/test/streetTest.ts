@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import * as maplibregl from 'maplibre-gl';
 import { createMap } from '../map/createMap';
 import { detectTier, measureFps } from '../map/tier';
-import { loadTraffic } from '../game/traffic';
+import { loadTraffic, type Traffic } from '../game/traffic';
 import { StreetTraffic } from '../game/vehicles3d';
 import { StreetBuildings } from '../game/streetBuildings';
 import { applyStreetStyle } from '../map/streetStyle';
@@ -617,23 +617,36 @@ let minimap: Minimap | null = null;
 // Real 3D buildings near the player (the map's own blocks are switched off at street level).
 // Trees, lights, kiosks, umbrellas, polytanks and people, placed along the same streets.
 let life: StreetLife | null = null;
+let trafficModel: Traffic | null = null;
+const pendingRoads: { pts: [number, number][]; lanes: 1 | 2 }[] = [];
 const buildings = new StreetBuildings(
   (lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT],
   { light: 220, standard: 320, ultra: 450 }[tier],
-  (roads, roofs) => life?.add(roads, roofs),
+  (roads, roofs) => {
+    life?.add(roads, roofs);
+    // Every street the map loads gets traffic too: two lanes each way on main roads, one on others.
+    const toLngLat = (x: number, z: number): [number, number] => [START[0] + x / M_LON, START[1] - z / M_LAT];
+    pendingRoads.push(
+      ...roads.map((r) => ({
+        pts: Array.from({ length: r.pts.length / 2 }, (_, i) => toLngLat(r.pts[i * 2], r.pts[i * 2 + 1])),
+        lanes: (r.kind === 'minor_road' ? 1 : 2) as 1 | 2,
+      })),
+    );
+    if (trafficModel) trafficModel.addRoads(pendingRoads.splice(0));
+  },
 );
 scene.add(buildings.group);
 life = new StreetLife((x, z, m) => buildings.blocked(x, z, m), {
-  light: { radiusM: 140, people: 80, props: 250 },
-  standard: { radiusM: 200, people: 200, props: 600 },
-  ultra: { radiusM: 280, people: 400, props: 1200 },
+  light: { radiusM: 140, people: 110, props: 250 },
+  standard: { radiusM: 200, people: 320, props: 600 },
+  ultra: { radiusM: 280, people: 560, props: 1200 },
 }[tier]);
 scene.add(life.group);
 // Planes on the Kotoka flight paths and helicopters circling over the city.
 const sky = new SkyTraffic((lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT]);
 scene.add(sky.group);
 let streetTraffic: StreetTraffic | null = null;
-const TRAFFIC_LANE_M = 2.4; // from the middle of the road to the middle of the lane (Ghana drives on the right)
+const TRAFFIC_LANE_M = 1.35; // the inner lane; the kerb lane is further out (traffic.ts) // from the middle of the road to the middle of the lane (Ghana drives on the right)
 
 async function start() {
   const [player] = await Promise.all([
@@ -668,9 +681,11 @@ async function start() {
   // Real 3D vehicles at street level (the overview map's blocks are not used here).
   loadTraffic().then((traffic) => {
     if (!traffic) return;
+    trafficModel = traffic;
+    traffic.addRoads(pendingRoads.splice(0));
     // Busy roads (raised from the first budget of 15 / 40 / 100: they are drawn in batches, so they cost little).
-    const limit = { light: 30, standard: 80, ultra: 160 }[tier];
-    streetTraffic = new StreetTraffic(traffic, (lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT], limit, 260);
+    const limit = { light: 70, standard: 150, ultra: 260 }[tier];
+    streetTraffic = new StreetTraffic(traffic, (lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT], limit, { light: 150, standard: 190, ultra: 240 }[tier]);
     scene.add(streetTraffic.group);
     streetTraffic.onHoot = (x, z) => honk(Math.hypot(x - state.x, z - state.z), true);
     if (debug) Object.assign(window, { __street: { state, sky, look, traffic: streetTraffic, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
@@ -687,14 +702,28 @@ async function start() {
   };
   requestAnimationFrame(loop);
 
-  if (debug) {
-    debugLine.hidden = false;
+  if (autoTest) runAutoTest();
+  // Busy, but never slow: every 2 seconds, if the frame rate is low, show fewer people and vehicles;
+  // if there is room to spare, bring them back (master plan: draw less when a phone struggles).
+  if (debug) debugLine.hidden = false;
+  if (!params.has('full')) {
+    let density = 1;
+    const baseLimit = { light: 70, standard: 150, ultra: 260 }[tier];
+    for (;;) {
+      const fps = await measureFps(2);
+      if (fps < 26 && density > 0.25) density *= 0.75;
+      else if (fps > 48 && density < 1) density = Math.min(1, density * 1.15);
+      life?.setDensity(density);
+      if (streetTraffic) streetTraffic.limit = Math.max(12, Math.round(baseLimit * density));
+      if (debug) debugLine.textContent = `${tier} (${reason}) · ${Math.round(fps)} fps · ${renderer.info.render.triangles} tris · busy ${Math.round(density * 100)}%`;
+    }
+  } else if (debug) {
     for (;;) {
       const fps = await measureFps(2);
       debugLine.textContent = `${tier} (${reason}) · ${Math.round(fps)} fps · ${renderer.info.render.triangles} tris`;
     }
   }
-  if (autoTest) runAutoTest();
+
 }
 
 start();

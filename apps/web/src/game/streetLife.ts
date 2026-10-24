@@ -139,11 +139,21 @@ export class StreetLife {
   readonly group = new THREE.Group();
   private batches: Batch[] = [];
   private walkways: Walkway[] = [];
+  // The middle of the big roads, where hawkers walk between the queuing cars.
+  private centreWays: Walkway[] = [];
+  private nearCentre: Walkway[] = [];
   private agents: Agent[] = [];
   private crowds: Partial<Record<CrowdBody, CrowdBatch>> = {};
   private loads: Record<'basin' | 'tray', THREE.InstancedMesh>;
   private gatherings: { x: number; z: number; face: number }[] = [];
   private time = { value: 0 };
+  private density = 1;
+
+  /** Share of the crowd to show (1 = everyone): lowered automatically when the phone struggles. */
+  setDensity(d: number) {
+    this.density = Math.max(0.2, Math.min(1, d));
+    for (const b of Object.values(this.crowds)) if (b) b.mesh.count = Math.floor(b.count * this.density);
+  }
   private lastRefresh = { x: Infinity, z: Infinity };
   private m = new THREE.Matrix4();
   private q = new THREE.Quaternion();
@@ -208,10 +218,14 @@ export class StreetLife {
     this.group.add(male.mesh, female.mesh);
     const total = MIX.reduce((n, [, w]) => n + w, 0);
     for (let i = 0; i < this.opts.people; i++) {
-      // School children come in groups of three or four behind the first one.
+      // School children come in groups of three or four; friends walk together in twos and threes.
       const prev = this.agents[i - 1];
-      const inGroup = prev && prev.kind === 'pupil' && (prev.leader === -1 ? 1 : i - prev.leader) < 2 + Math.floor(hash(i, 1) * 2) + 1;
-      let kind: PersonKind = 'pupil';
+      const head = prev ? (prev.leader === -1 ? i - 1 : prev.leader) : -1;
+      const size = prev ? i - head : 0;
+      const groupKind = prev && !prev.still && ['pupil', 'man', 'woman', 'church', 'muslimWoman'].includes(prev.kind) ? prev.kind : null;
+      const wantGroup = groupKind && (groupKind === 'pupil' ? size < 3 + Math.floor(hash(head, 1) * 2) : hash(head, 12) < 0.45 && size < 2 + Math.floor(hash(head, 13) * 2));
+      const inGroup = !!wantGroup;
+      let kind: PersonKind = groupKind && inGroup ? (groupKind as PersonKind) : 'pupil';
       if (!inGroup) {
         let r = hash(i, 2) * total;
         kind = MIX.find(([, w]) => (r -= w) < 0)?.[0] ?? 'man';
@@ -219,7 +233,7 @@ export class StreetLife {
       const look = lookFor(kind, (k) => hash(i, 40 + k));
       const batch = this.crowds[look.body]!;
       const slot = batch.count++;
-      const still = !inGroup && kind !== 'pupil' && kind !== 'kayayo' && hash(i, 3) < 0.24;
+      const still = !inGroup && kind !== 'pupil' && kind !== 'kayayo' && kind !== 'hawker' && hash(i, 3) < 0.3;
       const speed = (kind === 'pupil' || kind === 'child' ? 1.0 : 1.15) + hash(i, 4) * 0.45;
       const clip: Clip = still ? (hash(i, 5) < 0.6 ? 'talk' : 'idle') : 'walk';
       // Feet match the ground: play the walk faster or slower with speed and size.
@@ -228,11 +242,10 @@ export class StreetLife {
       this.agents.push({
         kind, look, batch: look.body, slot, run: null, spot: null,
         s0: hash(i, 7) * 500, speed, lateral: (hash(i, 8) - 0.5) * 1.1, still,
-        leader: inGroup ? (prev.leader === -1 ? i - 1 : prev.leader) : -1,
+        leader: inGroup ? head : -1,
       });
     }
-    male.mesh.count = male.count;
-    female.mesh.count = female.count;
+    this.setDensity(this.density);
   }
 
   // Road pieces in a grid of 25 m squares, so things are never put on a road.
@@ -322,6 +335,12 @@ export class StreetLife {
       const size = HALF[road.kind];
       if (!size?.walk) continue;
       for (const side of [1, -1]) this.addWalkways(road.pts, (size.half + GUTTER + size.walk / 2) * side);
+      if (road.kind !== 'minor_road' && road.pts.length >= 4) {
+        const cum = new Float32Array(road.pts.length / 2);
+        for (let i = 1; i < cum.length; i++) cum[i] = cum[i - 1] + Math.hypot(road.pts[i * 2] - road.pts[i * 2 - 2], road.pts[i * 2 + 1] - road.pts[i * 2 - 1]);
+        const total = cum[cum.length - 1];
+        if (total > 15) this.centreWays.push({ pts: road.pts, cum, total, cx: road.pts[0], cz: road.pts[1] });
+      }
     }
     for (const k of this.kiosks.all.concat(this.umbrellas.all)) this.gatherings.push({ x: k.x, z: k.z, face: k.angle });
     for (const roof of roofs) {
@@ -391,13 +410,17 @@ export class StreetLife {
   private nearSpots: { x: number; z: number; face: number }[] = [];
   private refresh(x: number, z: number) {
     this.lastRefresh = { x, z };
-    // People stay close to the player (within about 90 m), so the streets around you are busy.
-    const reach = Math.min(90, this.opts.radiusM * 0.75);
+    // People stay close to the player (within about 65 m), so the streets around you are packed.
+    const reach = Math.min(65, this.opts.radiusM * 0.75);
     this.nearWalkways = this.walkways.filter((w) => {
       for (let i = 0; i < w.pts.length; i += 2) if (Math.abs(w.pts[i] - x) < reach && Math.abs(w.pts[i + 1] - z) < reach) return true;
       return false;
     });
     this.nearLength = this.nearWalkways.reduce((n, w) => n + w.total, 0);
+    this.nearCentre = this.centreWays.filter((w) => {
+      for (let i = 0; i < w.pts.length; i += 2) if (Math.abs(w.pts[i] - x) < reach && Math.abs(w.pts[i + 1] - z) < reach) return true;
+      return false;
+    });
     this.nearSpots = this.gatherings.filter((g) => Math.hypot(g.x - x, g.z - z) < reach);
     const r2 = this.opts.radiusM ** 2;
     let shadows = 0;
@@ -449,17 +472,19 @@ export class StreetLife {
   private movePeople(x: number, z: number, t: number) {
     let shadows = this.propShadows;
     const loadCount = { basin: 0, tray: 0 };
-    const far = Math.min(115, this.opts.radiusM * 0.8);
+    const far = Math.min(85, this.opts.radiusM * 0.8);
     for (const [i, a] of this.agents.entries()) {
       const batch = this.crowds[a.batch];
-      if (!batch) continue;
+      if (!batch || a.slot >= batch.mesh.count) continue; // not shown at the current density
       const leader = a.leader >= 0 ? this.agents[a.leader] : null;
       // Someone who has fallen far behind the player moves to a pavement (or a kiosk) nearby.
       if (leader) {
         a.run = leader.run;
         a.s0 = leader.s0;
       } else if (!a.run || this.tooFar(a, x, z, t, far)) {
-        a.run = this.pickWalkway(hash(i, Math.floor(t)));
+        // Hawkers (and some kayayei) work the traffic, walking between the lanes.
+        const inTraffic = (a.kind === 'hawker' || (a.kind === 'kayayo' && hash(i, 14) < 0.35)) && this.nearCentre.length;
+        a.run = inTraffic ? this.nearCentre[Math.floor(hash(i, t) * this.nearCentre.length)] : this.pickWalkway(hash(i, Math.floor(t)));
         a.spot = a.still && this.nearSpots.length && hash(i, 9) < 0.7 ? this.nearSpots[Math.floor(hash(i, t) * this.nearSpots.length)] : null;
       }
       let px: number;

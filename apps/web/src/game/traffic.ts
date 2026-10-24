@@ -5,9 +5,12 @@ import type { GeoJSONSource, Map } from 'maplibre-gl';
 import type { Tier } from '../map/style';
 
 const ROUTES_URL = '/data/traffic-central.json';
-// Busy Accra: on each route a vehicle every 20 to 40 metres (about 20,000 vehicles in all).
-// Only the ones near the player are ever worked out.
-const SPACING_M: [number, number] = [20, 40];
+// Choked Accra: two lanes each way, nose to tail. Slots alternate between the two lanes, so each lane
+// has a vehicle every 9 to 14 metres (about 100,000 vehicles in all). Only the ones near the player
+// are ever worked out.
+const SPACING_M: [number, number] = [4.5, 7];
+// The outer (kerb-side) lane is this many lane-widths further out than the inner one.
+const OUTER_LANE = 1.9;
 // Vehicles are drawn about twice real size, like most map games, so they read clearly
 // next to the (screen-sized) characters.
 const SIZE = 2.1;
@@ -48,10 +51,10 @@ type VehicleShape = {
   properties: { colour: string; base: number; top: number };
   geometry: { type: 'Polygon'; coordinates: number[][][] };
 };
-type Route = { lon: Float64Array; lat: Float64Array; at: Float64Array; total: number }; // at = metres along the route
-export type Vehicle = { id: number; route: number; kind: Kind; colour: string; offset: number; speed: number };
+type Route = { lon: Float64Array; lat: Float64Array; at: Float64Array; total: number; lanes: 1 | 2 }; // at = metres along the route
+export type Vehicle = { id: number; route: number; lane: 0 | 1; kind: Kind; colour: string; offset: number; speed: number };
 
-function prepare(raw: number[][][], scale: number): Route[] {
+function prepare(raw: number[][][], scale: number, lanes: 1 | 2 = 2): Route[] {
   return raw.map((points) => {
     const lon = Float64Array.from(points, (p) => p[0] / scale);
     const lat = Float64Array.from(points, (p) => p[1] / scale);
@@ -59,7 +62,7 @@ function prepare(raw: number[][][], scale: number): Route[] {
     for (let i = 1; i < points.length; i++) {
       at[i] = at[i - 1] + Math.hypot((lon[i] - lon[i - 1]) * M_LON, (lat[i] - lat[i - 1]) * M_LAT);
     }
-    return { lon, lat, at, total: at[points.length - 1] };
+    return { lon, lat, at, total: at[points.length - 1], lanes };
   });
 }
 
@@ -113,6 +116,8 @@ export type Traffic = {
   near: (lon: number, lat: number, t: number, radiusM: number, limit: number, lane?: number) => Placed[];
   /** Where a vehicle is at a distance s along its route (for vehicles held back near the player). */
   at: (v: Vehicle, s: number, lane?: number) => { lon: number; lat: number; heading: number };
+  /** More roads to fill with traffic (each driven both ways): [longitude, latitude] points, and how many lanes each way. */
+  addRoads: (roads: { pts: [number, number][]; lanes: 1 | 2 }[]) => void;
 };
 
 // Loads the routes and sets up every vehicle. The same on every phone: positions come from the shared clock.
@@ -129,17 +134,20 @@ export async function loadTraffic(): Promise<Traffic | null> {
   // Each route: its own pace and its own spacing. Vehicles on a route share its speed and are
   // spaced evenly (with a little jitter), so they never drive through each other. A vehicle is
   // known by its route and its slot, so nothing needs storing for the 20,000 of them.
-  const pace = routes.map((r, i) => {
-    const spacing = SPACING_M[0] + hash(i * 17 + 3) * (SPACING_M[1] - SPACING_M[0]);
+  const paceFor = (r: Route, i: number) => {
+    // One-lane roads have one queue, so their slots are twice as far apart.
+    const spacing = (SPACING_M[0] + hash(i * 17 + 3) * (SPACING_M[1] - SPACING_M[0])) * (r.lanes === 1 ? 2 : 1);
     const slots = Math.max(1, Math.floor(r.total / spacing));
-    return { speed: 7 + hash(i * 13 + 5) * 4, slots, gap: r.total / slots };
-  });
+    // Rush-hour pace: from a crawl to a slow roll (metres per second).
+    return { speed: 2.2 + hash(i * 13 + 5) * 4.3, slots, gap: r.total / slots };
+  };
+  const pace = routes.map(paceFor);
   const vehicle = (route: number, slot: number): Vehicle => {
     const id = route * 100000 + slot;
     const kind = kindFor(hash(id * 3 + 1));
     const k = KINDS[kind];
     const p = pace[route];
-    return { id, route, kind, colour: k.colours[Math.floor(hash(id * 3 + 2) * k.colours.length)], offset: (slot + 0.3 * hash(id * 3 + 3)) * p.gap, speed: p.speed };
+    return { id, route, lane: (routes[route].lanes === 2 ? slot % 2 : 0) as 0 | 1, kind, colour: k.colours[Math.floor(hash(id * 3 + 2) * k.colours.length)], offset: (slot + 0.3 * hash(id * 3 + 3)) * p.gap, speed: p.speed };
   };
 
   // Which stretches of each route are near a point (worked out again after moving 40 m).
@@ -181,12 +189,13 @@ export async function loadTraffic(): Promise<Traffic | null> {
           const v = vehicle(ri, slot);
           const s = (((v.offset + base) % r.total) + r.total) % r.total;
           if (s < a || s > b) continue;
-          const pos = placeOn(r, s, lane);
+          const off = lane * (1 + v.lane * OUTER_LANE);
+          const pos = placeOn(r, s, off);
           const d = Math.hypot((pos.lon - lon) * M_LON, (pos.lat - lat) * M_LAT);
           if (d > radiusM) continue;
           // Facing: along the road a few metres either side, so turns are smooth instead of snapping.
-          const ahead = placeOn(r, Math.min(r.total, s + 3), lane);
-          const behind = placeOn(r, Math.max(0, s - 3), lane);
+          const ahead = placeOn(r, Math.min(r.total, s + 3), off);
+          const behind = placeOn(r, Math.max(0, s - 3), off);
           const heading = Math.atan2((ahead.lon - behind.lon) * M_LON, (ahead.lat - behind.lat) * M_LAT);
           found.push({ v, d, lon: pos.lon, lat: pos.lat, heading, s });
         }
@@ -198,12 +207,25 @@ export async function loadTraffic(): Promise<Traffic | null> {
   const at: Traffic['at'] = (v, s, lane = LANE_OFFSET_M) => {
     const r = routes[v.route];
     const t = ((s % r.total) + r.total) % r.total;
-    const p = placeOn(r, t, lane);
-    const ahead = placeOn(r, Math.min(r.total, t + 3), lane);
-    const behind = placeOn(r, Math.max(0, t - 3), lane);
+    const off = lane * (1 + v.lane * OUTER_LANE);
+    const p = placeOn(r, t, off);
+    const ahead = placeOn(r, Math.min(r.total, t + 3), off);
+    const behind = placeOn(r, Math.max(0, t - 3), off);
     return { lon: p.lon, lat: p.lat, heading: Math.atan2((ahead.lon - behind.lon) * M_LON, (ahead.lat - behind.lat) * M_LAT) };
   };
-  return { near, at };
+  const addRoads: Traffic['addRoads'] = (roads) => {
+    for (const road of roads) {
+      if (road.pts.length < 2) continue;
+      // There and back again, so the road gets traffic both ways.
+      const loop = [...road.pts, ...road.pts.slice(0, -1).reverse()];
+      const [r] = prepare([loop], 1, road.lanes);
+      if (r.total < 30) continue;
+      routes.push(r);
+      pace.push(paceFor(r, routes.length - 1));
+    }
+    cache = null;
+  };
+  return { near, at, addRoads };
 }
 
 // The overview map's traffic: simple blocks in the map's own "traffic" layer.

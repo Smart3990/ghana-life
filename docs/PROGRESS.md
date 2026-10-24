@@ -65,6 +65,15 @@ Next steps, in order (brief section 23):
 Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/streetTest.ts`).
 
 - **What it does:** a 3D person at Kwame Nkrumah Circle, seen from close behind, walks or runs with a touch joystick, W A S D or arrow keys, or a game controller. They get on and off an okada with the OKADA button, E, or X / □ on a controller. The bike leans in corners, its wheels turn, and the rider sits on it. The camera follows behind and turns after you. Place names fade in as you pass.
+- **Choked city pass (2026-10-24, owner: "it must look choked"):**
+  - **Traffic:** two lanes each way on main roads, nose to tail. Each lane has a vehicle every 9 to 14 m, at rush-hour crawl (2 to 6.5 m/s). The kerb lane sits further out (`OUTER_LANE` in `traffic.ts`).
+  - **Every street:** every major and minor road the game loads from the map tiles also gets two-way traffic (`Traffic.addRoads`: one lane each way on minor roads). The streets the 80 fixed routes miss are no longer empty. That added traffic is worked out on each phone, so it isn't identical between players; the fixed routes still are.
+  - **Queues:** each lane queues on its own with a 1.5 m gap. Vehicles from other routes in the same lane keep their distance too.
+  - **Pavements:** people stay within about 65 m of the player. Friends walk in twos and threes, school children in threes and fours, and about 30% stand chatting.
+  - **Hawkers in traffic:** hawkers (and some kayayei) walk along the middle of the main roads between the queuing cars.
+  - **Limits:** people 110 / 320 / 560 and vehicles 70 / 150 / 260 (Light / Standard / Ultra).
+  - **Automatic step-down:** every 2 seconds, below 26 fps the game shows 25% fewer people and vehicles (down to a fifth). Above 48 fps it brings them back. The debug line shows "busy %". `?full` turns this off for testing.
+  - **Cloud check at full busy-ness (`?full`):** about 186,000 triangles on Light and 479,000 on Standard, with no errors and the main game clean. On a cheap phone the automatic step-down will likely lower this; the "busy %" number will show by how much.
 - **Busy city pass (2026-10-24):**
   - **Crowds** (`src/game/crowd.ts`): hundreds of people, drawn in one batch per body (man, woman). Their walk, idle and talk moves are worked out once at the start and stored in a small texture, and the graphics card animates everyone from it. The kinds of people:
     - everyday men and women;
