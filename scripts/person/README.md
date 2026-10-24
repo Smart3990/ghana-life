@@ -1,4 +1,4 @@
-# Building the 3D person (`apps/web/public/models/person.glb`)
+# Building the 3D people (`apps/web/public/models/person.glb` and `person-female.glb`)
 
 The player (and later the crowds) come from two free packs by Quaternius, both **CC0** (public domain):
 
@@ -7,8 +7,8 @@ The player (and later the crowds) come from two free packs by Quaternius, both *
 
 What the build does:
 
-1. Takes the male base body and the short "Buzzed" hair.
-2. Paints a T-shirt, trousers and trainers onto the body texture. The texture's alpha channel records which part each texel is: skin 16, shirt 76, trousers 136, shoes 196, soles 255. The game then colours skin and clothes in the shader (`apps/web/src/game/person.ts`), so every person can look different with one file.
+1. Takes the male body with short "Buzzed" hair, or the female body with "Buns" hair.
+2. Paints a T-shirt, trousers and trainers onto the body texture. For the woman, it adds a flared midi skirt as a real shape, skinned to the hips and thighs so it swings as she walks. The texture's alpha channel records which part each texel is: skin 16, shirt 76, trousers 136, shoes 196, soles 255. The game then colours skin and clothes in the shader (`apps/web/src/game/person.ts`), so every person can look different with one file.
 3. Lifts and smooths the clothed areas slightly, so they look like fabric, and slims the bare arms a little.
 4. Keeps the animations the game needs and leaves out the weapon ones: idle, walk, jog, sprint, ride, sit, talk, dance, interact, jump, punch and hit.
 5. Shrinks it for the web: WebP textures, sparse animation keys, meshopt compression. The result is about 550 KB.
@@ -32,11 +32,13 @@ blender -b --python build_person.py -- \
   "$U/Base Characters/Godot - UE/Superhero_Male_FullBody.gltf" \
   "$U/Hairstyles/Rigged to Head Bone/glTF (Godot -Unreal)/Hair_Buzzed.gltf" \
   "$HOME/person-src/ual/x/Universal Animation Library[Standard]/Unreal-Godot/UAL1_Standard.glb" \
-  /tmp/person_raw.glb /tmp
+  /tmp/person_raw.glb /tmp male
+# The woman: Superhero_Female_FullBody.gltf, Hair_Buns.gltf, and "female" as the last word
 
 # 3. Shrink for the web
 npm install
 node optimise-person.mjs /tmp/person_raw.glb ../../apps/web/public/models/person.glb
+# (the woman goes to person-female.glb)
 ```
 
 Check the result at `/person-test.html` (several outfits side by side) and `/street-test.html`.

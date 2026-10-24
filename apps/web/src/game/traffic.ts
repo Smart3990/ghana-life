@@ -18,10 +18,10 @@ const LANE_OFFSET_M = 3.2; // Ghana drives on the right (wider than real, to mat
 const M_LAT = 110574;
 const M_LON = 111320 * Math.cos((5.56 * Math.PI) / 180);
 
-type Kind = 'car' | 'taxi' | 'trotro' | 'tricycle';
+export type Kind = 'car' | 'taxi' | 'trotro' | 'tricycle';
 
 // Sizes in metres, speeds in metres per second, and Accra-looking colours.
-const KINDS: Record<Kind, { length: number; width: number; height: number; speed: number; colours: string[]; cabin?: string }> = {
+export const KINDS: Record<Kind, { length: number; width: number; height: number; speed: number; colours: string[]; cabin?: string }> = {
   car: { length: 4.4, width: 1.8, height: 1.45, speed: 10, colours: ['#f4f4f2', '#c0c4c8', '#2b2f36', '#8e1b1b', '#1f4f8a'], cabin: '#33404d' },
   taxi: { length: 4.4, width: 1.8, height: 1.45, speed: 9, colours: ['#f2a922'], cabin: '#33404d' },
   trotro: { length: 6.2, width: 2.1, height: 2.4, speed: 7.5, colours: ['#f1ece0', '#e9e4d6', '#d9dde0'] },
@@ -36,7 +36,7 @@ type VehicleShape = {
   geometry: { type: 'Polygon'; coordinates: number[][][] };
 };
 type Route = { lon: Float64Array; lat: Float64Array; at: Float64Array; total: number }; // at = metres along the route
-type Vehicle = { route: number; kind: Kind; colour: string; offset: number; speed: number };
+export type Vehicle = { id: number; route: number; kind: Kind; colour: string; offset: number; speed: number };
 
 function prepare(raw: number[][][], scale: number): Route[] {
   return raw.map((points) => {
@@ -94,23 +94,29 @@ function box(lon: number, lat: number, heading: number, length: number, width: n
   return [[corner(l, -w), corner(l, w), corner(-l, w), corner(-l, -w), corner(l, -w)]];
 }
 
-// size: how much bigger than real the vehicles are drawn (street-level views pass 1, real size).
-export async function startTraffic(map: Map, getTier: () => Tier, serverNow: () => number, size = SIZE) {
-  const lane = (LANE_OFFSET_M * size) / SIZE;
+export type Placed = { v: Vehicle; d: number; lon: number; lat: number; heading: number };
+export type Traffic = {
+  /** The nearest vehicles to a point at a moment (seconds of shared time), nearest first. */
+  near: (lon: number, lat: number, t: number, radiusM: number, limit: number, lane?: number) => Placed[];
+};
+
+// Loads the routes and sets up every vehicle. The same on every phone: positions come from the shared clock.
+export async function loadTraffic(): Promise<Traffic | null> {
   let routes: Route[];
   try {
     const file = await (await fetch(ROUTES_URL)).json();
     routes = prepare(file.routes, file.scale);
   } catch {
-    return; // no traffic is better than a broken game
+    return null; // no traffic is better than a broken game
   }
-  if (!routes.length) return;
+  if (!routes.length) return null;
 
   const vehicles: Vehicle[] = Array.from({ length: VEHICLES }, (_, i) => {
     const kind = MIX[Math.floor(hash(i * 3 + 1) * MIX.length)];
     const k = KINDS[kind];
     const route = i % routes.length;
     return {
+      id: i,
       route,
       kind,
       colour: k.colours[Math.floor(hash(i * 3 + 2) * k.colours.length)],
@@ -118,6 +124,33 @@ export async function startTraffic(map: Map, getTier: () => Tier, serverNow: () 
       speed: k.speed * (0.85 + hash(i * 7) * 0.3),
     };
   });
+
+  const near: Traffic['near'] = (lon, lat, t, radiusM, limit, lane = LANE_OFFSET_M) => {
+    const found: Placed[] = [];
+    for (const v of vehicles) {
+      const r = routes[v.route];
+      const s = (v.offset + v.speed * t) % r.total;
+      const p = placeOn(r, s, lane);
+      const d = Math.hypot((p.lon - lon) * M_LON, (p.lat - lat) * M_LAT);
+      if (d > radiusM) continue;
+      // Facing: along the road a few metres either side, so turns are smooth instead of snapping.
+      const ahead = placeOn(r, Math.min(r.total, s + 3), lane);
+      const behind = placeOn(r, Math.max(0, s - 3), lane);
+      const heading = Math.atan2((ahead.lon - behind.lon) * M_LON, (ahead.lat - behind.lat) * M_LAT);
+      found.push({ v, d, lon: p.lon, lat: p.lat, heading });
+    }
+    found.sort((a, b) => a.d - b.d);
+    return found.slice(0, limit);
+  };
+  return { near };
+}
+
+// The overview map's traffic: simple blocks in the map's own "traffic" layer.
+// size: how much bigger than real the vehicles are drawn.
+export async function startTraffic(map: Map, getTier: () => Tier, serverNow: () => number, size = SIZE) {
+  const lane = (LANE_OFFSET_M * size) / SIZE;
+  const traffic = await loadTraffic();
+  if (!traffic) return;
 
   let last = 0;
   const frame = (now: number) => {
@@ -129,18 +162,11 @@ export async function startTraffic(map: Map, getTier: () => Tier, serverNow: () 
 
     const tier = getTier();
     const centre = map.getCenter();
-    const t = serverNow() / 1000;
-    const near: { d: number; v: Vehicle; p: ReturnType<typeof placeOn> }[] = [];
-    for (const v of vehicles) {
-      const r = routes[v.route];
-      const p = placeOn(r, (v.offset + v.speed * t) % r.total, lane);
-      const d = Math.hypot((p.lon - centre.lng) * M_LON, (p.lat - centre.lat) * M_LAT);
-      if (d < DRAW_RADIUS_M[tier]) near.push({ d, v, p });
-    }
-    near.sort((a, b) => a.d - b.d);
+    const near = traffic.near(centre.lng, centre.lat, serverNow() / 1000, DRAW_RADIUS_M[tier], DRAW_LIMIT[tier], lane);
 
     const features: VehicleShape[] = [];
-    for (const { v, p } of near.slice(0, DRAW_LIMIT[tier])) {
+    for (const p of near) {
+      const v = p.v;
       const real = KINDS[v.kind];
       const k = { ...real, length: real.length * size, width: real.width * size, height: real.height * size };
       features.push({

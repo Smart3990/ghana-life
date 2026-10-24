@@ -7,7 +7,8 @@ import * as THREE from 'three';
 import * as maplibregl from 'maplibre-gl';
 import { createMap } from '../map/createMap';
 import { detectTier, measureFps } from '../map/tier';
-import { startTraffic } from '../game/traffic';
+import { loadTraffic } from '../game/traffic';
+import { StreetTraffic } from '../game/vehicles3d';
 import { createPerson, type Move, type Person } from '../game/person';
 import { Minimap } from '../hud/minimap';
 import { TouchControls } from '../hud/touchControls';
@@ -180,7 +181,8 @@ type Player = Person & { seat: THREE.Vector3; shadow: THREE.Object3D };
 const BLENDED: Move[] = ['idle', 'walk', 'run', 'ride'];
 
 async function loadPlayer(): Promise<Player> {
-  const person = await createPerson();
+  // ?female plays as a woman.
+  const person = await createPerson({}, params.has('female') ? 'female' : 'male');
   for (const move of BLENDED) {
     person.actions[move].play();
     person.actions[move].setEffectiveWeight(move === 'idle' ? 1 : 0);
@@ -505,6 +507,7 @@ function step(player: Player, dt: number, t: number) {
     padding: { top: height * PLAYER_SCREEN_DROP, bottom: 0, left: 0, right: 0 },
   });
   checkPlace(here);
+  streetTraffic?.update(here[0], here[1], Date.now() / 1000, TRAFFIC_LANE_M);
   minimap?.update(state.x, state.z, state.camHeading, state.onOkada ? [] : [{ x: state.okadaX, z: state.okadaZ, color: '#c8442e', size: 5 }]);
   void t;
 }
@@ -585,6 +588,8 @@ function widenForStreetLevel() {
 }
 
 let minimap: Minimap | null = null;
+let streetTraffic: StreetTraffic | null = null;
+const TRAFFIC_LANE_M = 1.7; // from the middle of the road to the middle of the lane (Ghana drives on the right)
 
 async function start() {
   const [player] = await Promise.all([
@@ -615,7 +620,14 @@ async function start() {
     'fog-ground-blend': 0.9,
   });
   map.setLight({ anchor: 'map', color: '#ffe2bd', intensity: 0.45, position: [1.4, 265, 35] });
-  startTraffic(map, () => tier, () => Date.now(), 1); // real-size vehicles at street level
+  // Real 3D vehicles at street level (the overview map's blocks are not used here).
+  loadTraffic().then((traffic) => {
+    if (!traffic) return;
+    const limit = { light: 15, standard: 40, ultra: 100 }[tier];
+    streetTraffic = new StreetTraffic(traffic, (lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT], limit, 260);
+    scene.add(streetTraffic.group);
+    if (debug) Object.assign(window, { __street: { state, traffic: streetTraffic, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
+  });
 
   document.getElementById('loading')!.remove();
   setTimeout(() => (help.style.opacity = '0'), 7000);

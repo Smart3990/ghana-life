@@ -1,4 +1,5 @@
-// 3D people: the player now, and the crowds later, all from one model file (public/models/person.glb).
+// 3D people: the player now, and the crowds later. Two model files, a man (public/models/person.glb)
+// and a woman (public/models/person-female.glb); each is downloaded only when someone needs it.
 // The body texture's alpha channel marks skin, shirt, trousers, shoes and soles, so each person gets their own
 // skin tone and clothes colours from a few shader numbers: no extra textures or downloads per outfit.
 import * as THREE from 'three';
@@ -25,6 +26,8 @@ export type Move = keyof typeof MOVES;
 // Skin tones multiply the texture's medium-brown skin. Deep is the default.
 export const SKIN_TONES = { light: '#c2b6ad', medium: '#a0948b', deep: '#7f746d', veryDeep: '#665d58' };
 
+export type Body = 'male' | 'female';
+// For the woman, "trousers" is her skirt.
 export type Outfit = { skin: string; shirt: string; trousers: string; shoes: string; hair: string };
 export const DEFAULT_OUTFIT: Outfit = {
   skin: SKIN_TONES.deep,
@@ -44,14 +47,15 @@ export type Person = {
 };
 
 type Loaded = { scene: THREE.Object3D; animations: THREE.AnimationClip[] };
-let loading: Promise<Loaded> | null = null;
-function loadModel(): Promise<Loaded> {
-  if (!loading) {
+const MODEL_URL: Record<Body, string> = { male: '/models/person.glb', female: '/models/person-female.glb' };
+const loading: Partial<Record<Body, Promise<Loaded>>> = {};
+function loadModel(body: Body): Promise<Loaded> {
+  if (!loading[body]) {
     const loader = new GLTFLoader();
     loader.setMeshoptDecoder(MeshoptDecoder);
-    loading = loader.loadAsync('/models/person.glb');
+    loading[body] = loader.loadAsync(MODEL_URL[body]);
   }
-  return loading;
+  return loading[body]!;
 }
 
 // The body material: the standard lit material, with the colour and shine of each part
@@ -102,8 +106,8 @@ function bodyMaterial(source: THREE.MeshStandardMaterial) {
   return { material, uniforms };
 }
 
-export async function createPerson(outfit: Partial<Outfit> = {}): Promise<Person> {
-  const gltf = await loadModel();
+export async function createPerson(outfit: Partial<Outfit> = {}, bodyType: Body = 'male'): Promise<Person> {
+  const gltf = await loadModel(bodyType);
   const model = cloneSkinned(gltf.scene);
   let body: ReturnType<typeof bodyMaterial> | null = null;
   const hairMaterials: THREE.MeshStandardMaterial[] = [];

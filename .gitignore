@@ -11,3 +11,4 @@ dist/
 *.pmtiles
 apps/web/public/tiles/*/
 apps/web/public/data/roads/
+scripts/person/node_modules

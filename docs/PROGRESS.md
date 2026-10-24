@@ -75,21 +75,22 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
   - Controllers: left stick moves, right and left triggers accelerate and brake, A / ✕ jumps, B / ○ sprints, Y / △ gets on and off, and pressing the left stick sounds the horn.
   - New code: `src/hud/minimap.ts`, `src/hud/touchControls.ts` and `src/hud/landscape.ts`, ready to move into the main game.
 - **Look:** an evening Accra sky, warm light, a soft shadow under the player. At street level the roads are tarmac grey with kerbs and the ground is dusty, instead of the bright overview colours. Road widths keep growing past zoom 18, so roads stay the right size up close.
-- **Traffic:** the live traffic is drawn at real size here (`startTraffic(..., size)`, new optional argument; the main game is unchanged).
+- **Traffic (3D, 2026-10-24):** at street level the traffic is now real 3D vehicles built in code (`src/game/vehicles3d.ts`): private cars in several colours, yellow Accra taxis with a red band and roof sign, white trotros with side windows, a stripe and a roof rack, and pragya tricycles with a driver. They turn smoothly at bends and bounce slightly, with soft shadows. They follow the same shared clock as before (`loadTraffic()` in `traffic.ts`), so every phone sees the same vehicles. Each kind is drawn in one batch: about 10 draw calls for up to 100 vehicles. The limits are 15 on Light, 40 on Standard and 100 on Ultra, within 260 m. The overview map still uses its blocks.
 - **Assets:** `public/models/person.glb` (550 KB), a Ghanaian man in a T-shirt, trousers and trainers, with 14 animations. It's built from Quaternius' free CC0 packs by `scripts/person` (see its README). The source and licence are in `public/models/LICENSES.md`. The okada is built in code, so there is no file to download.
 - **People in code** (`src/game/person.ts`): one shared model and one shared shader for everyone. Skin tone, shirt, trousers, shoes and hair colours are numbers, so crowds can all look different at no download cost. Moves ready: idle, walk, jog, sprint, ride, sit, talk, dance, interact and jump. On the okada the rider uses the riding animation with the knees opened, and sits exactly on the seat.
-- **People test page:** `/person-test.html` shows four outfits side by side.
+- **Man and woman:** `person.glb` (550 KB) and `person-female.glb` (580 KB). The woman wears a T-shirt and a flared midi skirt that swings with her legs. Each file downloads only when needed. `/street-test.html?female` plays as the woman.
+- **People test page:** `/person-test.html` shows two men and two women in different outfits.
 - **Size:** the page's own code is 25 KB gzipped, and three.js is 144 KB gzipped (the same as /char-test.html).
 - **Test hooks:** `?debug` shows the frame rate and triangle count, `?auto` rides and walks by itself and writes the result into the page, and `?tier=light|standard|ultra` forces a tier.
 - **Cloud check (software graphics, no GPU, so the numbers are not the phone's):**
   - It loads with no errors.
-  - The scene is about 16,000 triangles (the person is about 15,000 of them; crowds will need a lighter version).
+  - The scene is about 24,000 triangles with 40 vehicles (the person is about 15,000 of them).
   - 8–11 fps under software drawing.
   - Screenshots look right on foot and on the okada.
 - **Known limits:**
   - There is no collision yet, so you can walk through buildings.
-  - There is only one body so far: a male body. A female body and a lighter crowd version are still to come.
-  - Traffic vehicles are plain boxes, which look like moving blocks at street level. Real 3D vehicles are still to come.
+  - Crowds still need a lighter version of the people.
+  - Vehicles drive through the player and each other (no collisions yet).
   - Light tier shows flat buildings, which look poor at street level. If the cheap phone gets Light, street view will need low walls in Light (decide after the phone test).
 - **Done when:** on the cheapest Android, `/street-test.html?debug` shows 30 fps or more while walking and riding round Circle, and the controls feel right.
 

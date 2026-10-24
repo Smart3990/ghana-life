@@ -1,13 +1,13 @@
 // Person test: the Ghanaverse people up close, in several skin tones and outfits, all from one
 // model file. Shows what the character creator will be able to change, and how many triangles it costs.
 import * as THREE from 'three';
-import { createPerson, SKIN_TONES, type Move, type Outfit } from '../game/person';
+import { createPerson, SKIN_TONES, type Body, type Move, type Outfit } from '../game/person';
 
-const LOOKS: (Partial<Outfit> & { move: Move })[] = [
-  { skin: SKIN_TONES.deep, shirt: '#2f7d55', trousers: '#2a3446', shoes: '#2b2b2e', move: 'idle' },
-  { skin: SKIN_TONES.veryDeep, shirt: '#e3a92b', trousers: '#3b3b3b', shoes: '#ecebe6', move: 'talk' },
-  { skin: SKIN_TONES.medium, shirt: '#c8442e', trousers: '#c9b48a', shoes: '#5a3a22', move: 'walk' },
-  { skin: SKIN_TONES.deep, shirt: '#f2efe6', trousers: '#1f5fa8', shoes: '#ecebe6', move: 'dance' },
+const LOOKS: (Partial<Outfit> & { move: Move; body: Body })[] = [
+  { body: 'male', skin: SKIN_TONES.deep, shirt: '#2f7d55', trousers: '#2a3446', shoes: '#2b2b2e', move: 'idle' },
+  { body: 'female', skin: SKIN_TONES.deep, shirt: '#f2efe6', trousers: '#c8442e', shoes: '#5a3a22', move: 'talk' },
+  { body: 'male', skin: SKIN_TONES.veryDeep, shirt: '#e3a92b', trousers: '#3b3b3b', shoes: '#ecebe6', move: 'walk' },
+  { body: 'female', skin: SKIN_TONES.medium, shirt: '#1f5fa8', trousers: '#e3a92b', shoes: '#2b2b2e', move: 'dance' },
 ];
 
 const canvas = document.getElementById('view') as HTMLCanvasElement;
@@ -37,7 +37,7 @@ const resize = () => {
 window.addEventListener('resize', resize);
 resize();
 
-const people = await Promise.all(LOOKS.map(({ move, ...outfit }) => createPerson(outfit).then((p) => ({ p, move }))));
+const people = await Promise.all(LOOKS.map(({ move, body, ...outfit }) => createPerson(outfit, body).then((p) => ({ p, move }))));
 people.forEach(({ p, move }, i) => {
   p.root.position.x = (i - (people.length - 1) / 2) * 0.95;
   p.root.rotation.y = (i - 1.5) * -0.12;
