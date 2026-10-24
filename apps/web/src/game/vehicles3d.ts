@@ -26,7 +26,7 @@ function profile(points: [number, number][], width: number, bevel = 0.04): Part 
   return g;
 }
 
-function box(w: number, h: number, l: number, x: number, y: number, z: number, tiltX = 0): Part {
+export function box(w: number, h: number, l: number, x: number, y: number, z: number, tiltX = 0): Part {
   const g = new THREE.BoxGeometry(w, h, l);
   if (tiltX) g.rotateX(tiltX);
   g.translate(x, y, z);
@@ -43,7 +43,7 @@ function wheel(radius: number, width: number, x: number, z: number): Part[] {
   return [paint(tyre, '#161616'), paint(hub, '#9ea3a8')];
 }
 
-function paint(g: Part, colour: string): Part {
+export function paint(g: Part, colour: string): Part {
   const c = new THREE.Color(colour);
   const n = g.getAttribute('position').count;
   const data = new Float32Array(n * 3);
@@ -53,7 +53,7 @@ function paint(g: Part, colour: string): Part {
 }
 
 // Merge parts into one geometry (positions, normals and colours only).
-function merge(parts: Part[]): Part {
+export function merge(parts: Part[]): Part {
   const clean = parts.map((p) => {
     const g = p.index ? p.toNonIndexed() : p;
     for (const name of Object.keys(g.attributes)) if (!['position', 'normal', 'color'].includes(name)) g.deleteAttribute(name);
@@ -64,6 +64,9 @@ function merge(parts: Part[]): Part {
   merged.computeBoundingSphere();
   return merged;
 }
+
+// Vehicle lengths (metres), for keeping a gap.
+const KIND_LENGTH: Record<Kind, number> = { car: 4.5, taxi: 4.5, trotro: 5.7, tricycle: 3 };
 
 const GLASS = '#1c252d';
 const TRIM = '#2a2b2d';
@@ -161,7 +164,7 @@ function pragya(): Model {
 }
 
 // A soft round shadow, shared by every vehicle (one batch for all of them).
-function shadowTexture() {
+export function shadowTexture() {
   const c = document.createElement('canvas');
   c.width = c.height = 64;
   const g = c.getContext('2d')!;
@@ -226,9 +229,72 @@ export class StreetTraffic {
   /** The vehicles drawn last frame (for tests). */
   placed: Placed[] = [];
 
-  update(lon: number, lat: number, t: number, lane: number) {
+  // How far (metres) each vehicle near the player is held back behind its timetable: it stops for
+  // the player and keeps its distance from the vehicle in front, then slowly catches up again.
+  private held = new Map<number, number>();
+  private blockedFor = new Map<number, number>();
+  private lastS = new Map<number, number>();
+  private lastT = 0;
+  /** Called when a driver hoots at the player (x, z in metres). */
+  onHoot: ((x: number, z: number) => void) | null = null;
+
+  update(lon: number, lat: number, t: number, lane: number, player?: { x: number; z: number }) {
+    const dt = this.lastT ? Math.min(0.1, Math.max(0, t - this.lastT)) : 0;
+    this.lastT = t;
     const placed: Placed[] = this.traffic.near(lon, lat, t, this.radiusM, this.limit, lane);
     this.placed = placed;
+    // Front of each route first, so the ones behind can keep their distance.
+    const byRoute = new Map<number, Placed[]>();
+    for (const p of placed) {
+      const list = byRoute.get(p.v.route) ?? [];
+      list.push(p);
+      byRoute.set(p.v.route, list);
+    }
+    for (const list of byRoute.values()) {
+      list.sort((a, b) => b.s - a.s);
+      let frontS = Infinity;
+      let frontHalf = 0;
+      for (const p of list) {
+        const half = KIND_LENGTH[p.v.kind] / 2;
+        let held = this.held.get(p.v.id) ?? 0;
+        let s = p.s - held;
+        let pos = held ? this.traffic.at(p.v, s, lane) : p;
+        let stopped = false;
+        if (player) {
+          // Is the player standing in this vehicle's lane, just ahead?
+          const [x, z] = this.toLocal(pos.lon, pos.lat);
+          const fx = Math.sin(pos.heading);
+          const fz = -Math.cos(pos.heading);
+          const ahead = (player.x - x) * fx + (player.z - z) * fz;
+          const side = Math.abs((player.x - x) * -fz + (player.z - z) * fx);
+          if (ahead > half && ahead < half + 9 && side < 1.7) stopped = true;
+        }
+        // Stopped: stay exactly where it was last frame, however long the frame took.
+        if (stopped) held = Math.max(held, p.s - (this.lastS.get(p.v.id) ?? p.s - held));
+        else held = Math.max(0, held - p.v.speed * 0.35 * dt); // then catch up gently
+        // Keep a gap to the vehicle in front.
+        const gap = frontHalf + half + 2.5;
+        if (p.s - held > frontS - gap) held = p.s - (frontS - gap);
+        s = p.s - held;
+        if (held > 0.01) {
+          pos = this.traffic.at(p.v, s, lane);
+          p.lon = pos.lon;
+          p.lat = pos.lat;
+          p.heading = pos.heading;
+          this.held.set(p.v.id, held);
+        } else this.held.delete(p.v.id);
+        // Hoot after waiting a moment.
+        const waited = stopped ? (this.blockedFor.get(p.v.id) ?? 0) + dt : 0;
+        if (waited > 1.2 && this.onHoot) {
+          const [x, z] = this.toLocal(p.lon, p.lat);
+          this.onHoot(x, z);
+          this.blockedFor.set(p.v.id, -2.5); // hoot again in a few seconds if still blocked
+        } else this.blockedFor.set(p.v.id, waited);
+        this.lastS.set(p.v.id, s);
+        frontS = s;
+        frontHalf = half;
+      }
+    }
     const counts: Record<Kind, number> = { car: 0, taxi: 0, trotro: 0, tricycle: 0 };
     let shadowCount = 0;
     for (const p of placed) {

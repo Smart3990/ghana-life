@@ -47,15 +47,19 @@ export type Person = {
 };
 
 type Loaded = { scene: THREE.Object3D; animations: THREE.AnimationClip[] };
-const MODEL_URL: Record<Body, string> = { male: '/models/person.glb', female: '/models/person-female.glb' };
-const loading: Partial<Record<Body, Promise<Loaded>>> = {};
-function loadModel(body: Body): Promise<Loaded> {
-  if (!loading[body]) {
+// Detail: "full" for the player, "lite" (a third of the triangles, every move) for the player on
+// Light phones, "crowd" (a sixth, only idle, walk and talk) for people in the street.
+export type Detail = 'full' | 'lite' | 'crowd';
+const MODEL_URL = (body: Body, detail: Detail) => `/models/${body === 'female' ? 'person-female' : 'person'}${detail === 'full' ? '' : `-${detail}`}.glb`;
+const loading = new Map<string, Promise<Loaded>>();
+function loadModel(body: Body, detail: Detail = 'full'): Promise<Loaded> {
+  const url = MODEL_URL(body, detail);
+  if (!loading.has(url)) {
     const loader = new GLTFLoader();
     loader.setMeshoptDecoder(MeshoptDecoder);
-    loading[body] = loader.loadAsync(MODEL_URL[body]);
+    loading.set(url, loader.loadAsync(url));
   }
-  return loading[body]!;
+  return loading.get(url)!;
 }
 
 // The body material: the standard lit material, with the colour and shine of each part
@@ -106,8 +110,8 @@ function bodyMaterial(source: THREE.MeshStandardMaterial) {
   return { material, uniforms };
 }
 
-export async function createPerson(outfit: Partial<Outfit> = {}, bodyType: Body = 'male'): Promise<Person> {
-  const gltf = await loadModel(bodyType);
+export async function createPerson(outfit: Partial<Outfit> = {}, bodyType: Body = 'male', detail: Detail = 'full'): Promise<Person> {
+  const gltf = await loadModel(bodyType, detail);
   const model = cloneSkinned(gltf.scene);
   let body: ReturnType<typeof bodyMaterial> | null = null;
   const hairMaterials: THREE.MeshStandardMaterial[] = [];
@@ -144,8 +148,9 @@ export async function createPerson(outfit: Partial<Outfit> = {}, bodyType: Body 
   const mixer = new THREE.AnimationMixer(model);
   const actions = {} as Record<Move, THREE.AnimationAction>;
   for (const [move, clipName] of Object.entries(MOVES) as [Move, string][]) {
-    const clip = THREE.AnimationClip.findByName(gltf.animations, clipName);
-    if (!clip) throw new Error(`person.glb has no "${clipName}" animation`);
+    // Crowd models only have some moves: the others fall back to standing.
+    const clip = THREE.AnimationClip.findByName(gltf.animations, clipName) ?? THREE.AnimationClip.findByName(gltf.animations, MOVES.idle);
+    if (!clip) throw new Error(`the person model has no "${clipName}" animation`);
     actions[move] = mixer.clipAction(clip);
   }
   const bones: Record<string, THREE.Bone> = {};

@@ -94,10 +94,12 @@ function box(lon: number, lat: number, heading: number, length: number, width: n
   return [[corner(l, -w), corner(l, w), corner(-l, w), corner(-l, -w), corner(l, -w)]];
 }
 
-export type Placed = { v: Vehicle; d: number; lon: number; lat: number; heading: number };
+export type Placed = { v: Vehicle; d: number; lon: number; lat: number; heading: number; s: number };
 export type Traffic = {
   /** The nearest vehicles to a point at a moment (seconds of shared time), nearest first. */
   near: (lon: number, lat: number, t: number, radiusM: number, limit: number, lane?: number) => Placed[];
+  /** Where a vehicle is at a distance s along its route (for vehicles held back near the player). */
+  at: (v: Vehicle, s: number, lane?: number) => { lon: number; lat: number; heading: number };
 };
 
 // Loads the routes and sets up every vehicle. The same on every phone: positions come from the shared clock.
@@ -111,19 +113,28 @@ export async function loadTraffic(): Promise<Traffic | null> {
   }
   if (!routes.length) return null;
 
+  // Vehicles on the same route share its speed and are spaced out evenly, so they never drive
+  // through each other (each route has its own pace: some roads are faster than others).
+  const perRoute = new globalThis.Map<number, number>();
   const vehicles: Vehicle[] = Array.from({ length: VEHICLES }, (_, i) => {
     const kind = MIX[Math.floor(hash(i * 3 + 1) * MIX.length)];
     const k = KINDS[kind];
     const route = i % routes.length;
+    const slot = perRoute.get(route) ?? 0;
+    perRoute.set(route, slot + 1);
     return {
       id: i,
       route,
       kind,
       colour: k.colours[Math.floor(hash(i * 3 + 2) * k.colours.length)],
-      offset: hash(i * 3 + 3) * routes[route].total,
-      speed: k.speed * (0.85 + hash(i * 7) * 0.3),
+      offset: slot,
+      speed: 7 + hash(route * 13 + 5) * 4,
     };
   });
+  for (const v of vehicles) {
+    const n = perRoute.get(v.route)!;
+    v.offset = ((v.offset + 0.35 * hash(v.id * 3 + 3)) / n) * routes[v.route].total;
+  }
 
   const near: Traffic['near'] = (lon, lat, t, radiusM, limit, lane = LANE_OFFSET_M) => {
     const found: Placed[] = [];
@@ -137,12 +148,20 @@ export async function loadTraffic(): Promise<Traffic | null> {
       const ahead = placeOn(r, Math.min(r.total, s + 3), lane);
       const behind = placeOn(r, Math.max(0, s - 3), lane);
       const heading = Math.atan2((ahead.lon - behind.lon) * M_LON, (ahead.lat - behind.lat) * M_LAT);
-      found.push({ v, d, lon: p.lon, lat: p.lat, heading });
+      found.push({ v, d, lon: p.lon, lat: p.lat, heading, s });
     }
     found.sort((a, b) => a.d - b.d);
     return found.slice(0, limit);
   };
-  return { near };
+  const at: Traffic['at'] = (v, s, lane = LANE_OFFSET_M) => {
+    const r = routes[v.route];
+    const t = ((s % r.total) + r.total) % r.total;
+    const p = placeOn(r, t, lane);
+    const ahead = placeOn(r, Math.min(r.total, t + 3), lane);
+    const behind = placeOn(r, Math.max(0, t - 3), lane);
+    return { lon: p.lon, lat: p.lat, heading: Math.atan2((ahead.lon - behind.lon) * M_LON, (ahead.lat - behind.lat) * M_LAT) };
+  };
+  return { near, at };
 }
 
 // The overview map's traffic: simple blocks in the map's own "traffic" layer.

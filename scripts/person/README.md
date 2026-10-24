@@ -42,3 +42,14 @@ node optimise-person.mjs /tmp/person_raw.glb ../../apps/web/public/models/person
 ```
 
 Check the result at `/person-test.html` (several outfits side by side) and `/street-test.html`.
+
+## Light versions
+
+```
+node make-crowd.mjs ../../apps/web/public/models/person.glb ../../apps/web/public/models/person-crowd.glb
+node make-crowd.mjs ../../apps/web/public/models/person-female.glb ../../apps/web/public/models/person-female-crowd.glb
+node make-crowd.mjs ../../apps/web/public/models/person.glb ../../apps/web/public/models/person-lite.glb lite
+node make-crowd.mjs ../../apps/web/public/models/person-female.glb ../../apps/web/public/models/person-female-lite.glb lite
+```
+
+The "crowd" files are for people in the street: about a sixth of the triangles, with only idle, walk and talk. The "lite" files are for the player on Light phones: about a third of the triangles, with every move.

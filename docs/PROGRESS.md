@@ -65,6 +65,14 @@ Next steps, in order (brief section 23):
 Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/streetTest.ts`).
 
 - **What it does:** a 3D person at Kwame Nkrumah Circle, seen from close behind, walks or runs with a touch joystick, W A S D or arrow keys, or a game controller. They get on and off an okada with the OKADA button, E, or X / □ on a controller. The bike leans in corners, its wheels turn, and the rider sits on it. The camera follows behind and turns after you. Place names fade in as you pass.
+- **Street quality pass (2026-10-24):**
+  - **Buildings** (`src/game/streetBuildings.ts`): the buildings near the player are real 3D, built from the same map tiles (nothing new to download). They use the map's Accra wall and roof colours and its guessed heights. The shader draws shop shutters, doors, framed windows and louvres floor by floor, with dust near the ground. The map's own blocks are switched off at street level. Building is spread over frames (5 ms each), so new streets don't make the game stutter. You can no longer walk or ride through walls; you slide along them.
+  - **Ground** (`src/map/streetStyle.ts`): roads are their real width in metres (major roads 10 m, minor roads 6.5 m), with pavements, open gutters, kerbs and a dashed centre line on two-way main roads. The ground is dusty laterite, and the floating labels (house numbers, road names, icons) are switched off, which also stops them flickering.
+  - **Street life** (`src/game/streetLife.ts`): neem trees, coconut palms, street lights along the main roads, painted container kiosks, vendors' umbrellas with tables, and black polytanks on about a third of the roofs. All are placed from the real roads, never on a road or inside a building. Men and women walk along the pavements or stand chatting, using light crowd models (`person-crowd.glb`, `person-female-crowd.glb`). Far ones animate at half rate.
+  - **Vehicles:** vehicles on the same route now share its speed and are spaced evenly, so they never drive through each other. This also improves the overview map's traffic. Near the player, a vehicle stops when you stand in its lane, the ones behind keep a gap, and the driver hoots after a moment. Then they catch up gently.
+  - **Light phones:** the player uses a lighter model with every move (`person-lite.glb`, about 6,000 triangles).
+  - **Limits:** people 5 / 12 / 24, props within 140 / 200 / 280 m, buildings within 220 / 320 / 450 m (Light / Standard / Ultra).
+  - **Cloud check:** about 46,000 triangles on Light and 93,000 on Standard, with no errors. The frame rate must be measured on the phone.
 - **Screen layout (2026-10-24, landscape):**
   - On phones, "Tap to play" goes full screen and locks the screen sideways where the browser allows it (Android Chrome). Held upright, a "Turn your phone" card covers the game (iPhones cannot be locked).
   - Bottom left: a round minimap with a kente energy bar under it. It is drawn from the street data the map already loaded (roads, water, parks, buildings), so there are no extra downloads. It turns with you, shows north, and marks the okada.
@@ -88,9 +96,8 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
   - 8–11 fps under software drawing.
   - Screenshots look right on foot and on the okada.
 - **Known limits:**
-  - There is no collision yet, so you can walk through buildings.
   - Crowds still need a lighter version of the people.
-  - Vehicles drive through the player and each other (no collisions yet).
+  - Vehicles don't yet react to each other at crossings, and nothing reacts to being touched (no crashes or knock-downs).
   - Light tier shows flat buildings, which look poor at street level. If the cheap phone gets Light, street view will need low walls in Light (decide after the phone test).
 - **Done when:** on the cheapest Android, `/street-test.html?debug` shows 30 fps or more while walking and riding round Circle, and the controls feel right.
 

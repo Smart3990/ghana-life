@@ -9,6 +9,9 @@ import { createMap } from '../map/createMap';
 import { detectTier, measureFps } from '../map/tier';
 import { loadTraffic } from '../game/traffic';
 import { StreetTraffic } from '../game/vehicles3d';
+import { StreetBuildings } from '../game/streetBuildings';
+import { applyStreetStyle } from '../map/streetStyle';
+import { StreetLife } from '../game/streetLife';
 import { createPerson, type Move, type Person } from '../game/person';
 import { Minimap } from '../hud/minimap';
 import { TouchControls } from '../hud/touchControls';
@@ -182,7 +185,7 @@ const BLENDED: Move[] = ['idle', 'walk', 'run', 'ride'];
 
 async function loadPlayer(): Promise<Player> {
   // ?female plays as a woman.
-  const person = await createPerson({}, params.has('female') ? 'female' : 'male');
+  const person = await createPerson({}, params.has('female') ? 'female' : 'male', tier === 'light' ? 'lite' : 'full');
   for (const move of BLENDED) {
     person.actions[move].play();
     person.actions[move].setEffectiveWeight(move === 'idle' ? 1 : 0);
@@ -305,21 +308,26 @@ function readInput() {
 
 // An okada horn, made in code (two short beeps, no sound file to download).
 let audio: AudioContext | null = null;
-function honk() {
+// distance: how far away the horn is (quieter further away); car: a deeper car horn.
+let lastHoot = 0;
+function honk(distance = 0, car = false) {
   try {
+    if (car && performance.now() - lastHoot < 1500) return;
+    if (car) lastHoot = performance.now();
     audio ??= new AudioContext();
     const t = audio.currentTime;
-    for (const start of [0, 0.16]) {
+    const loud = 0.12 / (1 + distance / 8);
+    for (const start of car ? [0, 0.3] : [0, 0.16]) {
       const osc = audio.createOscillator();
       const gain = audio.createGain();
       osc.type = 'square';
-      osc.frequency.setValueAtTime(430, t + start);
+      osc.frequency.setValueAtTime(car ? 340 : 430, t + start);
       gain.gain.setValueAtTime(0.0001, t + start);
-      gain.gain.exponentialRampToValueAtTime(0.12, t + start + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t + start + 0.12);
+      gain.gain.exponentialRampToValueAtTime(loud, t + start + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + start + (car ? 0.22 : 0.12));
       osc.connect(gain).connect(audio.destination);
       osc.start(t + start);
-      osc.stop(t + start + 0.13);
+      osc.stop(t + start + (car ? 0.23 : 0.13));
     }
   } catch {
     // No sound available: the horn is silent.
@@ -440,8 +448,22 @@ function step(player: Player, dt: number, t: number) {
     state.lean = 0;
   }
 
-  state.x += Math.sin(state.heading) * state.speed * dt;
-  state.z -= Math.cos(state.heading) * state.speed * dt;
+  // Move, but not into buildings: slide along the wall when walking into one at an angle.
+  const stepX = Math.sin(state.heading) * state.speed * dt;
+  const stepZ = -Math.cos(state.heading) * state.speed * dt;
+  const room = state.onOkada ? 0.8 : 0.3;
+  if (!buildings.blocked(state.x + stepX, state.z + stepZ, room)) {
+    state.x += stepX;
+    state.z += stepZ;
+  } else if (!buildings.blocked(state.x + stepX, state.z, room)) {
+    state.x += stepX;
+    state.speed *= 0.9;
+  } else if (!buildings.blocked(state.x, state.z + stepZ, room)) {
+    state.z += stepZ;
+    state.speed *= 0.9;
+  } else {
+    state.speed = state.onOkada ? 0 : state.speed * 0.5;
+  }
   if (state.onOkada) [state.okadaX, state.okadaZ, state.okadaHeading] = [state.x, state.z, state.heading];
 
   // Place the okada and the player in the scene.
@@ -507,7 +529,9 @@ function step(player: Player, dt: number, t: number) {
     padding: { top: height * PLAYER_SCREEN_DROP, bottom: 0, left: 0, right: 0 },
   });
   checkPlace(here);
-  streetTraffic?.update(here[0], here[1], Date.now() / 1000, TRAFFIC_LANE_M);
+  buildings.update(here, state.x, state.z);
+  life?.update(state.x, state.z, dt, performance.now() / 1000);
+  streetTraffic?.update(here[0], here[1], Date.now() / 1000, TRAFFIC_LANE_M, state);
   minimap?.update(state.x, state.z, state.camHeading, state.onOkada ? [] : [{ x: state.okadaX, z: state.okadaZ, color: '#c8442e', size: 5 }]);
   void t;
 }
@@ -554,42 +578,24 @@ async function runAutoTest() {
   console.log('street-test result', result);
 }
 
-// The map's road widths stop growing at about zoom 18-20, so at street level the roads would
-// shrink to thin lines. Keep each one growing at the same rate as the ground, up to zoom 24.
-type ZoomCurve = ['interpolate', unknown, ['zoom'], ...number[]];
-function widenForStreetLevel() {
-  for (const l of map.getStyle().layers) {
-    if (l.type !== 'line') continue;
-    for (const prop of ['line-width', 'line-gap-width'] as const) {
-      const value = map.getPaintProperty(l.id, prop) as ZoomCurve | undefined;
-      if (!Array.isArray(value) || value[0] !== 'interpolate' || (value[2] as unknown[])?.[0] !== 'zoom') continue;
-      const stops = value.slice(3) as number[];
-      if (stops.some((s) => typeof s !== 'number')) continue;
-      const [lastZoom, lastWidth] = stops.slice(-2);
-      if (lastZoom < 15 || lastZoom >= 24 || lastWidth <= 1) continue; // fixed hairlines stay thin
-      map.setPaintProperty(l.id, prop, [...value, 24, lastWidth * 2 ** (24 - lastZoom)] as unknown as number);
-    }
-  }
-  // Up close, the overview map's bright road colours look like highlighter pen.
-  // Street level gets tarmac, kerbs and dusty ground instead.
-  for (const l of map.getStyle().layers) {
-    const id = l.id;
-    if (l.type === 'line' && id.startsWith('roads_') && !/rail|runway|taxiway|pier/.test(id)) {
-      const tarmac = /casing/.test(id) ? '#b9b09d' : /highway|major/.test(id) ? '#55534f' : /minor_service|other/.test(id) ? '#8b8477' : '#64625d';
-      map.setPaintProperty(id, 'line-color', tarmac);
-    }
-  }
-  const paint = (id: string, prop: 'background-color' | 'fill-color', value: string) => map.getLayer(id) && map.setPaintProperty(id, prop, value);
-  paint('background', 'background-color', '#d6cab0');
-  paint('earth', 'fill-color', '#d6cab0');
-  paint('landuse_pedestrian', 'fill-color', '#cbc2b0');
-  paint('landuse_urban_green', 'fill-color', '#9fae77');
-  paint('landuse_park', 'fill-color', '#93a86c');
-}
-
 let minimap: Minimap | null = null;
+// Real 3D buildings near the player (the map's own blocks are switched off at street level).
+// Trees, lights, kiosks, umbrellas, polytanks and people, placed along the same streets.
+let life: StreetLife | null = null;
+const buildings = new StreetBuildings(
+  (lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT],
+  { light: 220, standard: 320, ultra: 450 }[tier],
+  (roads, roofs) => life?.add(roads, roofs),
+);
+scene.add(buildings.group);
+life = new StreetLife((x, z, m) => buildings.blocked(x, z, m), {
+  light: { radiusM: 140, people: 5, props: 250 },
+  standard: { radiusM: 200, people: 12, props: 600 },
+  ultra: { radiusM: 280, people: 24, props: 1200 },
+}[tier]);
+scene.add(life.group);
 let streetTraffic: StreetTraffic | null = null;
-const TRAFFIC_LANE_M = 1.7; // from the middle of the road to the middle of the lane (Ghana drives on the right)
+const TRAFFIC_LANE_M = 2.4; // from the middle of the road to the middle of the lane (Ghana drives on the right)
 
 async function start() {
   const [player] = await Promise.all([
@@ -608,7 +614,8 @@ async function start() {
     pixelRatio: Math.min(devicePixelRatio, tier === 'light' ? 1 : 2),
   });
   scene.add(player.root);
-  widenForStreetLevel();
+  applyStreetStyle(map);
+  for (const id of ['buildings', 'roofs']) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', 'none');
   map.addLayer(layer);
   // Sunset over Accra for this test: warm sky, light on the buildings from the west.
   map.setSky({
@@ -626,6 +633,7 @@ async function start() {
     const limit = { light: 15, standard: 40, ultra: 100 }[tier];
     streetTraffic = new StreetTraffic(traffic, (lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT], limit, 260);
     scene.add(streetTraffic.group);
+    streetTraffic.onHoot = (x, z) => honk(Math.hypot(x - state.x, z - state.z), true);
     if (debug) Object.assign(window, { __street: { state, traffic: streetTraffic, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
   });
 

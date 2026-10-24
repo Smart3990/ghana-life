@@ -101,12 +101,12 @@ export class Minimap {
     this.lastDraw.t = 0;
   }
 
-  // Call every frame; it redraws only when something changed, and at most about 30 times a second.
+  // Call every frame; it redraws only when something changed, and at most about 15 times a second.
   update(x: number, z: number, heading: number, blips: Blip[] = []) {
     if (Math.hypot(x - this.centre.x, z - this.centre.z) > REFRESH_DISTANCE_M || !this.shapes) this.read(x, z);
     const now = performance.now();
     const moved = Math.abs(x - this.lastDraw.x) + Math.abs(z - this.lastDraw.z) > 0.4 || Math.abs(heading - this.lastDraw.h) > 0.01;
-    if (this.lastDraw.t && (!moved || now - this.lastDraw.t < 33)) return;
+    if (this.lastDraw.t && (!moved || now - this.lastDraw.t < 66)) return;
     this.lastDraw = { x, z, h: heading, t: now };
     this.draw(x, z, heading, blips);
   }
