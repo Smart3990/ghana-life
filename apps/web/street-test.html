@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#121A14" />
+    <title>Street test · Ghanaverse</title>
+    <style>
+      :root {
+        --night: #121a14;
+        --card: rgba(18, 26, 20, 0.72);
+        --gold: #e3a92b;
+        --red: #c8442e;
+        --green: #2f8f57;
+        --text: #f2efe6;
+        --soft: #c9d3cb;
+      }
+      html, body { margin: 0; height: 100%; overflow: hidden; background: var(--night); font-family: system-ui, sans-serif; color: var(--text); touch-action: none; -webkit-user-select: none; user-select: none; }
+      /* The far distance beyond the drawn streets shows this colour: match the evening haze */
+      #map { position: fixed; inset: 0; background: #f1d7b6; }
+      .maplibregl-ctrl-bottom-right { display: none; }
+
+      /* Thin kente strip across the top: the Ghanaverse signature */
+      .strip { position: fixed; left: 0; right: 0; top: 0; height: 4px; z-index: 5;
+        background: repeating-linear-gradient(90deg, var(--gold) 0 18px, var(--night) 18px 22px, var(--red) 22px 34px, var(--night) 34px 38px, var(--green) 38px 50px, var(--night) 50px 54px, #1f5fa8 54px 60px, var(--night) 60px 64px); }
+
+      /* Time and money, top right */
+      #hud-top { position: fixed; right: max(14px, env(safe-area-inset-right)); top: calc(env(safe-area-inset-top, 0px) + 14px); text-align: right; text-shadow: 0 1px 3px rgba(0,0,0,.6); font-variant-numeric: tabular-nums; z-index: 5; }
+      #clock { font-size: 15px; font-weight: 700; }
+      #money { font-size: 17px; font-weight: 800; color: #9fe0b4; }
+      #debug { font-size: 12px; color: var(--soft); margin-top: 4px; }
+
+      /* Place name that fades in as you pass */
+      #place { position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 18px); transform: translateX(-50%); font-weight: 800; letter-spacing: 1px; text-transform: uppercase; font-size: 14px; text-shadow: 0 1px 4px rgba(0,0,0,.7); opacity: 0; transition: opacity .6s; z-index: 5; white-space: nowrap; }
+      #place.on { opacity: 1; }
+
+      /* Joystick, bottom left */
+      #stick { position: fixed; left: max(22px, env(safe-area-inset-left)); bottom: calc(env(safe-area-inset-bottom, 0px) + 22px); width: 128px; height: 128px; border-radius: 50%; background: rgba(18,26,20,.35); border: 2px solid rgba(242,239,230,.35); z-index: 6; touch-action: none; }
+      #knob { position: absolute; left: 39px; top: 39px; width: 50px; height: 50px; border-radius: 50%; background: rgba(242,239,230,.85); box-shadow: 0 2px 6px rgba(0,0,0,.35); }
+
+      /* Action buttons, bottom right */
+      #actions { position: fixed; right: max(22px, env(safe-area-inset-right)); bottom: calc(env(safe-area-inset-bottom, 0px) + 28px); display: flex; flex-direction: column; gap: 14px; align-items: flex-end; z-index: 6; }
+      .action { width: 74px; height: 74px; border-radius: 50%; border: 2px solid rgba(242,239,230,.5); background: var(--card); color: var(--text); font-weight: 800; font-size: 13px; letter-spacing: .5px; touch-action: none; }
+      .action.on { background: var(--gold); color: var(--night); border-color: var(--gold); }
+      .action:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+
+      /* Short help, fades after a few seconds */
+      #help { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 170px); transform: translateX(-50%); background: var(--card); border-radius: 12px; padding: 8px 14px; font-size: 13px; color: var(--soft); text-align: center; transition: opacity .8s; z-index: 5; max-width: 86vw; }
+      #help b { color: var(--gold); }
+
+      #loading { position: fixed; inset: 0; display: grid; place-items: center; background: var(--night); z-index: 10; font-weight: 700; color: var(--gold); letter-spacing: 1px; }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+    <div class="strip" aria-hidden="true"></div>
+    <div id="hud-top"><div id="clock">18:42</div><div id="money">₵ 1,280</div><div id="debug" hidden></div></div>
+    <div id="place" aria-live="polite"></div>
+
+    <div id="stick" aria-hidden="true"><div id="knob"></div></div>
+    <div id="actions">
+      <button id="btn-okada" class="action" type="button" aria-label="Get on or off the okada">OKADA</button>
+      <button id="btn-run" class="action" type="button" aria-label="Run">RUN</button>
+    </div>
+
+    <p id="help">Joystick or <b>W A S D</b> to move · <b>Shift</b> to run · <b>E</b> for the okada · controllers work too</p>
+    <div id="loading">LOADING ACCRA…</div>
+
+    <script type="module" src="/src/test/streetTest.ts"></script>
+  </body>
+</html>

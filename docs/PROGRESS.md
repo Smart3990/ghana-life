@@ -60,7 +60,31 @@ Next steps, in order (brief section 23):
 2. Rendering prototype A from brief section 22.1: a close follow camera, 3D player and nearby vehicles through a three.js layer in MapLibre, joystick and okada control, tested on the cheap Android.
 3. Royal Kente three-tap start screen, clean on-screen display, controller and keyboard input.
 
+### Street test, prototype A (built 2026-10-24, waiting for the phone test)
+
+Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/streetTest.ts`).
+
+- **What it does:** a 3D person at Kwame Nkrumah Circle, seen from close behind, walks or runs with a touch joystick, W A S D or arrow keys, or a game controller. They get on and off an okada with the OKADA button, E, or X / □ on a controller. The bike leans in corners, its wheels turn, and the rider sits on it. The camera follows behind and turns after you. Place names fade in as you pass.
+- **Look:** an evening Accra sky, warm light, a soft shadow under the player. At street level the roads are tarmac grey with kerbs and the ground is dusty, instead of the bright overview colours. Road widths keep growing past zoom 18, so roads stay the right size up close.
+- **Traffic:** the live traffic is drawn at real size here (`startTraffic(..., size)`, new optional argument; the main game is unchanged).
+- **Assets:** `public/models/player.glb`, a 425 KB placeholder person. Its source and licence are in `public/models/LICENSES.md`. The okada is built in code, so there is no file to download.
+- **Size:** the page's own code is 25 KB gzipped, and three.js is 144 KB gzipped (the same as /char-test.html).
+- **Test hooks:** `?debug` shows the frame rate and triangle count, `?auto` rides and walks by itself and writes the result into the page, and `?tier=light|standard|ultra` forces a tier.
+- **Cloud check (software graphics, no GPU, so the numbers are not the phone's):**
+  - It loads with no errors.
+  - The scene is about 7,000–9,000 triangles.
+  - 8–11 fps under software drawing.
+  - Screenshots look right on foot and on the okada.
+- **Known limits:**
+  - There is no collision yet, so you can walk through buildings.
+  - The person is a grey-model placeholder, tinted.
+  - The riding pose is approximate.
+  - Light tier shows flat buildings, which look poor at street level. If the cheap phone gets Light, street view will need low walls in Light (decide after the phone test).
+- **Done when:** on the cheapest Android, `/street-test.html?debug` shows 30 fps or more while walking and riding round Circle, and the controls feel right.
+
 ## Waiting on the owner
+
+- Street test on the cheap Android: open `/street-test.html?debug` after the next deploy, walk and ride for a minute, and report the fps number and how it feels.
 
 - Two-device test for T4 (phone and PC see each other walk).
 - Phone checks: map load time and smoothness, tap to walk, chat.

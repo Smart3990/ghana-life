@@ -58,7 +58,7 @@ const hash = (n: number) => {
 };
 
 // Where a vehicle is, and which way it faces, at a distance along its route.
-function placeOn(r: Route, s: number): { lon: number; lat: number; heading: number } {
+function placeOn(r: Route, s: number, lane = LANE_OFFSET_M): { lon: number; lat: number; heading: number } {
   let lo = 0;
   let hi = r.at.length - 1;
   while (hi - lo > 1) {
@@ -72,8 +72,8 @@ function placeOn(r: Route, s: number): { lon: number; lat: number; heading: numb
   const dy = (r.lat[hi] - r.lat[lo]) * M_LAT;
   const heading = Math.atan2(dx, dy); // radians clockwise from north
   // Shift to the right-hand side of the road.
-  const rx = Math.cos(heading) * LANE_OFFSET_M;
-  const ry = -Math.sin(heading) * LANE_OFFSET_M;
+  const rx = Math.cos(heading) * lane;
+  const ry = -Math.sin(heading) * lane;
   return {
     lon: r.lon[lo] + (r.lon[hi] - r.lon[lo]) * t + rx / M_LON,
     lat: r.lat[lo] + (r.lat[hi] - r.lat[lo]) * t + ry / M_LAT,
@@ -94,7 +94,9 @@ function box(lon: number, lat: number, heading: number, length: number, width: n
   return [[corner(l, -w), corner(l, w), corner(-l, w), corner(-l, -w), corner(l, -w)]];
 }
 
-export async function startTraffic(map: Map, getTier: () => Tier, serverNow: () => number) {
+// size: how much bigger than real the vehicles are drawn (street-level views pass 1, real size).
+export async function startTraffic(map: Map, getTier: () => Tier, serverNow: () => number, size = SIZE) {
+  const lane = (LANE_OFFSET_M * size) / SIZE;
   let routes: Route[];
   try {
     const file = await (await fetch(ROUTES_URL)).json();
@@ -131,7 +133,7 @@ export async function startTraffic(map: Map, getTier: () => Tier, serverNow: () 
     const near: { d: number; v: Vehicle; p: ReturnType<typeof placeOn> }[] = [];
     for (const v of vehicles) {
       const r = routes[v.route];
-      const p = placeOn(r, (v.offset + v.speed * t) % r.total);
+      const p = placeOn(r, (v.offset + v.speed * t) % r.total, lane);
       const d = Math.hypot((p.lon - centre.lng) * M_LON, (p.lat - centre.lat) * M_LAT);
       if (d < DRAW_RADIUS_M[tier]) near.push({ d, v, p });
     }
@@ -140,7 +142,7 @@ export async function startTraffic(map: Map, getTier: () => Tier, serverNow: () 
     const features: VehicleShape[] = [];
     for (const { v, p } of near.slice(0, DRAW_LIMIT[tier])) {
       const real = KINDS[v.kind];
-      const k = { ...real, length: real.length * SIZE, width: real.width * SIZE, height: real.height * SIZE };
+      const k = { ...real, length: real.length * size, width: real.width * size, height: real.height * size };
       features.push({
         type: 'Feature',
         properties: { colour: v.colour, base: 0.3, top: k.cabin ? k.height * 0.55 : k.height },
@@ -151,14 +153,14 @@ export async function startTraffic(map: Map, getTier: () => Tier, serverNow: () 
         features.push({
           type: 'Feature',
           properties: { colour: k.cabin, base: k.height * 0.55, top: k.height },
-          geometry: { type: 'Polygon', coordinates: box(p.lon, p.lat, p.heading, k.length * 0.55, k.width * 0.9, -0.2 * SIZE) },
+          geometry: { type: 'Polygon', coordinates: box(p.lon, p.lat, p.heading, k.length * 0.55, k.width * 0.9, -0.2 * size) },
         });
       }
       if (v.kind === 'taxi') {
         // Accra taxis: a darker band along the sides.
         features.push({
           type: 'Feature',
-          properties: { colour: '#c8102e', base: 0.55 * SIZE, top: 0.75 * SIZE },
+          properties: { colour: '#c8102e', base: 0.55 * size, top: 0.75 * size },
           geometry: { type: 'Polygon', coordinates: box(p.lon, p.lat, p.heading, k.length * 0.98, k.width + 0.04) },
         });
       }
