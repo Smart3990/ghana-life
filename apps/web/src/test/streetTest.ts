@@ -1382,6 +1382,7 @@ async function start() {
     streetTraffic = new StreetTraffic(traffic, (lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT], limit, { light: 150, standard: 190, ultra: 240 }[tier]);
     scene.add(streetTraffic.group);
     streetTraffic.onStreet = (x, z) => !life || life.roadAt(x, z, 0.5);
+    if (life) life.vehicleAt = vehicleAt;
     streetTraffic.onHoot = (x, z) => honk(Math.hypot(x - state.x, z - state.z), true);
     if (debug) Object.assign(window, { __street: { state, sky, look, life, story, thief, traffic: streetTraffic, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
   });

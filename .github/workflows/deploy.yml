@@ -1,0 +1,72 @@
+# Puts the web game online automatically, so it can be tested on a phone without running anything
+# on a computer.
+#   - Every update saved to GitHub (main branch) goes to the TEST link:
+#       https://ghana-life-test.ghana-life-web.workers.dev/street-test
+#   - The players' link (https://ghana-life-web.ghana-life-web.workers.dev) only changes when the owner
+#     presses "Run workflow" on GitHub (Actions tab > Deploy > Run workflow > target: live).
+# Needs two secrets in the GitHub repository (Settings > Secrets and variables > Actions):
+#   CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID. They are never written in the code.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+    paths: ['apps/web/**', 'scripts/**', '.github/workflows/deploy.yml']
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Where to put it: test (safe) or live (what players see)'
+        type: choice
+        options: [test, live]
+        default: test
+
+concurrency:
+  group: deploy-${{ github.event.inputs.target || 'test' }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      # The map tiles and street files (about 110 MB) are not stored in Git. Keep them between runs,
+      # and copy any missing ones from the live site (files already here are skipped).
+      - name: Map data from the cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            apps/web/public/tiles/accra
+            apps/web/public/data/roads
+          key: map-data-v1
+      - name: Copy missing map data from the live site
+        run: node scripts/fetch-live-data.mjs
+
+      - name: Install
+        working-directory: apps/web
+        run: npm ci
+
+      - name: Check the map data, then build
+        working-directory: apps/web
+        run: node ../../scripts/check-deploy-data.mjs && npm run build
+
+      - name: Put it online
+        working-directory: apps/web
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ "${{ github.event.inputs.target }}" = "live" ]; then
+            npx wrangler deploy
+            echo "Live: https://ghana-life-web.ghana-life-web.workers.dev" >> "$GITHUB_STEP_SUMMARY"
+          else
+            npx wrangler deploy --name ghana-life-test
+            echo "Test: https://ghana-life-test.ghana-life-web.workers.dev/street-test" >> "$GITHUB_STEP_SUMMARY"
+          fi

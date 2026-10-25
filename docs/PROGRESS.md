@@ -175,6 +175,11 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
   - **Buttons:** the bottom horn button is gone (it looked like a second volume button). RUN, JUMP and BRAKE carry a word and show only when useful.
   - **Done when:** on the phone the film plays from the start (or Skip), the bag is snatched, you chase, find the auntie and hear Uncle Kwame; you cannot walk through cars or buildings; the street sound plays after the first tap.
 
+- **Automatic updates, real vehicles, people wait for cars (2026-10-25):**
+  - **Automatic updates** (`.github/workflows/deploy.yml`): every update saved to GitHub goes to the test link https://ghana-life-test.ghana-life-web.workers.dev/street-test about 5 minutes later. The players' link only changes when the owner presses Run workflow with "live". The map data is copied from the live site and kept between runs. Needs the two secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in GitHub (owner's step).
+  - **Real-looking vehicles:** cars (wagon, sedan, hatchback), Accra taxis (body colour with yellow front and back corners), trotros (van) and trucks are now textured models from the free PSX Style Cars pack (CC0), repainted in 24 paints by `scripts/vehicles`. About 300 to 480 triangles each, 600 KB in all, downloaded after the game starts. Pickups, buses, pragyas and okadas are still built in code.
+  - **People wait for vehicles:** a walker or hawker whose path is blocked by a vehicle stands still (idle) until it passes, and steps aside if it comes right up to them. Check: 155 walkers and 88 vehicles, 0 people inside a vehicle over 12 seconds.
+
 ## Waiting on the owner
 
 - Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.

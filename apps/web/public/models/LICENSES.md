@@ -12,3 +12,10 @@ The okada (`src/test/streetTest.ts`) the street traffic (cars, taxis, trotros an
 Removed: `player.glb` (a Mixamo test figure, the three.js "Xbot"), replaced by `person.glb` on 2026-10-24.
 
 The plastic chairs and football (`src/game/streetScenes.ts`) are built in code. All street sounds and the highlife groove (`src/game/streetSound.ts`) are made in code; there are no sound files.
+
+## Vehicles (public/models/vehicles)
+
+- **PSX Style Cars** by GGBotNet, from https://opengameart.org/content/psx-style-cars. Licence: **CC0** (public domain, free for any use, no credit required; credited here anyway).
+  - Used: Car 01 (wagon), Car 02 (sedan, also the Accra taxi), Car 03 (hatchback), Car 04 (van, used as the trotro), Car 08 (box truck).
+  - Changes: resized to real metres and repainted in more colours, including the Accra taxi's yellow front and back corners, by `scripts/vehicles/paint.py` and `scripts/vehicles/build_vehicles.py`.
+- Pickups, buses, tricycles (pragya) and okadas are still built in code (`src/game/vehicles3d.ts`).

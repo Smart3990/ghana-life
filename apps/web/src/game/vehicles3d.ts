@@ -4,7 +4,26 @@
 // ten draw calls. Positions come from the shared traffic clock (traffic.ts), the same on every phone.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { Kind, Placed, Traffic } from './traffic';
+
+// Real-looking vehicles (public/models/vehicles): small textured models, about 300 to 480 triangles
+// each, from the free PSX Style Cars pack, repainted in Accra colours (see scripts/vehicles). Each
+// model and paint is one batch. Kinds not listed here keep the shapes built in code below.
+const SKINS = (name: string, n: number) => Array.from({ length: n }, (_, i) => `${name}-${i}`);
+const REAL: Partial<Record<Kind, { model: string; skins: string[] }[]>> = {
+  car: [
+    { model: 'wagon', skins: SKINS('wagon', 6) },
+    { model: 'sedan', skins: SKINS('sedan', 6) },
+    { model: 'hatch', skins: SKINS('hatch', 5) },
+  ],
+  taxi: [{ model: 'sedan', skins: SKINS('taxi', 5) }], // Accra taxi: yellow front and back corners
+  suv: [{ model: 'wagon', skins: ['wagon-1', 'wagon-3', 'wagon-4'] }],
+  trotro: [{ model: 'van', skins: ['van-0'] }],
+  truck: [{ model: 'boxtruck', skins: ['boxtruck-0'] }],
+};
+// The models face the same way as the shapes built in code (checked with a parked test car).
+const REAL_TURN = 0;
 
 type Part = THREE.BufferGeometry;
 
@@ -314,6 +333,9 @@ export class StreetTraffic {
   private shadowScale = new THREE.Vector3();
   private up = new THREE.Vector3(0, 1, 0);
   private c = new THREE.Color();
+  // Real models, once downloaded: for each kind, a list of batches (one per model and paint).
+  private real: Partial<Record<Kind, THREE.InstancedMesh[]>> = {};
+  private realCount = new Map<THREE.InstancedMesh, number>();
 
   constructor(
     private traffic: Traffic,
@@ -348,6 +370,51 @@ export class StreetTraffic {
     this.shadows.frustumCulled = false;
     this.shadows.renderOrder = -1;
     this.group.add(this.shadows);
+    void this.loadReal(limit);
+  }
+
+  private async loadReal(limit: number) {
+    try {
+      const loader = new GLTFLoader();
+      const textures = new THREE.TextureLoader();
+      const geometry = new Map<string, Promise<THREE.BufferGeometry>>();
+      const geo = (name: string) => {
+        if (!geometry.has(name))
+          geometry.set(name, loader.loadAsync(`/models/vehicles/${name}.glb`).then((g) => {
+            let found: THREE.BufferGeometry | null = null;
+            g.scene.traverse((o) => {
+              if ((o as THREE.Mesh).isMesh && !found) found = (o as THREE.Mesh).geometry;
+            });
+            return found!;
+          }));
+        return geometry.get(name)!;
+      };
+      const real: Partial<Record<Kind, THREE.InstancedMesh[]>> = {};
+      for (const [kind, options] of Object.entries(REAL) as [Kind, { model: string; skins: string[] }[]][]) {
+        const skins = options.reduce((n, o) => n + o.skins.length, 0);
+        const list: THREE.InstancedMesh[] = [];
+        for (const o of options) {
+          const g = await geo(o.model);
+          for (const skin of o.skins) {
+            const map = await textures.loadAsync(`/models/vehicles/${skin}.png`);
+            map.colorSpace = THREE.SRGBColorSpace;
+            map.flipY = false; // glTF texture coordinates
+            map.anisotropy = 4;
+            const mesh = new THREE.InstancedMesh(g, new THREE.MeshStandardMaterial({ map, roughness: 0.5, metalness: 0.15 }), Math.max(4, Math.ceil((limit / skins) * 2)));
+            mesh.count = 0;
+            mesh.frustumCulled = false;
+            mesh.castShadow = true;
+            mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+            list.push(mesh);
+          }
+        }
+        real[kind] = list;
+      }
+      for (const list of Object.values(real)) for (const m of list) this.group.add(m);
+      this.real = real;
+    } catch {
+      // The models did not download: the shapes built in code stay.
+    }
   }
 
   /** Puts the nearest vehicles in place for the moment t (seconds of shared time). */
@@ -485,17 +552,32 @@ export class StreetTraffic {
     this.boxes = local.map((a) => ({ x: a.x, z: a.z, fx: a.fx, fz: a.fz, half: a.half, halfW: a.halfW }));
     const counts: Record<Kind, number> = { car: 0, taxi: 0, trotro: 0, tricycle: 0, okada: 0, bus: 0, truck: 0, pickup: 0, suv: 0 };
     let shadowCount = 0;
+    for (const m of this.realCount.keys()) this.realCount.set(m, 0);
     for (const p of placed) {
       const b = this.batches[p.v.kind];
-      const i = counts[p.v.kind]++;
       const [x, z] = this.toLocal(p.lon, p.lat);
-      this.q.setFromAxisAngle(this.up, Math.PI - p.heading);
       // A gentle bounce, different for each vehicle, so they don't glide like toys.
       this.v.set(x, Math.sin(t * 9 + p.v.id) * 0.012, z);
-      this.m.compose(this.v, this.q, this.s);
-      b.body.setMatrixAt(i, this.m);
-      b.fixed.setMatrixAt(i, this.m);
-      b.body.setColorAt(i, this.c.set(p.v.colour));
+      const realList = this.real[p.v.kind];
+      if (realList?.length) {
+        // A real model: the vehicle's number picks its model and paint, the same on every phone.
+        const mesh = realList[Math.abs(p.v.id * 7 + 3) % realList.length];
+        const n = this.realCount.get(mesh) ?? 0;
+        if (n < mesh.instanceMatrix.count) {
+          this.q.setFromAxisAngle(this.up, Math.PI - p.heading + REAL_TURN);
+          this.m.compose(this.v, this.q, this.s);
+          mesh.setMatrixAt(n, this.m);
+          this.realCount.set(mesh, n + 1);
+        }
+      } else {
+        const i = counts[p.v.kind]++;
+        this.q.setFromAxisAngle(this.up, Math.PI - p.heading);
+        this.m.compose(this.v, this.q, this.s);
+        b.body.setMatrixAt(i, this.m);
+        b.fixed.setMatrixAt(i, this.m);
+        b.body.setColorAt(i, this.c.set(p.v.colour));
+      }
+      this.q.setFromAxisAngle(this.up, Math.PI - p.heading);
       this.v.y = 0.03;
       this.m.compose(this.v, this.q, this.shadowScale.set(b.shadow[0], 1, b.shadow[1]));
       this.shadows.setMatrixAt(shadowCount++, this.m);
@@ -507,5 +589,11 @@ export class StreetTraffic {
     }
     this.shadows.count = shadowCount;
     this.shadows.instanceMatrix.needsUpdate = true;
+    for (const list of Object.values(this.real)) {
+      for (const mesh of list) {
+        mesh.count = this.realCount.get(mesh) ?? 0;
+        mesh.instanceMatrix.needsUpdate = true;
+      }
+    }
   }
 }

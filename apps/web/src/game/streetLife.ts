@@ -115,6 +115,11 @@ type Agent = {
   lateral: number;
   still: boolean;
   leader: number; // school children walk in groups behind a leader (-1 = no group)
+  // Waiting for a vehicle to pass: how many seconds they are behind their own timetable.
+  held?: number;
+  waiting?: boolean;
+  lastX?: number;
+  lastZ?: number;
 };
 
 function headLoad(kind: 'basin' | 'tray'): Part {
@@ -436,9 +441,8 @@ export class StreetLife {
   update(x: number, z: number, dt: number, t: number) {
     this.time.value = t;
     if (Math.hypot(x - this.lastRefresh.x, z - this.lastRefresh.z) > 30) this.refresh(x, z);
-    this.movePeople(x, z, t);
+    this.movePeople(x, z, t, dt);
     this.scenes?.update(t, x, z);
-    void dt;
   }
 
   // Draw only the things near the player (rebuilt after moving 30 m).
@@ -563,7 +567,10 @@ export class StreetLife {
   /** How many walkers are within 25 m of the player (for the crowd's sound). */
   nearCount = 0;
 
-  private movePeople(x: number, z: number, t: number) {
+  /** Is a vehicle at this point? (Set by the street test, so people wait instead of walking through cars.) */
+  vehicleAt: ((x: number, z: number, room: number) => { x: number; z: number; fx: number; fz: number; half: number; halfW: number } | null) | null = null;
+
+  private movePeople(x: number, z: number, t: number, dt: number) {
     let shadows = this.propShadows;
     let close = 0;
     const loadCount = { basin: 0, tray: 0 };
@@ -593,7 +600,8 @@ export class StreetLife {
         heading = ang + Math.PI;
       } else if (a.run) {
         const w = a.run;
-        const along = a.still ? a.s0 % w.total : (a.s0 + t * (leader ? leader.speed : a.speed)) % (w.total * 2);
+        const held = leader ? (leader.held ?? 0) : (a.held ?? 0);
+        const along = a.still ? a.s0 % w.total : (a.s0 + (t - held) * (leader ? leader.speed : a.speed)) % (w.total * 2);
         const forward = along < w.total;
         let s = forward ? along : w.total * 2 - along;
         if (leader) s = Math.max(0, Math.min(w.total, s - (forward ? 1 : -1) * (1 + ((i - a.leader) % 3) * 0.9)));
@@ -604,6 +612,28 @@ export class StreetLife {
         px = qx + Math.cos(dir) * side;
         pz = qz + Math.sin(dir) * side;
         if (a.still) heading = dir + (a.lateral > 0 ? Math.PI / 2 : -Math.PI / 2);
+        // A vehicle in the way: wait where you are (standing, not walking on the spot) until it moves.
+        else if (this.vehicleAt && Math.abs(px - x) < 60 && Math.abs(pz - z) < 60 && this.vehicleAt(px, pz, 0.35)) {
+          if (!leader) a.held = (a.held ?? 0) + dt;
+          if (a.lastX !== undefined) [px, pz] = [a.lastX, a.lastZ!];
+          // If the vehicle comes right up to where they stand, they step aside out of its way.
+          const b = this.vehicleAt(px, pz, 0.2);
+          if (b) {
+            const side = (px - b.x) * -b.fz + (pz - b.z) * b.fx;
+            const out = b.halfW + 0.3 - Math.abs(side);
+            px += -b.fz * out * Math.sign(side || 1);
+            pz += b.fx * out * Math.sign(side || 1);
+          }
+          if (!a.waiting) {
+            a.waiting = true;
+            batch.setLook(a.slot, a.look, 'idle', t);
+          }
+        } else if (a.waiting) {
+          a.waiting = false;
+          batch.setLook(a.slot, a.look, 'walk', t, a.speed / (1.35 * a.look.scale));
+        }
+        a.lastX = px;
+        a.lastZ = pz;
       } else {
         // No pavements nearby yet: hide.
         this.m.makeScale(0, 0, 0);
