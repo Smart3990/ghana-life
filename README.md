@@ -16,6 +16,16 @@ cd apps/web && npm install && cd ../..
 cd apps/server && npm install && cd ../..
 ```
 
+### Get the map data onto a new computer (needed before deploying)
+
+The map tiles and street files are not stored in Git. On a new computer, copy them from the live site (about 3 minutes, about 110 MB):
+
+```
+node scripts/fetch-live-data.mjs
+```
+
+`npm run deploy` checks for them first and stops if they are missing, so a deploy can never publish the game without its map.
+
 ### Rebuild the generated map data (not stored in Git)
 
 The map tiles and the Greater Accra street files are large and can be rebuilt any time:
