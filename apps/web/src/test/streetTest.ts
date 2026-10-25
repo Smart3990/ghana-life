@@ -930,7 +930,7 @@ function step(player: Player, dt: number, t: number) {
   updateProps();
   updateMarker(t);
   const blips = state.onOkada || !hasOkada ? [] : [{ x: state.okadaX, z: state.okadaZ, color: '#c8442e', size: 5 }];
-  if (story.auntie) blips.push({ x: story.auntie.x, z: story.auntie.z, color: '#e3a92b', size: 7 });
+  if (story.target) blips.push({ x: story.target.x, z: story.target.z, color: '#e3a92b', size: 7 });
   if (thief.on) blips.push({ x: thief.x, z: thief.z, color: '#f2efe6', size: 4 });
   if (waypoint) {
     blips.push({ x: waypoint.x, z: waypoint.z, color: '#2dd4bf', size: 7 });
@@ -1350,6 +1350,8 @@ const story = {
   auntie: null as { x: number; z: number; reached: () => void } | null,
   shot: null as { x: number; z: number; bearing: number; zoom: number; pitch: number } | null,
   onFrame: null as (() => void) | null,
+  /** Who or where the story is sending you (shown on the big map and the minimap). */
+  target: null as null | { x: number; z: number; who?: string; role?: string; icon: string; label: string; mission: string },
   /** A move the scene gives the player (talking in the chair, eating...). */
   pose: null as null | (typeof POSES)[number],
   /** The player is out of sight (in Uncle Kwame's car). */
@@ -2192,8 +2194,10 @@ async function playOpening(start: StartChoice) {
         toast('The light is red: the cars have stopped', 'Cross now on the zebra');
       }
     };
+    story.target = { x: stall.x, z: stall.z, who: 'Auntie Dede', role: 'Kelewele seller at Circle', icon: '🍲', label: 'Find the kelewele auntie', mission: 'MISSION 1' };
     await new Promise<void>((reached) => (story.auntie = { x: stall.x, z: stall.z, reached }));
     story.auntie = null;
+    story.target = null;
     story.onFrame = null;
     // 5. The talk: she sits you down, takes your uncle's number and calls him, then feeds you.
     story.frozen = true;
@@ -2421,7 +2425,9 @@ async function playOpening(start: StartChoice) {
     stopDoing();
     if (home) {
       storyGoal('Walk into the compound');
+      story.target = { x: home.x, z: home.z, who: 'Uncle Kwame', role: 'Your uncle · his compound house', icon: '🏠', label: 'Walk into the compound', mission: 'CHAPTER 1' };
       await waitUntil(() => Math.hypot(home.x - state.x, home.z - state.z) < COMPOUND.d / 2 - 1, 120);
+      story.target = null;
       missionCard('Chapter 1', 'Fresh in Accra', 'Coming soon: Welcome Chop, your first mission in the compound');
       storyStep.home = true;
     }
@@ -2554,18 +2560,28 @@ function openBoardCard(ad: number, place: string) {
   });
 }
 
+// The part of the city open now: Circle (the rest of Accra opens with the story; brief 9).
+const OPEN_RADIUS_M = 1100;
 // The big map: tap the minimap. Shows the real streets, you, your goal and every place found.
 const lngLatOf = (x: number, z: number) => ({ lng: START[0] + x / M_LON, lat: START[1] - z / M_LAT });
 const fullMap = new FullMap(tier, () => {
-  const goalAt = story.auntie ?? waypoint ?? null;
   const list = places.list().map((p) => ({ ...lngLatOf(p.x, p.z), kind: p.kind }));
   if (station) list.push({ ...lngLatOf(station.x, station.z), kind: 'LORRY STATION' });
+  // The story's target first (who you are going to meet), then a place picked in the Ride app.
+  const t = story.target;
+  const goal = t
+    ? { ...lngLatOf(t.x, t.z), label: story.goal || t.label, who: t.who, role: t.role, icon: t.icon }
+    : waypoint
+      ? { ...lngLatOf(waypoint.x, waypoint.z), label: waypoint.name, icon: '📍' }
+      : null;
   return {
     you: { ...lngLatOf(state.x, state.z), heading: state.heading },
-    goal: goalAt ? { ...lngLatOf(goalAt.x, goalAt.z), label: story.auntie ? story.goal || 'Your goal' : waypoint?.name ?? 'Your goal' } : null,
+    goal,
+    open: { ...lngLatOf(0, 0), radius: OPEN_RADIUS_M, name: 'Circle' },
+    player: { name: dayName, home: homeTown, energy: me.energy, vibe: me.vibe, money: cashNow, mission: t?.mission ?? '' },
     places: list,
     areas: PLACES.map((a) => ({ name: a.name, lng: a.at[0], lat: a.at[1] })),
-    cars: () => (streetTraffic?.placed ?? []).map((p) => ({ lng: p.lon, lat: p.lat, kind: p.v.kind })),
+    cars: () => (streetTraffic?.placed ?? []).map((p) => ({ id: p.v.id, lng: p.lon, lat: p.lat, kind: p.v.kind, heading: p.heading })),
     here: placeLabel.textContent ?? '',
     boards: (life?.boards.all ?? []).filter((b) => Math.hypot(b.x - state.x, b.z - state.z) < 700).map((b) => ({ ...lngLatOf(b.x, b.z), ad: b.colour % AD_COUNT })),
     adPicture: (n) => adThumb(n, 160),

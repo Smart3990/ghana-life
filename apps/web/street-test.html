@@ -229,8 +229,17 @@
         border-image: repeating-linear-gradient(90deg, #e3a92b 0 12px, #121a14 12px 16px, #c8442e 16px 28px, #2f8f57 28px 40px, #1f5fa8 40px 48px) 4; animation: fm-card-in .5s .3s both cubic-bezier(.2,.9,.3,1.2); }
       @keyframes fm-card-in { from { opacity: 0; transform: translateY(20px); } }
       #fullmap .fm-card small { color: #e3a92b; font-size: 9.5px; letter-spacing: .16em; font-weight: 800; }
-      #fullmap .fm-card > b { display: block; font-size: 17px; margin: 1px 0 6px; }
-      #fullmap .fm-goalrow { color: #f2c21a; font-weight: 700; margin-bottom: 6px; }
+      #fullmap .fm-goalrow { display: flex; gap: 9px; align-items: center; background: rgba(227,169,43,.14); border: 1px solid rgba(227,169,43,.55); border-radius: 12px; padding: 7px 9px; margin: 8px 0; }
+      #fullmap .fm-goalrow > span { font-size: 22px; }
+      #fullmap .fm-goalrow div { display: flex; flex-direction: column; }
+      #fullmap .fm-goalrow small { color: #e3a92b; font-size: 9px; letter-spacing: .14em; font-weight: 800; }
+      #fullmap .fm-goalrow b { font-size: 14px; margin: 0; color: #f2efe6; }
+      #fullmap .fm-goalrow i { font-style: normal; font-size: 11px; color: #c9d3cb; }
+      #fullmap .fm-me { display: flex; gap: 9px; align-items: center; }
+      #fullmap .fm-me b { display: block; font-size: 16px; margin: 0; }
+      #fullmap .fm-me small { color: #c9d3cb; letter-spacing: 0; font-weight: 500; font-size: 11px; }
+      #fullmap .fm-avatar { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font: 800 18px system-ui; color: #121a14; background: conic-gradient(#e3a92b 0 25%, #c8442e 0 50%, #2f8f57 0 75%, #1f5fa8 0); box-shadow: inset 0 0 0 4px #121a14, 0 0 0 2px #e3a92b; }
+      #fullmap .fm-stats { display: flex; gap: 10px; margin: 8px 0 2px; font-weight: 700; font-variant-numeric: tabular-nums; }
       #fullmap .fm-near { display: grid; gap: 3px; }
       #fullmap .fm-near span { display: flex; justify-content: space-between; color: #c9d3cb; }
       #fullmap .fm-near em { font-style: normal; color: #f2efe6; font-weight: 700; }
@@ -239,16 +248,24 @@
         animation: fm-drop .5s both cubic-bezier(.3,1.6,.5,1); }
       .fm-pin span { display: grid; place-items: center; width: 100%; height: 100%; transform: rotate(45deg); font-size: 14px; line-height: 1; }
       @keyframes fm-drop { from { opacity: 0; translate: 0 -40px; } 60% { opacity: 1; } }
+      #fullmap.far .fm-pin, #fullmap.far .fm-board { display: none; }
       .fm-board { position: relative; width: 74px; padding-bottom: 16px; cursor: pointer; animation: fm-drop .6s both cubic-bezier(.3,1.6,.5,1); filter: drop-shadow(0 4px 4px rgba(0,0,0,.35)); }
       .fm-board img { display: block; width: 74px; height: 42px; border: 3px solid #16171a; border-radius: 3px; background: #16171a; }
       .fm-board i { position: absolute; left: 18px; right: 18px; bottom: 0; height: 16px; border-left: 4px solid #3a3b3e; border-right: 4px solid #3a3b3e; }
       .fm-area { font: 800 11px system-ui, sans-serif; letter-spacing: .14em; text-transform: uppercase; color: #5a3a12; text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 6px #fff; pointer-events: none; white-space: nowrap; animation: fm-fade 1s .8s both; }
+      .fm-area.locked { color: #f2efe6; text-shadow: 0 1px 3px rgba(0,0,0,.7); text-align: center; }
+      .fm-area.locked small { display: block; font-size: 9px; letter-spacing: .04em; text-transform: none; font-weight: 600; opacity: .85; }
       @keyframes fm-fade { from { opacity: 0; } }
       .fm-you { position: relative; width: 44px; height: 44px; pointer-events: none; }
       .fm-you i { position: absolute; inset: 0; border-radius: 50%; background: rgba(31,95,168,.25); animation: fm-pulse 1.8s infinite; }
       .fm-you b { position: absolute; left: 12px; top: 7px; width: 0; height: 0; border-left: 10px solid transparent; border-right: 10px solid transparent; border-bottom: 26px solid #1f5fa8; filter: drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1.5px #fff) drop-shadow(0 3px 3px rgba(0,0,0,.4)); }
       @keyframes fm-pulse { from { transform: scale(.4); opacity: 1; } to { transform: scale(1.6); opacity: 0; } }
-      .fm-goal { display: flex; flex-direction: column; align-items: center; gap: 3px; pointer-events: none; }
+      .fm-goal { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; pointer-events: none; }
+      .fm-goal em { position: absolute; bottom: 2px; left: 50%; width: 60px; height: 60px; margin: 0 0 -14px -30px; border-radius: 50%; border: 3px solid #e3a92b; animation: fm-ring 1.6s ease-out infinite; z-index: -1; }
+      @keyframes fm-ring { from { transform: scale(.3); opacity: 1; } to { transform: scale(1.6); opacity: 0; } }
+      .fm-goal span.who { width: 46px; height: 46px; font-size: 24px; background: #f2efe6; border: 4px solid #e3a92b; }
+      .fm-goal small b { display: block; color: #f2efe6; font-size: 12px; }
+      .fm-goal small i { display: block; font-style: normal; font-weight: 500; color: #e3a92b; font-size: 10px; }
       .fm-goal span { width: 34px; height: 34px; border-radius: 50%; background: #e3a92b; color: #121a14; display: grid; place-items: center; font-size: 19px; border: 3px solid #fff; box-shadow: 0 0 0 6px rgba(227,169,43,.35), 0 0 22px rgba(227,169,43,.9); animation: fm-bob 1.1s ease-in-out infinite alternate; }
       .fm-goal small { order: -1; font: 700 11px system-ui, sans-serif; background: #121a14; color: #f2c21a; padding: 3px 8px; border-radius: 6px; max-width: 170px; text-align: center; }
       @keyframes fm-bob { to { transform: translateY(-5px); } }

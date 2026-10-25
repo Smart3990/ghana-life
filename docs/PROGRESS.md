@@ -277,6 +277,11 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
   - The character models already had more moves; now used: talking on the phone, eating, pushing (the driver who pushes you aside), talking in a chair, picking up, nodding.
   - Story timers now count game time, so slow phones see the same scenes, not cut short.
 
+  - **The big map is locked to Circle:** only the Circle area (about 1.1 km round) is open; the rest of Accra is greyed out behind a gold dashed edge, its area names marked "🔒 Opens later in the story", and you cannot pan far past the edge. Pins and billboards show only inside the open area; zoomed far out, the pins hide so the map stays clear.
+  - **Real vehicles on the map:** every vehicle is drawn from above in its real shape and colours (blue saloons, white taxis with yellow corners and the roof sign, trotros with luggage on the rack, green and yellow buses, trucks with their load, tricycles, okadas with the rider), turned the way it drives, gliding smoothly between updates.
+  - **The player card on the map:** your day name and hometown, where you are, energy, Vibe and Sika, the nearest filling station, bus stop, chop bar and bank.
+  - **Who the mission sends you to:** the target on the map is the person (Auntie Dede, kelewele seller at Circle; Uncle Kwame at his compound house) with her picture-sign, name, role and pulsing rings; the card says "MISSION 1 · Meet Auntie Dede, 120 m away"; the red route runs along the roads to her; the minimap shows her too.
+
 ## Waiting on the owner
 
 - Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.

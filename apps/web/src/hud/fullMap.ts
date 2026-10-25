@@ -11,11 +11,16 @@ import { buildStyle } from '../map/style';
 import type { Tier } from '../map/style';
 
 export type MapPlace = { lng: number; lat: number; kind: string };
-export type MapCar = { lng: number; lat: number; kind: string };
+export type MapCar = { id: number; lng: number; lat: number; kind: string; heading: number };
 type Group = { name: string; icon: string; kinds: string[] };
 type View = {
   you: { lng: number; lat: number; heading: number };
-  goal: { lng: number; lat: number; label: string } | null;
+  /** Where the story wants you: the person or place, with a picture-sign and a name. */
+  goal: { lng: number; lat: number; label: string; who?: string; role?: string; icon?: string } | null;
+  /** The part of the city that is open now (the rest is greyed out and locked). */
+  open: { lng: number; lat: number; radius: number; name: string };
+  /** The player's card. */
+  player: { name: string; home: string; energy: number; vibe: number; money: number; mission: string };
   places: MapPlace[];
   areas: { name: string; lng: number; lat: number }[];
   cars: () => MapCar[];
@@ -47,7 +52,106 @@ const ICON: Record<string, string> = {
 };
 // Pin colours by group (Royal Kente).
 const TINT: Record<string, string> = { Fuel: '#c8442e', Transport: '#2f8f57', Food: '#e3a92b', Money: '#1f5fa8', Health: '#2f8f57', Worship: '#6a4c93', School: '#8e1b1b', Shops: '#121a14', Safety: '#0b2a5a' };
-const CAR_COLOUR: Record<string, string> = { trotro: '#f2efe6', taxi: '#e3a92b', bus: '#2f8f57', truck: '#8a5a2b', okada: '#c8442e', tricycle: '#c8442e' };
+const VEHICLE_ICON: Record<string, string> = { car: 'car', taxi: 'taxi', trotro: 'trotro', bus: 'bus', truck: 'truck', okada: 'okada', tricycle: 'tricycle', pickup: 'pickup', suv: 'suv' };
+
+/** Little top-down pictures of each kind of vehicle, at their real proportions (8 pixels a metre). */
+function vehicleIcons() {
+  const PX = 8;
+  const make = (len: number, wid: number, paint: (g: CanvasRenderingContext2D, L: number, W: number) => void) => {
+    const c = document.createElement('canvas');
+    c.width = Math.ceil(wid * PX) + 4;
+    c.height = Math.ceil(len * PX) + 4;
+    const g = c.getContext('2d')!;
+    g.translate(2, 2);
+    paint(g, len * PX, wid * PX);
+    return g.getImageData(0, 0, c.width, c.height);
+  };
+  const body = (g: CanvasRenderingContext2D, L: number, W: number, colour: string, r = 0.3) => {
+    g.fillStyle = 'rgba(0,0,0,.35)';
+    g.beginPath();
+    g.roundRect(1, 2, W, L, W * r);
+    g.fill();
+    g.fillStyle = colour;
+    g.beginPath();
+    g.roundRect(0, 0, W, L, W * r);
+    g.fill();
+    g.strokeStyle = 'rgba(0,0,0,.55)';
+    g.lineWidth = 1;
+    g.stroke();
+  };
+  const glass = (g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) => {
+    g.fillStyle = '#26343e';
+    g.beginPath();
+    g.roundRect(x, y, w, h, 2);
+    g.fill();
+  };
+  // The front of every picture is at the top (heading 0 = north).
+  const saloon = (colour: string, taxi = false) =>
+    make(4.4, 1.8, (g, L, W) => {
+      body(g, L, W, colour);
+      glass(g, 2, L * 0.24, W - 4, L * 0.16); // windscreen
+      g.fillStyle = colour === '#f2efe6' ? '#d9d4c8' : 'rgba(0,0,0,.18)';
+      g.fillRect(2, L * 0.4, W - 4, L * 0.3); // roof
+      glass(g, 2, L * 0.72, W - 4, L * 0.1); // back window
+      if (taxi) {
+        // Accra taxis: yellow-painted corners, and the roof sign.
+        g.fillStyle = '#f2c21a';
+        for (const [x, y] of [[0, 0], [W - 5, 0], [0, L - 7], [W - 5, L - 7]]) g.fillRect(x, y, 5, 7);
+        g.fillStyle = '#121a14';
+        g.fillRect(W / 2 - 4, L * 0.5, 8, 3);
+      }
+    });
+  return {
+    car: saloon('#1f4f8a'),
+    taxi: saloon('#f2efe6', true),
+    suv: make(4.7, 1.95, (g, L, W) => {
+      body(g, L, W, '#2a2c33', 0.2);
+      glass(g, 2, L * 0.2, W - 4, L * 0.15);
+      glass(g, 2, L * 0.82, W - 4, L * 0.08);
+    }),
+    pickup: make(5, 1.85, (g, L, W) => {
+      body(g, L, W, '#8f959b', 0.2);
+      glass(g, 2, L * 0.2, W - 4, L * 0.13);
+      g.fillStyle = '#5d5a55';
+      g.fillRect(2, L * 0.55, W - 4, L * 0.42); // the open back
+    }),
+    trotro: make(4.9, 1.8, (g, L, W) => {
+      body(g, L, W, '#f2efe6', 0.18);
+      glass(g, 2, L * 0.08, W - 4, L * 0.1);
+      g.fillStyle = '#c8442e';
+      g.fillRect(0, L * 0.45, W, 3); // the stripe
+      g.fillStyle = '#5d5a55';
+      g.fillRect(3, L * 0.6, W - 6, L * 0.22); // luggage on the roof rack
+    }),
+    bus: make(10.5, 2.5, (g, L, W) => {
+      body(g, L, W, '#2f8f57', 0.1);
+      glass(g, 2, L * 0.03, W - 4, L * 0.05);
+      g.fillStyle = '#f2c21a';
+      g.fillRect(0, L * 0.3, W, 3);
+      g.fillRect(0, L * 0.6, W, 3);
+    }),
+    truck: make(7.4, 2.3, (g, L, W) => {
+      body(g, L * 0.25, W, '#1f5fa8', 0.15);
+      glass(g, 2, L * 0.03, W - 4, L * 0.06);
+      g.fillStyle = '#8a5a2b';
+      g.fillRect(0, L * 0.28, W, L * 0.72); // the load
+      g.strokeStyle = 'rgba(0,0,0,.5)';
+      g.strokeRect(0, L * 0.28, W, L * 0.72);
+    }),
+    tricycle: make(3, 1.3, (g, L, W) => {
+      body(g, L, W, '#c8442e', 0.35);
+      g.fillStyle = '#e3a92b';
+      g.fillRect(2, L * 0.45, W - 4, L * 0.5);
+    }),
+    okada: make(2, 0.8, (g, L, W) => {
+      body(g, L, W, '#121a14', 0.5);
+      g.fillStyle = '#c8442e';
+      g.beginPath();
+      g.arc(W / 2, L * 0.55, W * 0.38, 0, Math.PI * 2); // the rider
+      g.fill();
+    }),
+  };
+}
 const M_LAT = 110574;
 const M_LON = 111320 * Math.cos((5.57 * Math.PI) / 180);
 const metres = (a: { lng: number; lat: number }, b: { lng: number; lat: number }) => Math.hypot((a.lng - b.lng) * M_LON, (a.lat - b.lat) * M_LAT);
@@ -121,11 +225,17 @@ export class FullMap {
     this.map = new maplibregl.Map({
       container: this.mapEl,
       style: buildStyle(this.tier === 'light' ? 'light' : 'standard'),
-      center: [you.lng, you.lat],
-      zoom: 13.2, // starts high over Accra, then flies down to you
-      minZoom: 11,
+      center: [view.open.lng, view.open.lat],
+      zoom: 14.2, // starts high over the open area, then flies down to you
+      minZoom: 13.8,
       maxZoom: 18.5,
-      maxBounds: [-0.8, 5.25, 0.95, 6.3],
+      // You can look a little past the edge of the open area (to see what is locked), no further.
+      maxBounds: [
+        view.open.lng - (view.open.radius * 1.9) / M_LON,
+        view.open.lat - (view.open.radius * 1.9) / M_LAT,
+        view.open.lng + (view.open.radius * 1.9) / M_LON,
+        view.open.lat + (view.open.radius * 1.9) / M_LAT,
+      ],
       pitch: 0,
       bearing: -25,
       maxPitch: 60,
@@ -135,6 +245,8 @@ export class FullMap {
     });
     this.map.touchZoomRotate.disableRotation();
     this.map.on('load', () => this.onLoad());
+    // Zoomed far out the pins would crowd together: only the goal, you and the area names show.
+    this.map.on('zoom', () => this.root.classList.toggle('far', (this.map?.getZoom() ?? 16) < 15.2));
     this.card.innerHTML = this.cardHtml(view);
     this.timers.push(window.setInterval(() => this.tick(), 250));
     this.timers.push(window.setInterval(() => (this.card.innerHTML = this.cardHtml(this.get())), 2000));
@@ -179,18 +291,40 @@ export class FullMap {
       layout: { 'line-cap': 'butt', 'line-join': 'round' },
       paint: { 'line-color': '#c8442e', 'line-width': ['interpolate', ['linear'], ['zoom'], 13, 3.5, 18, 9], 'line-dasharray': [0, 4, 3] },
     });
+    // Vehicles drawn as themselves from above (their real shape and colours), turned the way they
+    // drive, a little bigger than life when zoomed out so they can be seen.
+    for (const [kind, img] of Object.entries(vehicleIcons())) map.addImage(`car-${kind}`, img, { pixelRatio: 2 });
     map.addLayer({
       id: 'fm-cars',
-      type: 'circle',
+      type: 'symbol',
       source: 'fm-cars',
-      paint: {
-        'circle-radius': ['interpolate', ['linear'], ['zoom'], 13, 1.6, 16, 3.6, 18, 7],
-        'circle-color': ['get', 'c'],
-        'circle-stroke-color': '#121a14',
-        'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 13, 0.4, 17, 1.4],
-        'circle-pitch-alignment': 'map',
+      layout: {
+        'icon-image': ['concat', 'car-', ['get', 'k']],
+        'icon-rotate': ['get', 'h'],
+        'icon-rotation-alignment': 'map',
+        'icon-pitch-alignment': 'map',
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+        'icon-size': ['interpolate', ['exponential', 2], ['zoom'], 14, 0.18, 16, 0.6, 18, 1.4],
       },
     });
+    // The locked city: everything outside the open area is greyed out, with a gold dashed edge.
+    const open = this.get().open;
+    const ring: number[][] = [];
+    for (let i = 0; i <= 72; i++) {
+      const a = (i / 72) * Math.PI * 2;
+      // A gently uneven edge, like a district boundary rather than a perfect circle.
+      const r = open.radius * (1 + 0.035 * Math.sin(a * 3 + 1) + 0.02 * Math.sin(a * 5));
+      ring.push([open.lng + (Math.cos(a) * r) / M_LON, open.lat + (Math.sin(a) * r) / M_LAT]);
+    }
+    map.addSource('fm-lock', {
+      type: 'geojson',
+      data: { type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [[[-1.5, 4.5], [1.5, 4.5], [1.5, 7], [-1.5, 7], [-1.5, 4.5]], ring.slice().reverse()] } },
+    });
+    map.addSource('fm-edge', { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: ring } } });
+    map.addLayer({ id: 'fm-lock', type: 'fill', source: 'fm-lock', paint: { 'fill-color': '#4a4f55', 'fill-opacity': 0.66 } }, 'fm-route-glow');
+    map.addLayer({ id: 'fm-edge-glow', type: 'line', source: 'fm-edge', paint: { 'line-color': '#e3a92b', 'line-width': 9, 'line-opacity': 0.25, 'line-blur': 4 } }, 'fm-route-glow');
+    map.addLayer({ id: 'fm-edge', type: 'line', source: 'fm-edge', paint: { 'line-color': '#e3a92b', 'line-width': 2.5, 'line-dasharray': [3, 2] } }, 'fm-route-glow');
     // Only our own pins: the base map's business names are hidden (no real brands in the game).
     for (const l of map.getStyle().layers) if ((l as { 'source-layer'?: string })['source-layer'] === 'pois') map.setLayoutProperty(l.id, 'visibility', 'none');
     // Soft kente light over the map: a warm water colour and calm land.
@@ -198,6 +332,7 @@ export class FullMap {
     const { you } = this.get();
     // The fly-in: from high over Accra down to where you stand.
     map.flyTo({ center: [you.lng, you.lat], zoom: 16.3, pitch: this.pitch, bearing: 0, duration: 2200, curve: 1.3, essential: true });
+    this.carLoop();
     map.once('moveend', () => {
       this.drawMarkers(true);
       this.makeRoute();
@@ -205,16 +340,43 @@ export class FullMap {
     this.moveYou();
   }
 
+  private cars = new Map<number, { kind: string; fx: number; fz: number; fh: number; x: number; z: number; h: number; t0: number }>();
+  private lastCars = 0;
+  /** Glide the vehicles smoothly between the positions the street sends (about 15 times a second on Light). */
+  private carLoop() {
+    if (!this.map) return;
+    requestAnimationFrame(() => this.carLoop());
+    const now = performance.now();
+    if (now - this.lastCars < (this.tier === 'light' ? 66 : 40)) return;
+    this.lastCars = now;
+    const features = [];
+    for (const [, c] of this.cars) {
+      const k = Math.min(1, (now - c.t0) / 250);
+      const dh = Math.atan2(Math.sin(c.h - c.fh), Math.cos(c.h - c.fh));
+      features.push({
+        type: 'Feature' as const,
+        properties: { k: VEHICLE_ICON[c.kind] ?? 'car', h: ((c.fh + dh * k) * 180) / Math.PI },
+        geometry: { type: 'Point' as const, coordinates: [c.fx + (c.x - c.fx) * k, c.fz + (c.z - c.fz) * k] },
+      });
+    }
+    (this.map.getSource('fm-cars') as GeoJSONSource | undefined)?.setData({ type: 'FeatureCollection', features });
+  }
+
   private dash = 0;
   private tick() {
     if (!this.map?.isStyleLoaded()) return;
     this.moveYou();
     const view = this.get();
-    const cars = view.cars();
-    (this.map.getSource('fm-cars') as GeoJSONSource | undefined)?.setData({
-      type: 'FeatureCollection',
-      features: cars.map((c) => ({ type: 'Feature', properties: { c: CAR_COLOUR[c.kind] ?? '#1f5fa8' }, geometry: { type: 'Point', coordinates: [c.lng, c.lat] } })),
-    });
+    // New positions for the vehicles; carLoop glides them there.
+    const now = performance.now();
+    const seen = new Set<number>();
+    for (const c of view.cars()) {
+      seen.add(c.id);
+      const t = this.cars.get(c.id);
+      if (t) Object.assign(t, { fx: t.x, fz: t.z, fh: t.h, x: c.lng, z: c.lat, h: c.heading, t0: now });
+      else this.cars.set(c.id, { kind: c.kind, fx: c.lng, fz: c.lat, fh: c.heading, x: c.lng, z: c.lat, h: c.heading, t0: now });
+    }
+    for (const id of [...this.cars.keys()]) if (!seen.has(id)) this.cars.delete(id);
     // The route's dashes march towards the goal.
     const steps: number[][] = [[0, 4, 3], [0.5, 4, 2.5], [1, 4, 2], [1.5, 4, 1.5], [2, 4, 1], [2.5, 4, 0.5], [3, 4, 0], [0, 0.5, 3, 3.5], [0, 1, 3, 3], [0, 1.5, 3, 2.5], [0, 2, 3, 2], [0, 2.5, 3, 1.5], [0, 3, 3, 1], [0, 3.5, 3, 0.5]];
     this.dash = (this.dash + 1) % steps.length;
@@ -254,8 +416,15 @@ export class FullMap {
       ['🍲', 'Chop bar', near(['CHOP BAR'])],
       ['🏧', 'Bank · ATM', near(['ADINKRA BANK', 'ATM', 'MOBILE MONEY'])],
     ].filter((r) => r[2] !== null) as [string, string, number][];
-    const goal = view.goal ? `<div class="fm-goalrow">★ ${view.goal.label} · ${far(metres(view.goal, view.you))}</div>` : '';
-    return `<small>YOU ARE IN</small><b>${view.here || 'Accra'}</b>${goal}<div class="fm-near">${rows.map(([i, n, d]) => `<span>${i} ${n} <em>${far(d)}</em></span>`).join('')}</div><div class="fm-more">More of Ghana opens up as you play the story.</div>`;
+    const pl = view.player;
+    const goal = view.goal
+      ? `<div class="fm-goalrow"><span>${view.goal.icon ?? '★'}</span><div><small>${pl.mission || 'GOAL'}</small><b>${view.goal.who ? `Meet ${view.goal.who}` : view.goal.label}</b><i>${view.goal.who ? view.goal.label + ' · ' : ''}${far(metres(view.goal, view.you))} away</i></div></div>`
+      : '';
+    return `<div class="fm-me"><span class="fm-avatar">${pl.name[0]}</span><div><b>${pl.name}</b><small>From ${pl.home} · in ${view.here || 'Accra'}</small></div></div>
+      <div class="fm-stats"><span>⚡ ${Math.round(pl.energy)}</span><span>✨ ${pl.vibe}</span><span>₵ ${pl.money.toLocaleString('en-GH')}</span></div>
+      ${goal}
+      <div class="fm-near">${rows.map(([i, n, d]) => `<span>${i} ${n} <em>${far(d)}</em></span>`).join('')}</div>
+      <div class="fm-more">🔒 Only ${view.open.name} is open for now. More of Accra opens up as you play the story.</div>`;
   }
 
   private drawMarkers(animate: boolean) {
@@ -265,7 +434,10 @@ export class FullMap {
     const view = this.get();
     const group = GROUPS.find((g) => g.name === this.filter);
     // Nearest first, so the pins drop in rippling out from you.
+    const inside = (p: { lng: number; lat: number }) => metres(p, view.open) <= view.open.radius;
     const list = view.places
+      .filter(inside)
+      .filter((p) => metres(p, view.you) > 14) // never on top of your own arrow
       .filter((p) => !group || group.kinds.includes(p.kind))
       .filter(() => this.filter !== 'Ads')
       .map((p) => ({ p, d: metres(p, view.you) }))
@@ -291,7 +463,7 @@ export class FullMap {
       // On "All" only a few, spread out (at least 90 m apart), so the map stays clear; all of them under Ads.
       const gap = this.filter === 'Ads' ? 25 : 90;
       const boards: { b: (typeof view.boards)[number] }[] = [];
-      for (const b of view.boards.map((b) => ({ b, d: metres(b, view.you) })).sort((a, b) => a.d - b.d)) {
+      for (const b of view.boards.filter(inside).map((b) => ({ b, d: metres(b, view.you) })).sort((a, b) => a.d - b.d)) {
         if (boards.length >= (this.filter === 'Ads' ? 40 : 12)) break;
         if (boards.some((o) => metres(o.b, b.b) < gap)) continue;
         boards.push(b);
@@ -311,15 +483,18 @@ export class FullMap {
     }
     for (const a of view.areas) {
       const el = document.createElement('div');
-      el.className = 'fm-area';
-      el.textContent = a.name;
+      const locked = metres(a, view.open) > view.open.radius;
+      el.className = locked ? 'fm-area locked' : 'fm-area';
+      el.innerHTML = locked ? `🔒 ${a.name}<small>Opens later in the story</small>` : a.name;
       this.markers.push(new maplibregl.Marker({ element: el }).setLngLat([a.lng, a.lat]).addTo(this.map));
     }
     if (view.goal) {
       const el = document.createElement('div');
       el.className = 'fm-goal';
       el.style.zIndex = '15';
-      el.innerHTML = `<span>★</span><small>${view.goal.label}</small>`;
+      el.innerHTML = view.goal.who
+        ? `<small><b>${view.goal.who}</b>${view.goal.role ? `<i>${view.goal.role}</i>` : ''}</small><span class="who">${view.goal.icon ?? '★'}</span><em></em>`
+        : `<small>${view.goal.label}</small><span>${view.goal.icon ?? '★'}</span><em></em>`;
       this.markers.push(new maplibregl.Marker({ element: el, anchor: 'bottom' }).setLngLat([view.goal.lng, view.goal.lat]).addTo(this.map));
     }
     this.moveYou();
