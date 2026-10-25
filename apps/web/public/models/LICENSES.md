@@ -19,3 +19,8 @@ The plastic chairs and football (`src/game/streetScenes.ts`) are built in code. 
   - Used: Car 01 (wagon), Car 02 (sedan, also the Accra taxi), Car 03 (hatchback), Car 04 (van, used as the trotro), Car 08 (box truck).
   - Changes: resized to real metres and repainted in more colours, including the Accra taxi's yellow front and back corners, by `scripts/vehicles/paint.py` and `scripts/vehicles/build_vehicles.py`.
 - Pickups, buses, tricycles (pragya) and okadas are still built in code (`src/game/vehicles3d.ts`).
+
+## Opening film pictures (public/film)
+
+- `village.webp`, `hands.webp`, `bus.webp`, `circle.webp`: made for Ghanaverse on 2026-10-25 with the owner's ImagineArt account (model Seedream v5 lite), from our own written descriptions. All people are invented (not real people), with no logos or brand names.
+- Before launch, check that the ImagineArt plan used allows commercial use of these pictures (some free plans do not); if not, make them again on a plan that does.

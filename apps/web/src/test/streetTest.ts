@@ -1163,15 +1163,20 @@ const placeCard = (name: string) => {
 
 async function playOpening(start: StartChoice) {
   const home = start.hometown;
+  cine.preload(['/film/village.webp', '/film/hands.webp', '/film/bus.webp', '/film/circle.webp']);
   story.busy = story.frozen = true;
   goalChip.classList.add('hidden');
   setMoney(50);
   // 1. Home: title cards on black.
   cine.begin();
   await cine.black(true, 0.01);
-  await cine.title(home, 'Dawn. The cockerels are crowing.');
-  await cine.title('Grandma folds ₵50 into your hand.', '“Go and make us proud.”', 3.8);
-  await cine.title('“Accra! Accra! Accra!”', 'The bus mate shouts. You climb aboard.');
+  // Film pictures (made with ImagineArt, public/film): home at dawn, Grandma's goodbye, the bus,
+  // arriving in Accra. Each one moves slowly while the lines are spoken.
+  await cine.title(home, 'Dawn. The cockerels are crowing.', 2.4);
+  await cine.picture('/film/village.webp', 'in', [['', `${home}. Grandma has been up since before the cockerels.`]], 0.6);
+  await cine.picture('/film/hands.webp', 'in', [['', 'She folds ₵50 into your hand.'], ['GRANDMA', 'Go and make us proud.']], 0.4);
+  await cine.picture('/film/bus.webp', 'left', [['BUS MATE', 'Accra! Accra! Accra! Last seat, come, come!']], 0.3);
+  await cine.picture('/film/circle.webp', 'out', [['', 'Hours later. Accra. Kwame Nkrumah Circle.']], 0.3);
   // 2. The camera comes down over the city to Circle.
   if (!cine.skipped) {
     story.fly = { t: performance.now() / 1000, length: 9 };

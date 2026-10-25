@@ -146,27 +146,35 @@
 
 
       /* Film scenes (made in the game): black bars, title cards, subtitles, caller card, Skip */
-      .cine-bars i { position: fixed; left: 0; right: 0; height: 0; background: #000; z-index: 11; transition: height .6s ease; }
+      .cine-bars i { position: fixed; left: 0; right: 0; height: 0; background: #000; z-index: 13; transition: height .6s ease; }
       .cine-bars i:first-child { top: 0; }
       .cine-bars i:last-child { bottom: 0; }
       body.cine .cine-bars i { height: 11vh; }
       body.cine #radar, body.cine #hud-top, body.cine .act, body.cine #stick, body.cine #help, body.cine #me, body.cine #goal, body.cine #debug { opacity: 0; pointer-events: none; }
       #radar, #hud-top, .act, #stick { transition: opacity .4s; }
+      /* Film pictures: full screen, with a slow camera move */
+      .cine-pic { position: fixed; inset: 0; z-index: 12; background: #000; overflow: hidden; opacity: 0; transition: opacity .9s; pointer-events: none; }
+      .cine-pic.on { opacity: 1; }
+      .cine-img { position: absolute; inset: 0; background-size: cover; background-position: center; transition: transform 12s ease-out; }
+      .cine-img.in { transform: scale(1.02); } .cine-img.in.go { transform: scale(1.16); }
+      .cine-img.out { transform: scale(1.18); } .cine-img.out.go { transform: scale(1.03); }
+      .cine-img.left { transform: scale(1.14) translateX(4%); } .cine-img.left.go { transform: scale(1.14) translateX(-4%); }
+      .cine-img.right { transform: scale(1.14) translateX(-4%); } .cine-img.right.go { transform: scale(1.14) translateX(4%); }
       .cine-card { position: fixed; inset: 0; z-index: 12; display: grid; place-items: center; background: #000; opacity: 0; pointer-events: none; transition: opacity .7s; text-align: center; padding: 24px; }
       .cine-card.on.black { opacity: 1; }
       .cine-text { opacity: 0; transform: translateY(8px); transition: opacity .7s, transform .7s; }
       .cine-text.in { opacity: 1; transform: none; }
       .cine-text .big { font-weight: 900; font-size: clamp(22px, 5.5vh, 40px); letter-spacing: 1.5px; color: var(--text); }
       .cine-text .small { margin-top: 10px; font-size: clamp(14px, 3.4vh, 20px); color: var(--gold); font-style: italic; }
-      .cine-sub { position: fixed; left: 50%; bottom: calc(11vh + 12px); transform: translateX(-50%); max-width: min(720px, 86vw); text-align: center; z-index: 13; font-size: clamp(14px, 3.6vh, 19px); font-weight: 700; color: #fff; text-shadow: 0 2px 4px #000, 0 0 12px rgba(0,0,0,.8); opacity: 0; transition: opacity .3s; pointer-events: none; }
+      .cine-sub { position: fixed; z-index: 14; left: 50%; bottom: calc(11vh + 12px); transform: translateX(-50%); max-width: min(720px, 86vw); text-align: center; z-index: 13; font-size: clamp(14px, 3.6vh, 19px); font-weight: 700; color: #fff; text-shadow: 0 2px 4px #000, 0 0 12px rgba(0,0,0,.8); opacity: 0; transition: opacity .3s; pointer-events: none; }
       .cine-sub.on { opacity: 1; }
       .cine-sub b { color: var(--gold); margin-right: 8px; letter-spacing: 1px; font-size: .85em; }
-      .cine-caller { position: fixed; left: 50%; top: calc(11vh + 10px); transform: translate(-50%, -12px); display: flex; gap: 10px; align-items: center; background: rgba(18,26,20,.92); border: 1.5px solid var(--gold); border-radius: 16px; padding: 8px 16px 8px 8px; z-index: 13; opacity: 0; transition: opacity .3s, transform .3s; }
+      .cine-caller { position: fixed; left: 50%; top: calc(11vh + 10px); transform: translate(-50%, -12px); display: flex; gap: 10px; align-items: center; background: rgba(18,26,20,.92); border: 1.5px solid var(--gold); border-radius: 16px; padding: 8px 16px 8px 8px; z-index: 14; opacity: 0; transition: opacity .3s, transform .3s; }
       .cine-caller.on { opacity: 1; transform: translate(-50%, 0); }
       .cine-caller span { width: 36px; height: 36px; border-radius: 50%; background: var(--green); display: grid; place-items: center; font-weight: 900; animation: ring 1s infinite; }
       .cine-caller small { display: block; color: var(--soft); font-size: 11px; }
       @keyframes ring { 50% { box-shadow: 0 0 0 6px rgba(47,143,87,.35); } }
-      .cine-skip { position: fixed; right: var(--safe-r); bottom: calc(var(--safe-b) + 6px); z-index: 14; display: none; background: rgba(0,0,0,.4); color: var(--text); border: 1px solid var(--edge); border-radius: 999px; padding: 7px 14px; font: 800 12px system-ui, sans-serif; letter-spacing: 1px; }
+      .cine-skip { position: fixed; right: var(--safe-r); bottom: calc(var(--safe-b) + 6px); z-index: 15; display: none; background: rgba(0,0,0,.4); color: var(--text); border: 1px solid var(--edge); border-radius: 999px; padding: 7px 14px; font: 800 12px system-ui, sans-serif; letter-spacing: 1px; }
       body.cine .cine-skip { display: block; }
 
       /* Start screen: who you are and your hometown */

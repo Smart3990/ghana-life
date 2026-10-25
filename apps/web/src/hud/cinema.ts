@@ -10,6 +10,7 @@ export class Cinema {
   private caller: HTMLElement;
   private skipButton: HTMLElement;
   private skipping = false;
+  private pic: HTMLElement;
 
   constructor() {
     this.root = el('div', 'cine-bars');
@@ -20,7 +21,35 @@ export class Cinema {
     this.skipButton = el('button', 'cine-skip');
     this.skipButton.textContent = 'SKIP ›';
     this.skipButton.addEventListener('click', () => (this.skipping = true));
-    document.body.append(this.root, this.card, this.sub, this.caller, this.skipButton);
+    this.pic = el('div', 'cine-pic');
+    document.body.append(this.root, this.pic, this.card, this.sub, this.caller, this.skipButton);
+  }
+
+  /** Start downloading the film's pictures early, so they are ready when the film starts. */
+  preload(urls: string[]) {
+    for (const u of urls) new Image().src = u;
+  }
+
+  /**
+   * A full-screen picture with a slow camera move (push in, pull out or pan), and subtitle lines
+   * spoken over it. move: 'in' | 'out' | 'left' | 'right'.
+   */
+  async picture(url: string, move: 'in' | 'out' | 'left' | 'right', lines: [string, string][], hold = 0) {
+    if (this.skipping) return;
+    const img = el('div', 'cine-img ' + move);
+    img.style.backgroundImage = `url(${url})`;
+    this.pic.innerHTML = '';
+    this.pic.append(img);
+    this.pic.classList.add('on');
+    // The picture has its own black behind it: take the title card away.
+    this.card.style.transitionDuration = '0.9s';
+    this.card.classList.remove('on', 'black');
+    requestAnimationFrame(() => img.classList.add('go'));
+    await this.wait(0.9);
+    for (const [who, line] of lines) await this.say(who, line);
+    await this.wait(hold);
+    this.pic.classList.remove('on');
+    await this.wait(0.9);
   }
 
   /** True after Skip was pressed in the current scene. */
@@ -39,6 +68,7 @@ export class Cinema {
     this.sub.classList.remove('on');
     this.card.classList.remove('on', 'black');
     this.caller.classList.remove('on');
+    this.pic.classList.remove('on');
   }
 
   /** Wait (cut short by Skip). */

@@ -180,6 +180,8 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
   - **Real-looking vehicles:** cars (wagon, sedan, hatchback), Accra taxis (body colour with yellow front and back corners), trotros (van) and trucks are now textured models from the free PSX Style Cars pack (CC0), repainted in 24 paints by `scripts/vehicles`. About 300 to 480 triangles each, 600 KB in all, downloaded after the game starts. Pickups, buses, pragyas and okadas are still built in code.
   - **People wait for vehicles:** a walker or hawker whose path is blocked by a vehicle stands still (idle) until it passes, and steps aside if it comes right up to them. Check: 155 walkers and 88 vehicles, 0 people inside a vehicle over 12 seconds.
 
+- **Opening film with real-looking people (2026-10-25):** the opening's text cards are replaced by four film pictures made with ImagineArt (Grandma at dawn in the village, her hands folding the ₵50, the bus mate shouting "Accra!", arriving at Circle), each with a slow camera move, black bars and subtitles, then the 3D fly-down to Circle. 330 KB in all, downloaded only for the film. ImagineArt video clips need a paid plan, so the movement is made in the page.
+
 ## Waiting on the owner
 
 - Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.
