@@ -60,9 +60,12 @@ jobs:
       - name: Put it online
         working-directory: apps/web
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
+          # Remove any spaces or line breaks that came along when the secrets were pasted.
+          export CLOUDFLARE_API_TOKEN="$(printf '%s' "$TOKEN" | tr -d '[:space:]')"
+          export CLOUDFLARE_ACCOUNT_ID="$(printf '%s' "$ACCOUNT" | tr -d '[:space:]')"
           if [ "${{ github.event.inputs.target }}" = "live" ]; then
             npx wrangler deploy
             echo "Live: https://ghana-life-web.ghana-life-web.workers.dev" >> "$GITHUB_STEP_SUMMARY"
