@@ -81,6 +81,7 @@ function billboardFrame(): Part {
   ]);
 }
 
+const POSTERS = 8;
 // Posters for the game's own made-up brands (painted in code; no real brands in the city). These are
 // the in-world ad spaces of design brief 18.1: real advertisers' posters can replace them later.
 function poster(n: number): THREE.CanvasTexture {
@@ -90,10 +91,13 @@ function poster(n: number): THREE.CanvasTexture {
   const g = c.getContext('2d')!;
   const designs = [
     { bg: ['#0f6b3a', '#1c9b57'], big: 'SIKA MOBILE MONEY', small: 'Send money home in seconds', accent: '#f2c21a' },
-    { bg: ['#c2410c', '#f08a24'], big: 'AUNTIE AKOS KELEWELE', small: 'Hot and spicy, every evening', accent: '#fff3c4' },
-    { bg: ['#4a1d6e', '#7a3fb0'], big: 'VERSE FM', small: 'The sound of the city', accent: '#ffd25a' },
+    { bg: ['#c2410c', '#f08a24'], big: 'KELEWELE AT CIRCLE', small: 'Hot and spicy, every evening', accent: '#fff3c4' },
+    { bg: ['#4a1d6e', '#7a3fb0'], big: 'GHANAVERSE FM', small: 'The sound of the city · 24/7', accent: '#ffd25a' },
     { bg: ['#121a14', '#2a3a2e'], big: 'GHANAVERSE', small: 'Your Accra. Your story.', accent: '#e3a92b' },
-    { bg: ['#0b4f8a', '#2a86d1'], big: 'AKOS PURE WATER', small: 'Clean sachet water, ice cold', accent: '#ffffff' },
+    { bg: ['#0b4f8a', '#2a86d1'], big: 'COOL SACHET WATER', small: 'Clean water, ice cold', accent: '#ffffff' },
+    { bg: ['#f2efe6', '#d9d2c2'], big: 'YOUR AD HERE', small: 'Advertise in Ghanaverse from ₵35 a week', accent: '#c8442e', ink: '#121a14' },
+    { bg: ['#8e1b1b', '#c8442e'], big: 'GHANAVERSE NEWS', small: 'Tonight at 8 · the city’s biggest stories', accent: '#ffffff' },
+    { bg: ['#1f4f8a', '#121a14'], big: 'TONIGHT IN GHANAVERSE', small: 'Highlife night at Osu · free entry', accent: '#e3a92b' },
   ];
   const d = designs[n % designs.length];
   const grad = g.createLinearGradient(0, 0, 512, 256);
@@ -111,7 +115,7 @@ function poster(n: number): THREE.CanvasTexture {
   g.beginPath();
   g.arc(440, 96, 58, 0, Math.PI * 2);
   g.fill();
-  g.fillStyle = '#ffffff';
+  g.fillStyle = (d as { ink?: string }).ink ?? '#ffffff';
   g.font = '900 46px system-ui, sans-serif';
   g.fillText(d.big, 28, 108, 380);
   g.fillStyle = d.accent;
@@ -271,7 +275,7 @@ export class StreetLife {
     this.poles = make(powerPole(), false);
     this.boards = make(billboardFrame(), false);
     // Posters: one batch per design.
-    for (let n = 0; n < 5; n++) {
+    for (let n = 0; n < POSTERS; n++) {
       const mesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(8, 4).translate(0, 7.2, -0.02), new THREE.MeshStandardMaterial({ map: poster(n), roughness: 0.7 }), 40);
       mesh.count = 0;
       mesh.frustumCulled = false;
@@ -458,11 +462,18 @@ export class StreetLife {
               this.lastPole.set(road, [px, pz]);
             }
           }
-          if (road.kind !== 'minor_road' && Math.round(s / spacing) % 9 === 4 && hash(x, z * 3) < 0.6) {
-            // Billboards along the big roads, set back behind the pavement, facing the traffic.
-            const back = size.half + GUTTER + size.walk + 2.2;
-            const [bx, bz] = [x - dz * back * side, z + dx * back * side];
-            if (this.free(bx, bz, 2.8)) this.boards.all.push({ x: bx, z: bz, angle: facing, scale: 1, colour: Math.floor(hash(bx, bz) * 5) });
+          if (Math.round(s / spacing) % (road.kind === 'minor_road' ? 12 : 4) === 2) {
+            // Billboards all over the city (design brief 18.1): about every 65 m along the main roads,
+            // now and then on side streets, set back behind the pavement and facing the traffic.
+            // Tried at a few distances back, so one still fits where buildings are close.
+            for (const extra of [2.2, 3.6, 5.2]) {
+              const back = size.half + GUTTER + size.walk + extra;
+              const [bx, bz] = [x - dz * back * side, z + dx * back * side];
+              if (this.free(bx, bz, 2.4) && !this.boards.all.some((o) => Math.abs(o.x - bx) < 30 && Math.abs(o.z - bz) < 30)) {
+                this.boards.all.push({ x: bx, z: bz, angle: facing, scale: 1, colour: Math.floor(hash(bx, bz) * POSTERS) });
+                break;
+              }
+            }
           }
           if (road.kind !== 'minor_road' && Math.round(s / spacing) % 2 === 0) {
             // Street lights along the big roads, at the kerb.
@@ -600,10 +611,12 @@ export class StreetLife {
     }
     const r2 = this.opts.radiusM ** 2;
     let shadows = 0;
+    const boardR2 = Math.max(r2, 320 ** 2);
     for (const b of this.batches) {
       let n = 0;
       for (const s of b.all) {
-        if ((s.x - x) ** 2 + (s.z - z) ** 2 > r2 || n >= this.opts.props) continue;
+        const far = b === this.boards ? boardR2 : r2; // billboards are tall: seen from much further
+        if ((s.x - x) ** 2 + (s.z - z) ** 2 > far || n >= this.opts.props) continue;
         const y = (s as Spot & { y?: number }).y ?? 0;
         this.q.setFromAxisAngle(this.up, Math.PI - s.angle);
         this.m.compose(this.p.set(s.x, y, s.z), this.q, this.sc.setScalar(s.scale));
@@ -624,7 +637,7 @@ export class StreetLife {
     // Posters on the billboards near the player (each design is its own batch).
     const counts = this.posters.map(() => 0);
     for (const bd of this.boards.all) {
-      if ((bd.x - x) ** 2 + (bd.z - z) ** 2 > r2) continue;
+      if ((bd.x - x) ** 2 + (bd.z - z) ** 2 > boardR2) continue;
       const k = bd.colour % this.posters.length;
       if (counts[k] >= 40) continue;
       this.q.setFromAxisAngle(this.up, Math.PI - bd.angle);
@@ -744,6 +757,18 @@ export class StreetLife {
       found.push({ x: e.x, z: e.z, axis, arms: e.arms.slice(0, 4), half, phase: hash(e.x, e.z) * 36 });
     }
     this.junctions = found;
+  }
+
+  /** The billboard spot nearest a point (for the big screen at Circle). */
+  boardNear(x: number, z: number) {
+    let best: Spot | null = null;
+    for (const b of this.boards.all) if (!best || Math.hypot(b.x - x, b.z - z) < Math.hypot(best.x - x, best.z - z)) best = b;
+    return best;
+  }
+  /** Take a billboard away (its place is used by something else). */
+  removeBoard(b: Spot) {
+    this.boards.all = this.boards.all.filter((o) => o !== b);
+    this.lastRefresh = { x: Infinity, z: Infinity };
   }
 
   /** Is this point on a road? */

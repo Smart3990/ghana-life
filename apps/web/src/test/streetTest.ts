@@ -17,6 +17,7 @@ import { StreetLife } from '../game/streetLife';
 import type { Nearby } from '../game/streetScenes';
 import { Signals, lightFor } from '../game/signals';
 import { Flyovers } from '../game/flyovers';
+import { BigScreen } from '../game/bigScreen';
 import { box, merge, paint } from '../game/vehicles3d';
 import { SkyTraffic } from '../game/sky3d';
 import { StreetSound } from '../game/streetSound';
@@ -741,6 +742,14 @@ function step(player: Player, dt: number, t: number) {
   if (life) signals.junctions = life.junctions;
   signals.update(state.x, state.z, Date.now() / 1000);
   flyovers.update();
+  if (!bigScreen.isPlaced && life && performance.now() - startedAt > 4000) {
+    const spot = life.boardNear(0, 0); // the middle of Circle is the map's start point
+    if (spot && Math.hypot(spot.x, spot.z) < 260) {
+      life.removeBoard(spot);
+      bigScreen.place(spot.x, spot.z, spot.angle);
+    }
+  }
+  bigScreen.update(Date.now() / 1000);
   streetTraffic?.update(here[0], here[1], Date.now() / 1000, TRAFFIC_LANE_M, state);
   updateStats(dt);
   updateButtons();
@@ -1598,6 +1607,10 @@ function placeBubbles(now: number) {
   }
 }
 
+// The big screen at Circle (brief 17): put on the billboard spot nearest the middle of Circle.
+const bigScreen = new BigScreen();
+scene.add(bigScreen.group);
+
 // Flyovers built from the map's bridges.
 const flyovers = new Flyovers();
 scene.add(flyovers.group);
@@ -1662,7 +1675,7 @@ async function start() {
     streetTraffic.signals = signals;
     if (life) life.vehicleAt = vehicleAt;
     streetTraffic.onHoot = (x, z) => honk(Math.hypot(x - state.x, z - state.z), true);
-    if (debug) Object.assign(window, { __street: { state, sky, look, life, story, thief, signals, lightFor, flyovers, pinch, traffic: streetTraffic, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
+    if (debug) Object.assign(window, { __street: { state, sky, look, life, story, thief, signals, lightFor, flyovers, pinch, bigScreen, traffic: streetTraffic, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
   }
 
   document.getElementById('loading')!.remove();
