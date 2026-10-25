@@ -14,18 +14,18 @@ import type { Kind, Placed, Traffic } from './traffic';
 // scripts/vehicles. Each file has a "paint" part (repainted per vehicle) and a "fixed" part (glass,
 // lights, tyres). Until they have downloaded, the shapes built in code below are shown.
 // Batches: each kind, plus a second car model so the streets mix sedans and hatchbacks.
-type BatchKey = Kind | 'hatch' | 'motorking';
+type BatchKey = Kind | 'hatch' | 'motorking' | 'sprinter';
 const MODERN: Partial<Record<BatchKey, string>> = {
-  // Our own models shaped after the real ones at Circle (scripts/vehicles/build_ghana.py): the
-  // Corolla-type saloon (most cars and every taxi) and the Hiace-type trotro.
-  car: 'saloon',
-  hatch: 'hatch',
-  taxi: 'saloon',
-  suv: 'suv',
-  pickup: 'pickup',
-  trotro: 'trotro',
-  bus: 'bus',
-  // truck: the pack's truck is a tractor unit, not an Accra cargo truck; the one built in code stays.
+  // Our own models shaped after the real vehicles at Circle (scripts/vehicles/build_ghana.py).
+  car: 'saloon', // Corolla-type saloon
+  taxi: 'saloon', // ... as an Accra taxi
+  hatch: 'smallcar', // Picanto / Vitz-type small car
+  suv: 'suv', // RAV4-size SUV (Rgsdev pack)
+  pickup: 'pickup4x4', // Hilux-type double cab
+  trotro: 'trotro', // Hiace-type trotro
+  sprinter: 'sprinter', // Sprinter-type trotro
+  bus: 'citybus', // Metro-type city bus
+  truck: 'cargotruck', // Tata-type cargo truck
 };
 
 // Quantized model files store small whole numbers; turn them into ordinary metres.
@@ -51,12 +51,13 @@ function toFloat(g: THREE.BufferGeometry, m: THREE.Matrix4) {
 //  - taxis: the body colour with orange-yellow front and back corners (below the bonnet line);
 //  - trotros: white on top, a yellow stripe, and the lower body in the vehicle's colour (white or blue);
 //  - buses: the body colour (mostly Metro yellow) with a blue and red stripe along the side.
-function livery(base: THREE.MeshStandardMaterial, kind: 'taxi' | 'trotro' | 'bus') {
+function livery(base: THREE.MeshStandardMaterial, kind: 'taxi' | 'trotro' | 'sprinter' | 'bus') {
   const m = base.clone();
   const rule = {
     taxi: 'if (abs(vLocal.z) > 1.35 && vLocal.y < 0.88) diffuseColor.rgb = vec3(0.9, 0.55, 0.07);',
     trotro: 'if (vLocal.y > 1.0) diffuseColor.rgb = vec3(0.93, 0.92, 0.88); else if (vLocal.y > 0.86) diffuseColor.rgb = vec3(0.9, 0.68, 0.1);',
-    bus: 'if (vLocal.y > 0.86 && vLocal.y < 0.98) diffuseColor.rgb = vec3(0.12, 0.33, 0.66); else if (vLocal.y >= 0.98 && vLocal.y < 1.06) diffuseColor.rgb = vec3(0.75, 0.15, 0.12);',
+    sprinter: 'if (vLocal.y > 1.15) diffuseColor.rgb = vec3(0.93, 0.92, 0.88); else if (vLocal.y > 0.98) diffuseColor.rgb = vec3(0.9, 0.68, 0.1);',
+    bus: 'if (vLocal.y > 1.0 && vLocal.y < 1.12) diffuseColor.rgb = vec3(0.12, 0.33, 0.66); else if (vLocal.y >= 1.12 && vLocal.y < 1.22) diffuseColor.rgb = vec3(0.75, 0.15, 0.12);',
   }[kind];
   m.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader
@@ -82,7 +83,7 @@ function extras(key: BatchKey, paint: THREE.BufferGeometry): THREE.BufferGeometr
         for (const x of [-0.42, 0.42]) {
           if (layer === 2 && row === 0) continue;
           const shade = ['#8a6238', '#7a5531', '#94693c'][(layer + row) % 3];
-          crates.push(paintPart(box(0.8, 0.5, 0.62, x, 1.15 + layer * 0.52, -0.75 - row * 0.64), shade));
+          crates.push(paintPart(box(0.78, 0.5, 0.6, x, 1.32 + layer * 0.52, -1.0 - row * 0.62), shade));
         }
     return crates;
   }
@@ -440,10 +441,10 @@ export class StreetTraffic {
   ) {
     const paintMat = new THREE.MeshStandardMaterial({ roughness: 0.38, metalness: 0.25 });
     const fixedMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, metalness: 0.1 });
-    const models: Record<BatchKey, Model> = { car: car(false), hatch: car(false), motorking: motorKing(), taxi: car(true), trotro: trotro(), tricycle: pragya(), okada: okada(), bus: bus(), truck: truck(), pickup: pickup(), suv: suv() };
+    const models: Record<BatchKey, Model> = { car: car(false), hatch: car(false), sprinter: trotro(), motorking: motorKing(), taxi: car(true), trotro: trotro(), tricycle: pragya(), okada: okada(), bus: bus(), truck: truck(), pickup: pickup(), suv: suv() };
     this.batches = {} as typeof this.batches;
     for (const [kind, model] of Object.entries(models) as [BatchKey, Model][]) {
-      const look = kind === 'taxi' || kind === 'trotro' || kind === 'bus' ? livery(paintMat, kind) : paintMat;
+      const look = kind === 'taxi' || kind === 'trotro' || kind === 'sprinter' || kind === 'bus' ? livery(paintMat, kind) : paintMat;
       const body = new THREE.InstancedMesh(model.body, look, limit);
       const fixed = new THREE.InstancedMesh(model.fixed, fixedMat, limit);
       for (const mesh of [body, fixed]) {
@@ -618,12 +619,16 @@ export class StreetTraffic {
     // Forget vehicles that have gone.
     if (this.held.size > 4000) for (const id of [...this.held.keys()]) if (!before.has(id)) this.held.delete(id);
     this.boxes = local.filter((a) => !a.up).map((a) => ({ x: a.x, z: a.z, fx: a.fx, fz: a.fz, half: a.half, halfW: a.halfW }));
-    const counts: Record<BatchKey, number> = { car: 0, hatch: 0, motorking: 0, taxi: 0, trotro: 0, tricycle: 0, okada: 0, bus: 0, truck: 0, pickup: 0, suv: 0 };
+    const counts: Record<BatchKey, number> = { car: 0, hatch: 0, sprinter: 0, motorking: 0, taxi: 0, trotro: 0, tricycle: 0, okada: 0, bus: 0, truck: 0, pickup: 0, suv: 0 };
     let shadowCount = 0;
     for (const p of placed) {
       // Cars are a mix: about one in three is a small hatchback.
       // Tricycles: half carry passengers (pragya), half carry goods (motor king, painted orange or blue).
-      const key: BatchKey = p.v.kind === 'car' && p.v.id % 3 === 0 ? 'hatch' : p.v.kind === 'tricycle' && p.v.id % 2 === 0 ? 'motorking' : p.v.kind;
+      const key: BatchKey =
+        p.v.kind === 'car' && p.v.id % 3 === 0 ? 'hatch'
+        : p.v.kind === 'trotro' && p.v.id % 3 === 0 ? 'sprinter' // about a third of trotros are the longer Sprinter type
+        : p.v.kind === 'tricycle' && p.v.id % 2 === 0 ? 'motorking'
+        : p.v.kind;
       const b = this.batches[key];
       const i = counts[key]++;
       const [x, z] = this.toLocal(p.lon, p.lat);

@@ -14,6 +14,7 @@ COL = {
     'paint': (1, 1, 1), 'glass': (0.07, 0.09, 0.11), 'trim': (0.06, 0.06, 0.065), 'bumper': (0.2, 0.2, 0.21),
     'chrome': (0.72, 0.74, 0.76), 'head': (1.0, 0.97, 0.86), 'tail': (0.75, 0.05, 0.04), 'amber': (1.0, 0.55, 0.08),
     'tyre': (0.05, 0.05, 0.05), 'hub': (0.65, 0.67, 0.7), 'plate': (0.9, 0.88, 0.8), 'rack': (0.12, 0.12, 0.12),
+    'wood': (0.45, 0.3, 0.16), 'wooddark': (0.32, 0.2, 0.1), 'tarp': (0.42, 0.4, 0.34), 'bedliner': (0.1, 0.1, 0.1),
 }
 
 
@@ -285,6 +286,199 @@ def saloon():
     b.write('saloon')
 
 
+def windows(u, start, end, pillars, width=0.018):
+    if u < start or u > end:
+        return 'paint'
+    return 'paint' if any(abs(u - p) < width for p in pillars) else 'glass'
+
+
+def stations_with(base, pillars, width=0.018):
+    return sorted({round(x, 4) for x in base} | {round(p + d, 4) for p in pillars for d in (-width, width)})
+
+
+def boxy(w, low, belt, gt, top, r, a=0.985):
+    return [(w, low, 'side'), (w, belt, 'window'), (w * a, gt, 'side'), (w * a - r, top, 'roof'), (-w * a + r, top, 'side'),
+            (-w * a, gt, 'window'), (-w, belt, 'side'), (-w, low, 'bottom')]
+
+
+def lamps(b, L, W, head_z, tail_z, head_w=0.3, mirror_y=0.3, mirror_z=1.5):
+    y0, y1 = -L / 2, L / 2
+    for s in (1, -1):
+        b.box(s * (W / 2 - 0.25), y0 - 0.005, head_z, head_w, 0.03, 0.15, 'head')
+        b.box(s * (W / 2 - 0.08), y0 - 0.005, head_z - 0.15, 0.08, 0.03, 0.07, 'amber')
+        b.box(s * (W / 2 - 0.1), y1 + 0.005, tail_z, 0.16, 0.03, 0.3, 'tail')
+        b.box(s * (W / 2 + 0.06), y0 + mirror_y, mirror_z, 0.12, 0.05, 0.16, 'trim')
+
+
+def wheels(b, W, ys, r, w=0.2, arch=True):
+    for s in (1, -1):
+        for y in ys:
+            b.wheel(s * (W / 2 - 0.12), y, r, w)
+            if arch:
+                b.box(s * (W / 2 + 0.003), y, r * 1.5, 0.01, r * 2.4, r * 1.1, 'trim')
+
+
+# ---------- Sprinter-type trotro: longer, with a short sloping bonnet ----------
+def sprinter():
+    L, W, H = 6.0, 1.95, 2.6
+    b = Builder()
+    belt, gt = 1.2, 2.15
+    pillars = [0.3, 0.45, 0.6, 0.75, 0.9]
+    b.kind_at = lambda u, k: ('glass' if 0.1 < u < 0.2 else 'paint') if k == 'roof' else windows(u, 0.21, 0.95, pillars) if k == 'window' else 'paint'
+
+    def ring(u):
+        w = W / 2 * curve([(0, 0.88), (0.04, 0.96), (0.1, 1.0), (1, 1.0)], u)
+        top = curve([(0, 1.0), (0.1, 1.2), (0.2, H - 0.05), (0.24, H), (0.99, H), (1, H - 0.08)], u)
+        low = curve([(0, 0.36), (0.05, 0.32), (1, 0.34)], u)
+        if top < belt + 0.1:
+            return [(w, low, 'side'), (w, top - 0.08, 'side'), (w * 0.97, top - 0.02, 'side'), (w * 0.94, top, 'roof'), (-w * 0.94, top, 'side'),
+                    (-w * 0.97, top - 0.02, 'side'), (-w, top - 0.08, 'side'), (-w, low, 'bottom')]
+        return boxy(w, low, belt, min(gt, top - 0.12), top, 0.1)
+    b.body(L, stations_with([0, 0.02, 0.05, 0.1, 0.15, 0.2, 0.24, 0.27, 0.97, 1.0], pillars), ring)
+    lamps(b, L, W, 0.95, 1.1, mirror_y=1.0, mirror_z=1.75)
+    b.box(0, -L / 2 + 0.02, 0.78, 0.9, 0.04, 0.25, 'trim')  # grille
+    b.box(0, -L / 2 - 0.05, 0.45, W * 0.97, 0.1, 0.2, 'bumper')
+    b.box(0, L / 2 + 0.05, 0.45, W * 0.97, 0.1, 0.18, 'bumper')
+    b.box(0, L / 2 + 0.01, 0.68, 0.45, 0.02, 0.14, 'plate')
+    b.box(0, L / 2 + 0.006, 1.8, 1.5, 0.02, 0.6, 'glass')
+    b.box(W / 2 + 0.004, 0.2, 1.3, 0.01, 0.02, 1.6, 'trim')  # sliding door
+    b.box(W / 2 + 0.004, 1.15, 1.3, 0.01, 0.02, 1.6, 'trim')
+    wheels(b, W, [-L / 2 + 1.0, L / 2 - 1.25], 0.36)
+    b.write('sprinter')
+
+
+# ---------- City bus (Metro-type): long, flat front, big windows, two doors ----------
+def citybus():
+    L, W, H = 10.8, 2.5, 3.05
+    b = Builder()
+    belt, gt = 1.3, 2.6
+    pillars = [0.12, 0.25, 0.36, 0.47, 0.58, 0.69, 0.8, 0.91]
+    b.kind_at = lambda u, k: windows(u, 0.04, 0.97, pillars, 0.012) if k == 'window' else 'paint'
+    def ring(u):
+        w = W / 2
+        top = curve([(0, H - 0.1), (0.015, H), (0.985, H), (1, H - 0.1)], u)
+        return boxy(w, 0.35, belt, gt, top, 0.12, 0.99)
+    b.body(L, stations_with([0, 0.015, 0.04, 0.97, 0.985, 1.0], pillars, 0.012), ring)
+    y0, y1 = -L / 2, L / 2
+    b.box(0, y0 - 0.01, 2.0, W * 0.9, 0.03, 1.35, 'glass')  # windscreen
+    b.box(0, y0 - 0.015, 2.85, W * 0.8, 0.03, 0.22, 'trim')  # destination board
+    b.box(0, y1 + 0.01, 2.2, W * 0.75, 0.03, 0.8, 'glass')
+    lamps(b, L, W, 0.75, 0.9, head_w=0.34, mirror_y=0.15, mirror_z=2.4)
+    b.box(0, y0 - 0.06, 0.45, W, 0.12, 0.3, 'bumper')
+    b.box(0, y1 + 0.06, 0.45, W, 0.12, 0.3, 'bumper')
+    b.box(0, y1 + 0.02, 0.8, 0.5, 0.02, 0.15, 'plate')
+    for y in (-L / 2 + 1.2, 0.6):  # doors on the right
+        b.box(W / 2 + 0.005, y, 1.45, 0.01, 1.1, 2.1, 'glass')
+    wheels(b, W, [-L / 2 + 2.1, L / 2 - 2.4], 0.48, 0.28)
+    b.write('citybus')
+
+
+# ---------- Small hatchback (Picanto / Vitz-type) ----------
+def smallcar():
+    L, W, H = 3.6, 1.6, 1.48
+    b = Builder()
+    belt = 0.88
+    def kind_at(u, k):
+        if k == 'roof':
+            return 'glass' if 0.2 < u < 0.36 or 0.86 < u < 0.985 else 'paint'
+        if k == 'window':
+            return windows(u, 0.36, 0.86, [0.6])
+        return 'paint'
+    b.kind_at = kind_at
+    def ring(u):
+        w = W / 2 * curve([(0, 0.85), (0.05, 0.97), (0.15, 1.0), (0.95, 1.0), (1, 0.94)], u)
+        top = curve([(0, 0.7), (0.05, 0.8), (0.2, 0.9), (0.36, H), (0.85, H - 0.03), (0.985, 1.0), (1, 0.92)], u)
+        low = curve([(0, 0.26), (0.06, 0.2), (0.95, 0.2), (1, 0.28)], u)
+        if top <= belt + 0.05:
+            return [(w, low, 'side'), (w, top - 0.06, 'side'), (w * 0.95, top, 'roof'), (-w * 0.95, top, 'side'), (-w, top - 0.06, 'side'), (-w, low, 'bottom'), (-w, low, 'bottom'), (w, low, 'bottom')]
+        g = curve([(0.2, 1.0), (0.36, 0.84), (0.85, 0.84), (1, 0.9)], u)
+        return [(w, low, 'side'), (w, belt, 'window'), (w * g, top - 0.05, 'roof'), (w * g * 0.9, top, 'roof'), (-w * g * 0.9, top, 'side'),
+                (-w * g, top - 0.05, 'window'), (-w, belt, 'side'), (-w, low, 'bottom')]
+    b.body(L, [0, 0.02, 0.05, 0.12, 0.2, 0.26, 0.31, 0.36, 0.45, 0.58, 0.62, 0.75, 0.86, 0.92, 0.985, 1.0], ring)
+    lamps(b, L, W, 0.72, 0.95, head_w=0.28, mirror_y=1.0, mirror_z=0.98)
+    b.box(0, -L / 2 - 0.02, 0.36, W * 0.95, 0.06, 0.16, 'bumper')
+    b.box(0, L / 2 + 0.02, 0.4, W * 0.95, 0.06, 0.16, 'bumper')
+    b.box(0, L / 2 + 0.005, 0.6, 0.38, 0.02, 0.1, 'plate')
+    wheels(b, W, [-L / 2 + 0.72, L / 2 - 0.68], 0.28, 0.18)
+    b.write('smallcar')
+
+
+# ---------- Pickup (Hilux-type): double cab and an open bed ----------
+def pickup():
+    L, W, H = 5.3, 1.8, 1.8
+    b = Builder()
+    belt = 1.08
+    def kind_at(u, k):
+        if k == 'roof':
+            return 'glass' if 0.26 < u < 0.36 else 'paint'
+        if k == 'window':
+            return windows(u, 0.36, 0.6, [0.48])
+        return 'paint'
+    b.kind_at = kind_at
+    def ring(u):
+        w = W / 2 * curve([(0, 0.9), (0.05, 0.98), (0.1, 1.0), (1, 1.0)], u)
+        top = curve([(0, 0.95), (0.06, 1.05), (0.26, 1.12), (0.36, H), (0.6, H), (0.62, 1.05), (1, 1.05)], u)
+        low = curve([(0, 0.4), (0.05, 0.36), (1, 0.4)], u)
+        if top <= belt + 0.05:
+            return [(w, low, 'side'), (w, top - 0.06, 'side'), (w * 0.96, top, 'roof'), (-w * 0.96, top, 'side'), (-w, top - 0.06, 'side'), (-w, low, 'bottom'), (-w, low, 'bottom'), (w, low, 'bottom')]
+        g = curve([(0.26, 1.0), (0.36, 0.88), (0.6, 0.88)], u)
+        return [(w, low, 'side'), (w, belt, 'window'), (w * g, top - 0.05, 'roof'), (w * g * 0.92, top, 'roof'), (-w * g * 0.92, top, 'side'),
+                (-w * g, top - 0.05, 'window'), (-w, belt, 'side'), (-w, low, 'bottom')]
+    b.body(L, [0, 0.03, 0.06, 0.15, 0.26, 0.3, 0.36, 0.46, 0.5, 0.6, 0.62, 0.8, 1.0], ring)
+    # The open bed: a dark floor inset at the top of the back part.
+    b.box(0, (0.81 - 0.5) * L, 1.06, W * 0.86, L * 0.36, 0.02, 'bedliner')
+    lamps(b, L, W, 0.88, 0.85, head_w=0.32, mirror_y=1.45, mirror_z=1.3)
+    b.box(0, -L / 2 + 0.02, 0.78, 0.8, 0.04, 0.22, 'chrome')  # grille
+    b.box(0, -L / 2 - 0.05, 0.48, W * 0.98, 0.1, 0.2, 'bumper')
+    b.box(0, L / 2 + 0.04, 0.5, W * 0.98, 0.08, 0.14, 'bumper')
+    b.box(0, L / 2 + 0.005, 0.72, 0.45, 0.02, 0.13, 'plate')
+    wheels(b, W, [-L / 2 + 0.95, L / 2 - 1.1], 0.36, 0.22)
+    b.write('pickup4x4')
+
+
+# ---------- Cargo truck (Tata-type): flat cab and a wooden stake body ----------
+def truck():
+    L, W = 7.6, 2.3
+    b = Builder()
+    cab = 1.7
+    y0 = -L / 2
+    # Cab: box with a windscreen, a slightly lower roof line, doors.
+    b.box(0, y0 + cab / 2, 1.65, W, cab, 2.0, 'paint')
+    b.box(0, y0 + cab / 2, 2.72, W * 0.96, cab * 0.9, 0.14, 'paint')
+    b.box(0, y0 - 0.005, 2.0, W * 0.88, 0.02, 0.85, 'glass')
+    for s in (1, -1):
+        b.box(s * (W / 2 + 0.003), y0 + 0.7, 2.05, 0.01, 0.8, 0.6, 'glass')
+        b.box(s * (W / 2 + 0.1), y0 + 0.15, 2.0, 0.08, 0.06, 0.35, 'trim')
+    b.box(0, y0 - 0.01, 1.05, W * 0.6, 0.03, 0.4, 'trim')  # grille
+    for s in (1, -1):
+        b.box(s * 0.85, y0 - 0.01, 0.95, 0.3, 0.03, 0.18, 'head')
+    b.box(0, y0 - 0.08, 0.6, W, 0.14, 0.25, 'bumper')
+    # Chassis and the wooden cargo body with stake sides.
+    b.box(0, 0.6, 0.75, W * 0.5, L - cab - 0.2, 0.25, 'trim')
+    body_len = L - cab - 0.25
+    yc = y0 + cab + 0.15 + body_len / 2
+    b.box(0, yc, 1.0, W, body_len, 0.15, 'wooddark')
+    for s in (1, -1):
+        b.box(s * (W / 2 - 0.03), yc, 1.6, 0.06, body_len, 1.05, 'paint')  # painted side boards
+    b.box(0, yc + body_len / 2 - 0.03, 1.6, W, 0.06, 1.05, 'paint')
+    b.box(0, y0 + cab + 0.18, 1.85, W, 0.06, 1.55, 'wood')
+    # A load under a tarpaulin.
+    b.box(0, yc, 1.9, W * 0.92, body_len * 0.92, 1.4, 'tarp')
+    for s in (1, -1):
+        b.box(s * (W / 2 - 0.1), L / 2 + 0.01, 0.95, 0.2, 0.03, 0.12, 'tail')
+    b.box(0, L / 2 + 0.01, 0.95, 0.5, 0.02, 0.15, 'plate')
+    for s in (1, -1):
+        b.wheel(s * (W / 2 - 0.16), y0 + 1.05, 0.5, 0.28)
+        b.wheel(s * (W / 2 - 0.16), L / 2 - 1.3, 0.5, 0.28)
+        b.wheel(s * (W / 2 - 0.46), L / 2 - 1.3, 0.5, 0.28)
+    b.write('cargotruck')
+
+
 bpy.ops.wm.read_factory_settings(use_empty=True)
 trotro()
 saloon()
+sprinter()
+citybus()
+smallcar()
+pickup()
+truck()
