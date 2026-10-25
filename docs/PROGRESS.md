@@ -163,6 +163,18 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
   - Sika on this page is still the demo number; real money will come from the server.
   - **Done when:** on the phone, the map is at the top, the joystick is bottom left, the gold button shows RIDE beside the okada, GET OFF while riding, and SIT / GREET / DANCE at chairs, people and music; on a computer, E does the same.
 
+- **Story opening and fixes (2026-10-25, owner's playtest):**
+  - **Start screen** (brief 5.2, short version): "You are" (a woman / a man) and hometown (Ada, Ho, Kumasi, Tamale, Cape Coast, Koforidua, Surprise me); the title updates ("From Kumasi to Accra"). Remembered on the phone for next time.
+  - **Opening film made in the game** (`src/hud/cinema.ts`: black bars, title cards, subtitles, caller card, Skip): your hometown at dawn, Grandma's ₵50 and "Go and make us proud", the bus mate's "Accra! Accra!", then the camera comes down out of the sky over the real Accra map to Circle.
+  - **First story mission** (brief 7, steps 1 to 4): a boy in red snatches your bag (₵50 to ₵0); "Catch the thief!"; he weaves through the crowd and traffic and gets away; "Find the kelewele auntie" (gold marker and minimap dot); TALK opens a side-on film scene; she calls Uncle Kwame ("Stay there. I'm coming."). Then the free-roam goals start. `?nostory` skips it.
+  - **You can't walk or ride through things:** vehicles, buildings, kiosks, trees, poles and tanks are solid; a vehicle that moves into you pushes you aside; riding into something stops the okada with a buzz. Test: walking at a car for 8 s, 0 frames inside it.
+  - **No more floating cars:** vehicles are only drawn on streets drawn at ground level (the route data includes Circle's flyovers and slip roads, which looked like cars crossing open ground). Vehicles at crossings now wait for each other instead of driving through.
+  - **Fewer people and vehicles:** walkers 60 / 170 / 300 (was 110 / 320 / 560), vehicles 40 / 90 / 150 (was 70 / 150 / 260).
+  - **You start on the pavement**, not in the road.
+  - **Sound:** phones only allow sound after a finger lifts, so the sound now starts on any tap (and retries until it runs). The okada horn goes through the same sound and the mute button.
+  - **Buttons:** the bottom horn button is gone (it looked like a second volume button). RUN, JUMP and BRAKE carry a word and show only when useful.
+  - **Done when:** on the phone the film plays from the start (or Skip), the bag is snatched, you chase, find the auntie and hear Uncle Kwame; you cannot walk through cars or buildings; the street sound plays after the first tap.
+
 ## Waiting on the owner
 
 - Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.

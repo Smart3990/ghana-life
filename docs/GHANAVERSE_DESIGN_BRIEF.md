@@ -140,7 +140,7 @@ Players switch themes for their phone, menus and title cards in settings.
 - Top left: the round minimap inside a thin energy ring; beside it a small energy number (tap it for the full "You" card: energy, Vibe, Sika, heat stars) and the current goal.
 - Top right: sound, phone button, time and Sika.
 - Bottom left: the movement joystick (it rests there, and comes to your thumb anywhere on the left half).
-- Bottom right: sprint and jump on foot, brake and horn on the okada.
+- Bottom right, each only when it is useful and with a short word on it: RUN while you walk, JUMP on foot, BRAKE while the okada is moving (pulling the stick back brakes too). No horn button on phones (H on a keyboard).
 
 **The action button:** one gold button above sprint that changes with what is next to you: Ride, Get off, Greet, Chat (sellers), Sit (rest on a chop bar chair), Dance (where music plays), and later Enter, Buy and Work. It only shows when there is something to do. On computers it shows as a prompt with its key (E), and the round sprint, jump, brake and horn buttons are hidden because the keyboard does them.
 

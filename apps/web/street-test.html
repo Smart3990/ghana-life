@@ -88,7 +88,7 @@
       #look-zone { position: fixed; right: 0; top: 0; bottom: 0; width: 50%; z-index: 3; touch-action: none; cursor: grab; }
       html:not(.touch) #look-zone { width: 100%; }
 
-      /* Bottom right, in the thumb's arc: sprint and jump (brake and horn on the okada), and above them
+      /* Bottom right, in the thumb's arc: run and jump (brake on the okada), each shown only when useful; above them
          the gold ACTION button that changes with what is next to you: Ride, Get off, Greet, Sit, Dance... */
       .act { position: fixed; border-radius: 50%; border: 2px solid var(--edge); background: var(--card); color: var(--text); padding: 0; display: grid; place-items: center; z-index: 6; touch-action: none; transition: transform .12s, opacity .2s, background .12s; }
       .act svg { width: 52%; height: 52%; }
@@ -96,7 +96,9 @@
       .act.big { width: 76px; height: 76px; right: var(--safe-r); bottom: calc(var(--safe-b) + 18px); }
       .act.mid { width: 58px; height: 58px; }
       .act.off { opacity: .35; }
-      #btn-jump, #btn-horn { right: calc(var(--safe-r) + 90px); bottom: calc(var(--safe-b) + 10px); }
+      .act > span { position: absolute; bottom: 7px; left: 0; right: 0; text-align: center; font: 900 9.5px system-ui, sans-serif; letter-spacing: .8px; }
+      .act.big svg, .act.mid svg { margin-top: -9px; width: 46%; height: 46%; }
+      #btn-jump { right: calc(var(--safe-r) + 90px); bottom: calc(var(--safe-b) + 10px); }
       #btn-act { width: 70px; height: 70px; right: calc(var(--safe-r) + 64px); bottom: calc(var(--safe-b) + 104px); border: 2.5px solid var(--gold); background: rgba(227,169,43,.9); color: var(--night); animation: pop .3s ease-out; }
       #btn-act svg { width: 46%; height: 46%; margin-top: -10px; }
       #btn-act span { position: absolute; bottom: 9px; left: 0; right: 0; text-align: center; font: 900 10px system-ui, sans-serif; letter-spacing: .8px; }
@@ -104,7 +106,7 @@
       @keyframes pop { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
       .hidden { display: none !important; }
       body:not(.riding) .ride-only, body.riding .walk-only { display: none !important; }
-      /* Computers: the keyboard does sprint, jump, brake and horn, so those buttons go; the action
+      /* Computers: the keyboard does run, jump and brake, so those buttons go; the action
          button stays as a prompt above the key help, with its key (E) on it. Bigger map on big screens. */
       html:not(.touch) .act:not(#btn-act) { display: none !important; }
       html:not(.touch) #btn-act { right: auto; left: 50%; margin-left: -35px; bottom: calc(var(--safe-b) + 64px); cursor: pointer; }
@@ -142,6 +144,43 @@
       #turn { display: none; z-index: 30; }
       @media (orientation: portrait) { html.touch #turn { display: grid; } }
 
+
+      /* Film scenes (made in the game): black bars, title cards, subtitles, caller card, Skip */
+      .cine-bars i { position: fixed; left: 0; right: 0; height: 0; background: #000; z-index: 11; transition: height .6s ease; }
+      .cine-bars i:first-child { top: 0; }
+      .cine-bars i:last-child { bottom: 0; }
+      body.cine .cine-bars i { height: 11vh; }
+      body.cine #radar, body.cine #hud-top, body.cine .act, body.cine #stick, body.cine #help, body.cine #me, body.cine #goal, body.cine #debug { opacity: 0; pointer-events: none; }
+      #radar, #hud-top, .act, #stick { transition: opacity .4s; }
+      .cine-card { position: fixed; inset: 0; z-index: 12; display: grid; place-items: center; background: #000; opacity: 0; pointer-events: none; transition: opacity .7s; text-align: center; padding: 24px; }
+      .cine-card.on.black { opacity: 1; }
+      .cine-text { opacity: 0; transform: translateY(8px); transition: opacity .7s, transform .7s; }
+      .cine-text.in { opacity: 1; transform: none; }
+      .cine-text .big { font-weight: 900; font-size: clamp(22px, 5.5vh, 40px); letter-spacing: 1.5px; color: var(--text); }
+      .cine-text .small { margin-top: 10px; font-size: clamp(14px, 3.4vh, 20px); color: var(--gold); font-style: italic; }
+      .cine-sub { position: fixed; left: 50%; bottom: calc(11vh + 12px); transform: translateX(-50%); max-width: min(720px, 86vw); text-align: center; z-index: 13; font-size: clamp(14px, 3.6vh, 19px); font-weight: 700; color: #fff; text-shadow: 0 2px 4px #000, 0 0 12px rgba(0,0,0,.8); opacity: 0; transition: opacity .3s; pointer-events: none; }
+      .cine-sub.on { opacity: 1; }
+      .cine-sub b { color: var(--gold); margin-right: 8px; letter-spacing: 1px; font-size: .85em; }
+      .cine-caller { position: fixed; left: 50%; top: calc(11vh + 10px); transform: translate(-50%, -12px); display: flex; gap: 10px; align-items: center; background: rgba(18,26,20,.92); border: 1.5px solid var(--gold); border-radius: 16px; padding: 8px 16px 8px 8px; z-index: 13; opacity: 0; transition: opacity .3s, transform .3s; }
+      .cine-caller.on { opacity: 1; transform: translate(-50%, 0); }
+      .cine-caller span { width: 36px; height: 36px; border-radius: 50%; background: var(--green); display: grid; place-items: center; font-weight: 900; animation: ring 1s infinite; }
+      .cine-caller small { display: block; color: var(--soft); font-size: 11px; }
+      @keyframes ring { 50% { box-shadow: 0 0 0 6px rgba(47,143,87,.35); } }
+      .cine-skip { position: fixed; right: var(--safe-r); bottom: calc(var(--safe-b) + 6px); z-index: 14; display: none; background: rgba(0,0,0,.4); color: var(--text); border: 1px solid var(--edge); border-radius: 999px; padding: 7px 14px; font: 800 12px system-ui, sans-serif; letter-spacing: 1px; }
+      body.cine .cine-skip { display: block; }
+
+      /* Start screen: who you are and your hometown */
+      .start { position: fixed; inset: 0; z-index: 25; background: var(--night); display: grid; place-items: center; overflow: auto; padding: 16px; }
+      .start::before { content: ''; position: fixed; left: 0; right: 0; top: 0; height: 4px; background: repeating-linear-gradient(90deg, var(--gold) 0 18px, var(--night) 18px 22px, var(--red) 22px 34px, var(--night) 34px 38px, var(--green) 38px 50px, var(--night) 50px 54px, var(--blue) 54px 60px, var(--night) 60px 64px); }
+      .start-in { text-align: center; max-width: 640px; }
+      .start .brand { font-size: 18px; }
+      .start .bar { margin: 8px auto 10px; }
+      .start-title { margin: 0 0 12px; font-size: clamp(22px, 6vh, 34px); color: var(--text); }
+      .start-q { color: var(--soft); font-size: 12px; letter-spacing: 2px; text-transform: uppercase; margin: 8px 0 6px; }
+      .start-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 7px; }
+      .start-row button { background: transparent; color: var(--text); border: 1.5px solid var(--edge); border-radius: 999px; padding: 8px 15px; font: 700 14px system-ui, sans-serif; cursor: pointer; }
+      .start-row button.on { background: var(--gold); border-color: var(--gold); color: var(--night); }
+      .start-go { border: 0; font-size: 15px; cursor: pointer; margin-top: 16px; }
       #loading { position: fixed; inset: 0; display: grid; place-items: center; background: var(--night); z-index: 10; font-weight: 700; color: var(--gold); letter-spacing: 2px; }
     </style>
   </head>
@@ -182,18 +221,15 @@
 
     <!-- On foot -->
     <button id="btn-sprint" class="act big walk-only" type="button" aria-label="Sprint (hold)">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="14.5" cy="4" r="2" fill="currentColor" stroke="none"/><path d="M9 21l3-6 3 2v4"/><path d="M12 15l1-6"/><path d="M6.5 10.5l3-2.5 3.5 1 2.5 3.5 3 .5"/><path d="M13 9l-4 5H5"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="14.5" cy="4" r="2" fill="currentColor" stroke="none"/><path d="M9 21l3-6 3 2v4"/><path d="M12 15l1-6"/><path d="M6.5 10.5l3-2.5 3.5 1 2.5 3.5 3 .5"/><path d="M13 9l-4 5H5"/></svg><span>RUN</span>
     </button>
     <button id="btn-jump" class="act mid walk-only" type="button" aria-label="Jump">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4"/><path d="M7 9l5-5 5 5"/><path d="M5 20h14"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4"/><path d="M7 9l5-5 5 5"/><path d="M5 20h14"/></svg><span>JUMP</span>
     </button>
 
     <!-- On the okada -->
     <button id="btn-brake" class="act big ride-only" type="button" aria-label="Brake (hold)">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 7l6 5 6-5"/><path d="M6 13l6 5 6-5"/></svg>
-    </button>
-    <button id="btn-horn" class="act mid ride-only" type="button" aria-label="Horn">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v4h3l6 4V6L7 10z" fill="currentColor" fill-opacity=".25"/><path d="M16.5 9.5a3.5 3.5 0 010 5"/><path d="M19 7a7 7 0 010 10"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 7l6 5 6-5"/><path d="M6 13l6 5 6-5"/></svg><span>BRAKE</span>
     </button>
 
     <p id="help"><span class="keys"><b>W A S D</b> move · <b>Shift</b> sprint · <b>Space</b> jump · <b>E</b> action (ride, greet, sit, dance) · <b>H</b> horn · <b>Tab</b> your details · drag to look around · controllers work too</span><span class="touchtip">Left side: move · right side: look around</span></p>

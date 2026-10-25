@@ -218,6 +218,11 @@ export class StreetScenes {
     return best;
   }
 
+  /** Where the sellers are; umbrella-stall sellers (food) are marked, for the story's kelewele auntie. */
+  sellers(): { x: number; z: number; face: number; food: boolean }[] {
+    return this.members.filter((m) => m.cycle?.includes('sell')).map((m) => ({ x: m.x, z: m.z, face: m.face, food: !!m.cycle?.includes('pick') }));
+  }
+
   /** The player greets someone: they answer with a word and a nod or a wave. */
   answer(who: number, t: number, seller: boolean) {
     const m = this.members[who];

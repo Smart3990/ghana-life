@@ -68,6 +68,11 @@ export function merge(parts: Part[]): Part {
 // Vehicle lengths (metres), for keeping a gap.
 const KIND_LENGTH: Record<Kind, number> = { car: 4.5, taxi: 4.5, trotro: 5.7, tricycle: 3, okada: 2, bus: 11, truck: 8, pickup: 5.2, suv: 4.8 };
 
+// Widths (metres), for crossings and for not walking through vehicles.
+const KIND_WIDTH: Record<Kind, number> = { car: 1.8, taxi: 1.8, trotro: 2.0, tricycle: 1.4, okada: 0.8, bus: 2.5, truck: 2.4, pickup: 1.9, suv: 1.9 };
+
+export type VehicleBox = { x: number; z: number; fx: number; fz: number; half: number; halfW: number };
+
 const GLASS = '#1c252d';
 const TRIM = '#2a2b2d';
 const HEAD = '#fff4cf';
@@ -348,6 +353,8 @@ export class StreetTraffic {
   /** Puts the nearest vehicles in place for the moment t (seconds of shared time). */
   /** The vehicles drawn last frame (for tests). */
   placed: Placed[] = [];
+  /** Where each drawn vehicle's body is (centre, facing, half length and half width), for collisions. */
+  boxes: VehicleBox[] = [];
 
   // How far (metres) each vehicle near the player is held back behind its timetable: it stops for
   // the player and keeps its distance from the vehicle in front, then slowly catches up again.
@@ -355,13 +362,21 @@ export class StreetTraffic {
   private blockedFor = new Map<number, number>();
   private lastS = new Map<number, number>();
   private lastT = 0;
+  /** Is this point on a street drawn at ground level? (Set by the street test.) */
+  onStreet: ((x: number, z: number) => boolean) | null = null;
   /** Called when a driver hoots at the player (x, z in metres). */
   onHoot: ((x: number, z: number) => void) | null = null;
 
   update(lon: number, lat: number, t: number, lane: number, player?: { x: number; z: number }) {
     const dt = this.lastT ? Math.min(0.1, Math.max(0, t - this.lastT)) : 0;
     this.lastT = t;
-    const placed: Placed[] = this.traffic.near(lon, lat, t, this.radiusM, this.limit, lane);
+    // Only vehicles on streets we draw: the route data also has flyovers and slip roads, which at
+    // street level would look like cars floating across open ground.
+    const placed: Placed[] = this.traffic.near(lon, lat, t, this.radiusM, this.limit, lane).filter((p) => {
+      if (!this.onStreet) return true;
+      const [x, z] = this.toLocal(p.lon, p.lat);
+      return this.onStreet(x, z);
+    });
     this.placed = placed;
     // Front of each route first, so the ones behind can keep their distance.
     const byRoute = new Map<number, Placed[]>();
@@ -389,7 +404,7 @@ export class StreetTraffic {
           const fz = -Math.cos(pos.heading);
           const ahead = (player.x - x) * fx + (player.z - z) * fz;
           const side = Math.abs((player.x - x) * -fz + (player.z - z) * fx);
-          if (ahead > half && ahead < half + 9 && side < 1.7) stopped = true;
+          if (ahead > -half && ahead < half + 9 && side < 1.7) stopped = true;
         }
         // Stopped: stay exactly where it was last frame, however long the frame took.
         if (stopped) held = Math.max(held, p.s - (this.lastS.get(p.v.id) ?? p.s - held));
@@ -421,20 +436,37 @@ export class StreetTraffic {
     // of it in its lane, whichever route that one is on (two passes settle short queues).
     const local = placed.map((p) => {
       const [x, z] = this.toLocal(p.lon, p.lat);
-      return { p, x, z, fx: Math.sin(p.heading), fz: -Math.cos(p.heading), half: KIND_LENGTH[p.v.kind] / 2 };
+      return { p, x, z, fx: Math.sin(p.heading), fz: -Math.cos(p.heading), half: KIND_LENGTH[p.v.kind] / 2, halfW: KIND_WIDTH[p.v.kind] / 2 };
     });
+    type L = (typeof local)[number];
+    // Is b in the way of a, just in front of it? (Works for any angle, so crossings are handled too.)
+    const inPath = (a: L, b: L) => {
+      const dx = b.x - a.x;
+      const dz = b.z - a.z;
+      const ahead = dx * a.fx + dz * a.fz;
+      if (ahead <= 0) return 0;
+      const side = Math.abs(dx * -a.fz + dz * a.fx);
+      const dot = Math.abs(a.fx * b.fx + a.fz * b.fz);
+      const cross = Math.sqrt(Math.max(0, 1 - dot * dot));
+      const across = b.half * cross + b.halfW * dot; // how far b reaches sideways from a's point of view
+      const along = b.half * dot + b.halfW * cross; // and along a's direction
+      if (side > a.halfW + across + 0.25) return 0;
+      const need = a.half + along + 1.5;
+      return ahead < need ? need - ahead : 0;
+    };
     for (let pass = 0; pass < 2; pass++) {
       for (const a of local) {
         let push = 0;
         for (const b of local) {
-          if (a === b || a.fx * b.fx + a.fz * b.fz < 0.7) continue;
-          const dx = b.x - a.x;
-          const dz = b.z - a.z;
-          const ahead = dx * a.fx + dz * a.fz;
-          if (ahead <= 0 || Math.abs(dx * -a.fz + dz * a.fx) > 1.3) continue;
-          const need = a.half + b.half + 1.5;
-          // The one further along its own route (or the lower number) goes first.
-          if (ahead < need) push = Math.max(push, need - ahead);
+          if (a === b || Math.abs(b.x - a.x) > 16 || Math.abs(b.z - a.z) > 16) continue;
+          const dot = a.fx * b.fx + a.fz * b.fz;
+          if (dot < -0.7) continue; // oncoming traffic is in the other lanes
+          const need = inPath(a, b);
+          if (!need) continue;
+          // Same direction: the one behind waits. At a crossing, whoever has the other in front of
+          // them waits; if both do, the lower number goes first, so nobody is stuck for ever.
+          if (dot < 0.7 && inPath(b, a) && a.p.v.id < b.p.v.id) continue;
+          push = Math.max(push, need);
         }
         if (push > 0.05) {
           const held = (this.held.get(a.p.v.id) ?? 0) + push;
@@ -450,6 +482,7 @@ export class StreetTraffic {
         }
       }
     }
+    this.boxes = local.map((a) => ({ x: a.x, z: a.z, fx: a.fx, fz: a.fz, half: a.half, halfW: a.halfW }));
     const counts: Record<Kind, number> = { car: 0, taxi: 0, trotro: 0, tricycle: 0, okada: 0, bus: 0, truck: 0, pickup: 0, suv: 0 };
     let shadowCount = 0;
     for (const p of placed) {

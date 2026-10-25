@@ -31,17 +31,31 @@ export class StreetSound {
   muted = false;
 
   constructor() {
+    // Phones only let a page make sound after a real tap (the finger lifting counts, not touching
+    // down), so try on every kind of tap until the sound is running.
     const start = () => {
-      if (this.ctx) return;
       try {
-        this.ctx = new AudioContext();
-        this.build();
+        if (!this.ctx) {
+          this.ctx = new AudioContext();
+          this.build();
+        }
+        if (this.ctx.state !== 'running') void this.ctx.resume();
       } catch {
         this.ctx = null; // no sound on this device
       }
+      if (this.ctx?.state === 'running') for (const ev of EVENTS) window.removeEventListener(ev, start, true);
     };
-    window.addEventListener('pointerdown', start, { once: true });
-    window.addEventListener('keydown', start, { once: true });
+    const EVENTS = ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown'];
+    for (const ev of EVENTS) window.addEventListener(ev, start, true);
+  }
+
+  /** The sound system, once it has started (for one-off sounds such as horns). */
+  get context(): AudioContext | null {
+    return this.ctx;
+  }
+  /** Where one-off sounds go (respects the mute button). */
+  get output(): AudioNode | null {
+    return this.ctx ? this.master : null;
   }
 
   setMuted(muted: boolean) {

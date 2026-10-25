@@ -489,8 +489,55 @@ export class StreetLife {
       if (b.mesh.instanceColor) b.mesh.instanceColor.needsUpdate = true;
     }
     this.propShadows = shadows;
+    // The solid things near the player: you cannot walk or ride through them.
+    this.solids = [];
+    const near = (list: Spot[], r: number, box = false) => {
+      for (const s of list) if (Math.abs(s.x - x) < 70 && Math.abs(s.z - z) < 70) this.solids.push({ x: s.x, z: s.z, r: r * s.scale, angle: s.angle, box });
+    };
+    near(this.kiosks.all, 1.25, true);
+    near(this.trees.all, 0.3);
+    near(this.palms.all, 0.25);
+    near(this.lights.all, 0.12);
+    near(this.tanks.all, 0.6);
+    near(this.umbrellas.all, 0.45);
   }
   private propShadows = 0;
+  private solids: { x: number; z: number; r: number; angle: number; box: boolean }[] = [];
+
+  /** Is there a kiosk, tree, pole or tank at this point (with room around it)? */
+  solid(x: number, z: number, room: number) {
+    for (const o of this.solids) {
+      const dx = x - o.x;
+      const dz = z - o.z;
+      if (Math.abs(dx) > 3 || Math.abs(dz) > 3) continue;
+      if (o.box) {
+        // The container is a square turned to face the street.
+        const c = Math.cos(o.angle);
+        const sn = Math.sin(o.angle);
+        if (Math.abs(dx * c + dz * sn) < o.r + room && Math.abs(-dx * sn + dz * c) < o.r + room) return true;
+      } else if (dx * dx + dz * dz < (o.r + room) ** 2) return true;
+    }
+    return false;
+  }
+
+  /** The nearest spot on a pavement (off the road, clear of buildings and kiosks), for placing the player. */
+  pavementNear(x: number, z: number, clear = 0.6): { x: number; z: number } | null {
+    for (let r = 0; r <= 40; r += 1.5) {
+      const steps = Math.max(1, Math.round(r * 2));
+      for (let i = 0; i < steps; i++) {
+        const a = (i / steps) * Math.PI * 2;
+        const px = x + Math.cos(a) * r;
+        const pz = z + Math.sin(a) * r;
+        if (!this.onRoad(px, pz, clear) && !this.blocked(px, pz, 0.6) && !this.solid(px, pz, 0.5)) return { x: px, z: pz };
+      }
+    }
+    return null;
+  }
+
+  /** Is this point on a road? */
+  roadAt(x: number, z: number, margin = 0) {
+    return this.onRoad(x, z, margin);
+  }
 
   // Picks a pavement near the player, longer ones more often (so people spread evenly).
   private pickWalkway(r: number) {
