@@ -17,6 +17,8 @@ export class Flyovers {
   private mesh: THREE.Mesh | null = null;
   private material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0, side: THREE.DoubleSide });
   private dirty = false;
+  private bannerMat = new THREE.MeshStandardMaterial({ map: bannerTexture(), roughness: 0.6, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 });
+  private banners: THREE.Mesh | null = null;
   private seen = new Set<string>();
 
   add(lines: Line[]) {
@@ -44,6 +46,9 @@ export class Flyovers {
       this.mesh.geometry.dispose();
     }
     const parts: THREE.BufferGeometry[] = [];
+    const bannerPos: number[] = [];
+    const bannerUv: number[] = [];
+    let bannerCount = 0;
     // An end of a bridge piece is "joined" if another bridge piece starts or ends there (tile borders
     // and junctions on the deck); a free end is where the flyover comes down to the ground.
     const ends: [number, number][] = [];
@@ -71,6 +76,33 @@ export class Flyovers {
         const h1 = height(cum[i]);
         const h2 = height(cum[i + 1]);
         parts.push(deckPiece(x1, z1, h1, x2, z2, h2, half));
+        // Long banners along the side of the deck on high, straight stretches (as on Circle's flyovers).
+        if (len > 22 && Math.min(h1, h2) > 5.5 && bannerCount < 40 && (i + Math.round(x1)) % 2 === 0) {
+          bannerCount++;
+          const ux = (x2 - x1) / len;
+          const uz = (z2 - z1) / len;
+          const ax = -uz;
+          const az = ux;
+          const bl = Math.min(18, len - 4);
+          const m0 = (len - bl) / 2;
+          for (const side of [1, -1]) {
+            const o = half + 0.02;
+            const a = [x1 + ux * m0 + ax * o * side, z1 + uz * m0 + az * o * side];
+            const b = [x1 + ux * (m0 + bl) + ax * o * side, z1 + uz * (m0 + bl) + az * o * side];
+            const ha = h1 + ((h2 - h1) * m0) / len;
+            const hb = h1 + ((h2 - h1) * (m0 + bl)) / len;
+            const row = (bannerCount + (side > 0 ? 0 : 1)) % 3;
+            const v0 = row / 3;
+            const v1 = (row + 1) / 3;
+            // From outside, the text reads left to right.
+            const [u0, u1] = side > 0 ? [1, 0] : [0, 1];
+            const quad = [[a[0], ha - 1.0, a[1], u0, v0], [b[0], hb - 1.0, b[1], u1, v0], [b[0], hb + 0.85, b[1], u1, v1], [a[0], ha + 0.85, a[1], u0, v1]];
+            for (const k of [0, 1, 2, 0, 2, 3]) {
+              bannerPos.push(quad[k][0], quad[k][1], quad[k][2]);
+              bannerUv.push(quad[k][3], quad[k][4]);
+            }
+          }
+        }
         // Pillars under the high parts.
         for (let s = Math.ceil(cum[i] / PILLAR_EVERY) * PILLAR_EVERY; s < cum[i + 1]; s += PILLAR_EVERY) {
           const k = (s - cum[i]) / len;
@@ -83,12 +115,53 @@ export class Flyovers {
         }
       }
     }
+    if (this.banners) {
+      this.group.remove(this.banners);
+      this.banners.geometry.dispose();
+      this.banners = null;
+    }
+    if (bannerPos.length) {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(bannerPos, 3));
+      g.setAttribute('uv', new THREE.Float32BufferAttribute(bannerUv, 2));
+      g.computeVertexNormals();
+      this.banners = new THREE.Mesh(g, this.bannerMat);
+      this.group.add(this.banners);
+    }
     if (!parts.length) return;
     this.mesh = new THREE.Mesh(merge(parts), this.material);
     this.mesh.castShadow = true;
     this.mesh.receiveShadow = true;
     this.group.add(this.mesh);
   }
+}
+
+// Three long banners (one per row of the picture), the game's own placeholder adverts.
+function bannerTexture() {
+  const c = document.createElement('canvas');
+  c.width = 2048;
+  c.height = 3 * 200;
+  const g = c.getContext('2d')!;
+  const rows = [
+    { bg: '#f2efe6', text: 'NO FEES. NO STRESS.  SIKA MOBILE MONEY', ink: '#0f6b3a', accent: '#f2c21a' },
+    { bg: '#121a14', text: 'GHANAVERSE FM 98.5  ·  THE SOUND OF THE CITY', ink: '#e3a92b', accent: '#c8442e' },
+    { bg: '#c8442e', text: 'YOUR AD HERE  ·  ADVERTISE IN GHANAVERSE', ink: '#ffffff', accent: '#121a14' },
+  ];
+  rows.forEach((r, i) => {
+    const y = (2 - i) * 200; // row 0 at the bottom of the texture
+    g.fillStyle = r.bg;
+    g.fillRect(0, y, 2048, 200);
+    g.fillStyle = r.accent;
+    g.fillRect(0, y, 2048, 16);
+    g.fillRect(0, y + 184, 2048, 16);
+    g.fillStyle = r.ink;
+    g.font = '900 110px system-ui, sans-serif';
+    g.fillText(r.text, 60, y + 140, 1930);
+  });
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
 }
 
 export function deckHeightAt(lines: Line[], x: number, z: number) {

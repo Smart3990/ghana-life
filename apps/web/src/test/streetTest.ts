@@ -18,6 +18,7 @@ import type { Nearby } from '../game/streetScenes';
 import { Signals, lightFor } from '../game/signals';
 import { Flyovers } from '../game/flyovers';
 import { BigScreen } from '../game/bigScreen';
+import { RoadSigns } from '../game/roadSigns';
 import { box, merge, paint } from '../game/vehicles3d';
 import { SkyTraffic } from '../game/sky3d';
 import { StreetSound } from '../game/streetSound';
@@ -62,6 +63,13 @@ const PLACES: { name: string; at: [number, number] }[] = [
   { name: 'Makola', at: [-0.2069, 5.5481] },
   { name: 'Osu', at: [-0.1812, 5.5566] },
   { name: 'Kaneshie', at: [-0.2365, 5.5665] },
+  { name: 'Tesano', at: [-0.231, 5.597] },
+  { name: 'Alajo', at: [-0.216, 5.592] },
+  { name: 'Achimota', at: [-0.229, 5.615] },
+  { name: 'Lapaz', at: [-0.251, 5.608] },
+  { name: 'Abossey Okai', at: [-0.238, 5.559] },
+  { name: 'Odorkor', at: [-0.27, 5.572] },
+  { name: 'Dzorwulu', at: [-0.201, 5.608] },
 ];
 
 const params = new URLSearchParams(location.search);
@@ -749,7 +757,21 @@ function step(player: Player, dt: number, t: number) {
       bigScreen.place(spot.x, spot.z, spot.angle);
     }
   }
-  bigScreen.update(Date.now() / 1000);
+  const screenEvery = tier === 'light' ? 0.25 : 0.1;
+  bigScreen.update(Date.now() / 1000, state.x, state.z, screenEvery);
+  if (life && bigScreen.isPlaced && moreScreens.length < 5 && ++screenCheck % 90 === 0) {
+    const all = [bigScreen, ...moreScreens];
+    const spot = life.boardsNear(state.x, state.z, 180).find((b) => all.every((sc) => Math.hypot(sc.group.position.x - b.x, sc.group.position.z - b.z) > 380));
+    if (spot) {
+      const sc = new BigScreen(moreScreens.length + 1);
+      scene.add(sc.group);
+      life.removeBoard(spot);
+      sc.place(spot.x, spot.z, spot.angle);
+      moreScreens.push(sc);
+    }
+  }
+  for (const sc of moreScreens) sc.update(Date.now() / 1000, state.x, state.z, screenEvery);
+  if (life) roadSigns.update(state.x, state.z, life.namePlates, life.junctions);
   streetTraffic?.update(here[0], here[1], Date.now() / 1000, TRAFFIC_LANE_M, state);
   updateStats(dt);
   updateButtons();
@@ -1607,9 +1629,16 @@ function placeBubbles(now: number) {
   }
 }
 
+// Street-name plates and green direction signs to the nearby areas.
+const roadSigns = new RoadSigns(PLACES.map((p) => ({ name: p.name, x: (p.at[0] - START[0]) * M_LON, z: (START[1] - p.at[1]) * M_LAT })));
+scene.add(roadSigns.group);
+
 // The big screen at Circle (brief 17): put on the billboard spot nearest the middle of Circle.
-const bigScreen = new BigScreen();
+const bigScreen = new BigScreen(0);
 scene.add(bigScreen.group);
+// More LED screens along the main roads, each showing the pages at a different moment.
+const moreScreens: BigScreen[] = [];
+let screenCheck = 0;
 
 // Flyovers built from the map's bridges.
 const flyovers = new Flyovers();
@@ -1675,7 +1704,7 @@ async function start() {
     streetTraffic.signals = signals;
     if (life) life.vehicleAt = vehicleAt;
     streetTraffic.onHoot = (x, z) => honk(Math.hypot(x - state.x, z - state.z), true);
-    if (debug) Object.assign(window, { __street: { state, sky, look, life, story, thief, signals, lightFor, flyovers, pinch, bigScreen, traffic: streetTraffic, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
+    if (debug) Object.assign(window, { __street: { state, sky, look, life, story, thief, signals, lightFor, flyovers, pinch, bigScreen, roadSigns, traffic: streetTraffic, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
   }
 
   document.getElementById('loading')!.remove();

@@ -18,7 +18,7 @@ export class BigScreen {
   private page = -1;
   private placed = false;
 
-  constructor() {
+  constructor(private offset = 0) {
     this.canvas.width = 768;
     this.canvas.height = 384;
     this.texture = new THREE.CanvasTexture(this.canvas);
@@ -47,10 +47,19 @@ export class BigScreen {
     return this.placed;
   }
 
-  update(t: number) {
+  private lastDraw = 0;
+  /** Redraw (only when the player is near enough to see it move: each redraw costs a little). */
+  update(t: number, px = this.group.position.x, pz = this.group.position.z, every = 0.1) {
     if (!this.placed) return;
-    const page = Math.floor(t / 7) % PAGES.length;
-    if (page === this.page) return;
+    const far = Math.hypot(px - this.group.position.x, pz - this.group.position.z) > 220;
+    if (far && this.page >= 0) return;
+    // Like a video screen: the pages change, the picture slides in, and the news ticker scrolls
+    // (redrawn ten times a second).
+    if (t - this.lastDraw < every) return;
+    this.lastDraw = t;
+    const tt = t + this.offset * 3.1;
+    const page = Math.floor(tt / 7) % PAGES.length;
+    const into = (tt % 7) / 0.6; // the first 0.6 s of each page: sliding in
     this.page = page;
     const p = PAGES[page];
     const g = this.canvas.getContext('2d')!;
@@ -61,17 +70,30 @@ export class BigScreen {
       g.fillStyle = kente[i % kente.length];
       g.fillRect(x, 0, 24, 18);
     }
+    const slide = into < 1 ? (1 - into) * 768 : 0;
+    g.save();
+    g.translate(slide, 0);
     g.fillStyle = p.accent;
     g.font = '900 58px system-ui, sans-serif';
     g.fillText(p.title, 36, 100, 700);
     g.fillStyle = '#f2efe6';
     g.font = '700 36px system-ui, sans-serif';
     p.lines.forEach((l, i) => g.fillText(l, 36, 175 + i * 58, 700));
+    g.restore();
+    // A pulsing "LIVE" dot.
+    g.fillStyle = Math.floor(tt * 2) % 2 ? '#ff3b30' : '#7a1a14';
+    g.beginPath();
+    g.arc(728, 64, 14, 0, Math.PI * 2);
+    g.fill();
     g.fillStyle = p.accent;
-    g.fillRect(0, 352, 768, 32);
+    g.fillRect(0, 344, 768, 40);
     g.fillStyle = p.bg;
-    g.font = '800 22px system-ui, sans-serif';
-    g.fillText('GHANAVERSE · CIRCLE · ' + ['NEWS', 'MOST WANTED', 'ADVERT', 'TONIGHT'][page], 24, 376);
+    g.font = '800 24px system-ui, sans-serif';
+    const ticker = 'GHANAVERSE NEWS  ·  Trotro fares steady  ·  Highlife night at Osu  ·  Sika Mobile Money: send home in seconds  ·  Your ad here from ₵350 a week  ·  ';
+    const tw = g.measureText(ticker).width;
+    const x0 = -((tt * 90) % tw);
+    g.fillText(ticker, x0, 372);
+    g.fillText(ticker, x0 + tw, 372);
     this.texture.needsUpdate = true;
   }
 }

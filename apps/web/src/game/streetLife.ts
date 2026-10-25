@@ -82,6 +82,21 @@ function billboardFrame(): Part {
 }
 
 const POSTERS = 8;
+// A rooftop billboard: steel legs and a walkway on the roof, the poster above.
+function roofFrame(): Part {
+  return merge([
+    paint(box(0.18, 3.4, 0.18, -3.8, 1.7, 0.6), '#4a4844'),
+    paint(box(0.18, 3.4, 0.18, 3.8, 1.7, 0.6), '#4a4844'),
+    paint(box(0.18, 3.4, 0.18, 0, 1.7, 0.6), '#4a4844'),
+    paint(box(9.3, 4.8, 0.16, 0, 5.6, -0.12), '#2f2e2c'),
+    paint(box(9.3, 0.1, 0.8, 0, 3.3, 0.25), '#4a4844'),
+  ]);
+}
+// A short pole with a small vertical poster (the posters are a separate picture).
+function bannerPole(): Part {
+  return merge([paint(new THREE.CylinderGeometry(0.04, 0.05, 2.9, 6).translate(0, 1.45, 0), '#6b665e')]);
+}
+
 // Posters for the game's own made-up brands (painted in code; no real brands in the city). These are
 // the in-world ad spaces of design brief 18.1: real advertisers' posters can replace them later.
 function poster(n: number): THREE.CanvasTexture {
@@ -274,6 +289,20 @@ export class StreetLife {
     this.tanks = make(polytank(), false);
     this.poles = make(powerPole(), false);
     this.boards = make(billboardFrame(), false);
+    this.roofBoards = make(roofFrame(), false);
+    this.banners = make(bannerPole(), false);
+    for (let n = 0; n < POSTERS; n++) {
+      const mat = new THREE.MeshStandardMaterial({ map: poster(n), roughness: 0.7 });
+      const roof = new THREE.InstancedMesh(new THREE.PlaneGeometry(9, 4.5).translate(0, 5.6, -0.02), mat, 30);
+      const small = new THREE.InstancedMesh(new THREE.PlaneGeometry(1.0, 0.5).rotateZ(Math.PI / 2).translate(0, 2.35, 0.04), mat, 80);
+      for (const m of [roof, small]) {
+        m.count = 0;
+        m.frustumCulled = false;
+        this.group.add(m);
+      }
+      this.roofPosters.push(roof);
+      this.bannerPosters.push(small);
+    }
     // Posters: one batch per design.
     for (let n = 0; n < POSTERS; n++) {
       const mesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(8, 4).translate(0, 7.2, -0.02), new THREE.MeshStandardMaterial({ map: poster(n), roughness: 0.7 }), 40);
@@ -311,6 +340,10 @@ export class StreetLife {
   private poles!: Batch;
   private boards!: Batch;
   private posters: THREE.InstancedMesh[] = [];
+  private roofBoards!: Batch;
+  private banners!: Batch;
+  private roofPosters: THREE.InstancedMesh[] = [];
+  private bannerPosters: THREE.InstancedMesh[] = [];
   private wires!: THREE.LineSegments;
   private spans: number[] = []; // wires between neighbouring poles: x1, z1, x2, z2, angle
 
@@ -417,6 +450,8 @@ export class StreetLife {
     this.palms.all = clear(this.palms.all, 0.5);
     this.poles.all = clear(this.poles.all, 0.3);
     this.boards.all = clear(this.boards.all, 2.5);
+    this.banners.all = clear(this.banners.all, 0.25);
+    this.namePlates = this.namePlates.filter((n) => !this.onRoad(n.x, n.z, 0.2));
     const spans: number[] = [];
     for (let i = 0; i < this.spans.length; i += 5) {
       // A wire whose pole is now on a road goes too.
@@ -462,6 +497,22 @@ export class StreetLife {
               this.lastPole.set(road, [px, pz]);
             }
           }
+          // Rows of small posters on poles along the kerb of main roads (election-style banners).
+          if (road.kind !== 'minor_road' && Math.round(s / spacing) % 14 === 7 && hash(x * 2, z) < 0.5) {
+            const kerb = size.half + GUTTER + 0.45;
+            for (let k = 0; k < 6; k++) {
+              const along = k * 11;
+              if (along > len - s) break;
+              const [rx, rz] = [x + dx * along - dz * kerb * -side, z + dz * along + dx * kerb * -side];
+              if (this.free(rx, rz, 0.25)) this.banners.all.push({ x: rx, z: rz, angle: facing + Math.PI, scale: 1, colour: Math.floor(hash(x, z) * POSTERS) });
+            }
+          }
+          // A street-name plate now and then on named streets, at the edge of the pavement.
+          if (road.name && Math.round(s / spacing) % 14 === 3) {
+            const off = size.half + GUTTER + size.walk + 0.25;
+            const [nx, nz] = [x - dz * off * side, z + dx * off * side];
+            if (this.free(nx, nz, 0.2)) this.namePlates.push({ x: nx, z: nz, angle: angle + Math.PI / 2, name: road.name });
+          }
           if (Math.round(s / spacing) % (road.kind === 'minor_road' ? 12 : 4) === 2) {
             // Billboards all over the city (design brief 18.1): about every 65 m along the main roads,
             // now and then on side streets, set back behind the pavement and facing the traffic.
@@ -470,7 +521,8 @@ export class StreetLife {
               const back = size.half + GUTTER + size.walk + extra;
               const [bx, bz] = [x - dz * back * side, z + dx * back * side];
               if (this.free(bx, bz, 2.4) && !this.boards.all.some((o) => Math.abs(o.x - bx) < 30 && Math.abs(o.z - bz) < 30)) {
-                this.boards.all.push({ x: bx, z: bz, angle: facing, scale: 1, colour: Math.floor(hash(bx, bz) * POSTERS) });
+                // Turned a little towards the traffic coming along this side, so drivers see it face on.
+                this.boards.all.push({ x: bx, z: bz, angle: facing + side * 0.45, scale: 1, colour: Math.floor(hash(bx, bz) * POSTERS) });
                 break;
               }
             }
@@ -524,6 +576,12 @@ export class StreetLife {
       }
     }
     for (const roof of roofs) {
+      // Billboards on the roofs of buildings next to the big roads, facing the road.
+      if (roof.top > 5 && hash(roof.z, roof.x) < 0.3) {
+        const dir = this.roadDirNear(roof.x, roof.z, 28);
+        if (dir !== null && !this.roofBoards.all.some((o) => Math.abs(o.x - roof.x) < 40 && Math.abs(o.z - roof.z) < 40))
+          this.roofBoards.all.push({ x: roof.x, z: roof.z, angle: dir, scale: 1, colour: Math.floor(hash(roof.x, roof.top) * POSTERS), y: roof.top } as Spot & { y: number });
+      }
       if (hash(roof.x, roof.z) < 0.35) this.tanks.all.push({ x: roof.x, z: roof.z, angle: roof.id, scale: 1, colour: 0, y: roof.top } as Spot & { y: number });
     }
     this.lastRefresh = { x: Infinity, z: Infinity }; // show the new things straight away
@@ -615,7 +673,7 @@ export class StreetLife {
     for (const b of this.batches) {
       let n = 0;
       for (const s of b.all) {
-        const far = b === this.boards ? boardR2 : r2; // billboards are tall: seen from much further
+        const far = b === this.boards || b === this.roofBoards ? boardR2 : r2; // billboards are tall: seen from much further
         if ((s.x - x) ** 2 + (s.z - z) ** 2 > far || n >= this.opts.props) continue;
         const y = (s as Spot & { y?: number }).y ?? 0;
         this.q.setFromAxisAngle(this.up, Math.PI - s.angle);
@@ -623,7 +681,7 @@ export class StreetLife {
         b.mesh.setMatrixAt(n, this.m);
         if (b.tint) b.mesh.setColorAt(n, this.colour.set(s.colour));
         n++;
-        if (y === 0 && b !== this.lights && b !== this.poles && b !== this.boards && shadows < this.opts.props) {
+        if (y === 0 && b !== this.lights && b !== this.poles && b !== this.boards && b !== this.banners && shadows < this.opts.props) {
           const size = b === this.kiosks ? 3.4 : b === this.umbrellas ? 2.6 : 3.2 * s.scale;
           this.m.compose(this.p.set(s.x, 0.04, s.z), this.q, this.sc.set(size, 1, size));
           this.shadowBatch.setMatrixAt(shadows++, this.m);
@@ -648,6 +706,23 @@ export class StreetLife {
       m.count = counts[k];
       m.instanceMatrix.needsUpdate = true;
     });
+    const fill = (spots: Spot[], meshes: THREE.InstancedMesh[], range2: number, cap: number) => {
+      const c = meshes.map(() => 0);
+      for (const sp of spots) {
+        if ((sp.x - x) ** 2 + (sp.z - z) ** 2 > range2) continue;
+        const k = sp.colour % meshes.length;
+        if (c[k] >= cap) continue;
+        this.q.setFromAxisAngle(this.up, Math.PI - sp.angle);
+        this.m.compose(this.p.set(sp.x, (sp as Spot & { y?: number }).y ?? 0, sp.z), this.q, this.sc.setScalar(1));
+        meshes[k].setMatrixAt(c[k]++, this.m);
+      }
+      meshes.forEach((m, k) => {
+        m.count = c[k];
+        m.instanceMatrix.needsUpdate = true;
+      });
+    };
+    fill(this.roofBoards.all, this.roofPosters, boardR2, 30);
+    fill(this.banners.all, this.bannerPosters, r2, 80);
     // Wires: three per span, sagging a little in the middle.
     const w: number[] = [];
     const wireReach = Math.min(160, this.opts.radiusM);
@@ -687,6 +762,7 @@ export class StreetLife {
     near(this.umbrellas.all, 0.45);
     near(this.poles.all, 0.18);
     near(this.boards.all, 0.2); // only the legs matter; the posters are high up
+    near(this.banners.all, 0.08);
   }
   private propShadows = 0;
   private solids: { x: number; z: number; r: number; angle: number; box: boolean }[] = [];
@@ -765,11 +841,42 @@ export class StreetLife {
     for (const b of this.boards.all) if (!best || Math.hypot(b.x - x, b.z - z) < Math.hypot(best.x - x, best.z - z)) best = b;
     return best;
   }
+  /** Billboard spots within reach of a point. */
+  boardsNear(x: number, z: number, reach: number) {
+    return this.boards.all.filter((b) => Math.hypot(b.x - x, b.z - z) < reach);
+  }
   /** Take a billboard away (its place is used by something else). */
   removeBoard(b: Spot) {
     this.boards.all = this.boards.all.filter((o) => o !== b);
     this.lastRefresh = { x: Infinity, z: Infinity };
   }
+
+  /** The direction (clockwise from north) from a point towards the nearest main road within reach, or null. */
+  private roadDirNear(x: number, z: number, reach: number): number | null {
+    const cx = Math.floor(x / 25);
+    const cz = Math.floor(z / 25);
+    let best: [number, number] | null = null;
+    let bestD = reach;
+    for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+      const list = this.roadGrid.get(`${cx + i},${cz + j}`);
+      if (!list) continue;
+      for (let k = 0; k < list.length; k += 5) {
+        const [ax, az, bx, bz, half] = [list[k], list[k + 1], list[k + 2], list[k + 3], list[k + 4]];
+        if (half < 4.5) continue; // main roads only
+        const dx = bx - ax;
+        const dz = bz - az;
+        const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz || 1)));
+        const px = ax + dx * t;
+        const pz = az + dz * t;
+        const d = Math.hypot(px - x, pz - z);
+        if (d < bestD) [bestD, best] = [d, [px, pz]];
+      }
+    }
+    return best ? Math.atan2(best[0] - x, -(best[1] - z)) : null;
+  }
+
+  /** Street-name plates (drawn by roadSigns.ts). */
+  namePlates: { x: number; z: number; angle: number; name: string }[] = [];
 
   /** Is this point on a road? */
   roadAt(x: number, z: number, margin = 0) {
