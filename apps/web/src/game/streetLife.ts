@@ -6,6 +6,8 @@
 // People are drawn in big batches animated by the graphics card (crowd.ts).
 import type { Arm, Junction } from './signals';
 import * as THREE from 'three';
+import { addCutout } from './cutout';
+import { slidingAdMaterial, twoSidedFace } from './adScreens';
 import { box, merge, paint, shadowTexture } from './vehicles3d';
 import type { Roof, StreetLine } from './streetBuildings';
 import { CrowdBatch, lookFor, MIX, type Clip, type CrowdBody, type Kind as PersonKind, type Look } from './crowd';
@@ -302,6 +304,7 @@ export class StreetLife {
     private opts: { radiusM: number; people: number; props: number; scenes: number; smoothCrowd?: boolean },
   ) {
     const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0.05 });
+    addCutout(mat);
     const make = (geometry: Part, tint: boolean) => {
       const mesh = new THREE.InstancedMesh(geometry, mat, opts.props);
       mesh.count = 0;
@@ -324,26 +327,28 @@ export class StreetLife {
     this.boards = make(billboardFrame(), false);
     this.roofBoards = make(roofFrame(), false);
     this.banners = make(bannerPole(), false);
-    for (let n = 0; n < POSTERS; n++) {
-      const mat = new THREE.MeshStandardMaterial({ map: poster(n), roughness: 0.7 });
-      const roof = new THREE.InstancedMesh(new THREE.PlaneGeometry(9, 4.5).translate(0, 5.6, -0.02), mat, 30);
-      const small = new THREE.InstancedMesh(new THREE.PlaneGeometry(1.0, 0.5).rotateZ(Math.PI / 2).translate(0, 2.35, 0.04), mat, 80);
-      for (const m of [roof, small]) {
-        m.count = 0;
-        m.frustumCulled = false;
-        this.group.add(m);
-      }
-      this.roofPosters.push(roof);
-      this.bannerPosters.push(small);
-    }
-    // Posters: one batch per design.
-    for (let n = 0; n < POSTERS; n++) {
-      const mesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(8, 4).translate(0, 7.2, -0.02), new THREE.MeshStandardMaterial({ map: poster(n), roughness: 0.7 }), 40);
+    // Advert faces: every billboard is two-sided and changes advert every few seconds (sliding),
+    // all from one picture of the adverts (one draw for all the billboards of each kind).
+    const atlas = document.createElement('canvas');
+    atlas.width = 512;
+    atlas.height = 256 * POSTERS;
+    const ag = atlas.getContext('2d')!;
+    for (let n = 0; n < POSTERS; n++) ag.drawImage(poster(n).image as HTMLCanvasElement, 0, (POSTERS - 1 - n) * 256);
+    const atlasTex = new THREE.CanvasTexture(atlas);
+    atlasTex.colorSpace = THREE.SRGBColorSpace;
+    atlasTex.anisotropy = 4;
+    const adMat = slidingAdMaterial(atlasTex, POSTERS, 7);
+    const face = (g: THREE.BufferGeometry, n: number) => {
+      g.setAttribute('aAd', new THREE.InstancedBufferAttribute(new Float32Array(n), 1));
+      const mesh = new THREE.InstancedMesh(g, adMat, n);
       mesh.count = 0;
       mesh.frustumCulled = false;
-      this.posters.push(mesh);
       this.group.add(mesh);
-    }
+      return mesh;
+    };
+    this.posterMesh = face(twoSidedFace(8, 4, 7.2, -0.12, 0.11), 320);
+    this.roofMesh = face(twoSidedFace(9, 4.5, 5.6, -0.12, 0.1), 60);
+    this.bannerMesh = face(twoSidedFace(1.0, 0.5, 0, 0, 0.02).rotateZ(Math.PI / 2).translate(0, 2.35, 0), 160);
     this.wires = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0x1d1d1d, transparent: true, opacity: 0.85 }));
     this.wires.frustumCulled = false;
     this.group.add(this.wires);
@@ -378,11 +383,12 @@ export class StreetLife {
   private phones!: Batch;
   private poles!: Batch;
   private boards!: Batch;
-  private posters: THREE.InstancedMesh[] = [];
+  private posterMesh!: THREE.InstancedMesh;
+  private roofMesh!: THREE.InstancedMesh;
+  private bannerMesh!: THREE.InstancedMesh;
   private roofBoards!: Batch;
   private banners!: Batch;
-  private roofPosters: THREE.InstancedMesh[] = [];
-  private bannerPosters: THREE.InstancedMesh[] = [];
+
   private wires!: THREE.LineSegments;
   private spans: number[] = []; // wires between neighbouring poles: x1, z1, x2, z2, angle
 
@@ -762,37 +768,25 @@ export class StreetLife {
       if (b.mesh.instanceColor) b.mesh.instanceColor.needsUpdate = true;
     }
     this.propShadows = shadows;
-    // Posters on the billboards near the player (each design is its own batch).
-    const counts = this.posters.map(() => 0);
-    for (const bd of this.boards.all) {
-      if ((bd.x - x) ** 2 + (bd.z - z) ** 2 > boardR2) continue;
-      const k = bd.colour % this.posters.length;
-      if (counts[k] >= 40) continue;
-      this.q.setFromAxisAngle(this.up, Math.PI - bd.angle);
-      this.m.compose(this.p.set(bd.x, 0, bd.z), this.q, this.sc.setScalar(1));
-      this.posters[k].setMatrixAt(counts[k]++, this.m);
-    }
-    this.posters.forEach((m, k) => {
-      m.count = counts[k];
-      m.instanceMatrix.needsUpdate = true;
-    });
-    const fill = (spots: Spot[], meshes: THREE.InstancedMesh[], range2: number, cap: number) => {
-      const c = meshes.map(() => 0);
+    // Advert faces on the billboards near the player.
+    const fill = (spots: Spot[], mesh: THREE.InstancedMesh, range2: number) => {
+      const ads = mesh.geometry.getAttribute('aAd') as THREE.InstancedBufferAttribute;
+      let n = 0;
       for (const sp of spots) {
+        if (n >= mesh.instanceMatrix.count) break;
         if ((sp.x - x) ** 2 + (sp.z - z) ** 2 > range2) continue;
-        const k = sp.colour % meshes.length;
-        if (c[k] >= cap) continue;
         this.q.setFromAxisAngle(this.up, Math.PI - sp.angle);
         this.m.compose(this.p.set(sp.x, (sp as Spot & { y?: number }).y ?? 0, sp.z), this.q, this.sc.setScalar(1));
-        meshes[k].setMatrixAt(c[k]++, this.m);
+        mesh.setMatrixAt(n, this.m);
+        ads.setX(n++, sp.colour % POSTERS);
       }
-      meshes.forEach((m, k) => {
-        m.count = c[k];
-        m.instanceMatrix.needsUpdate = true;
-      });
+      mesh.count = n;
+      mesh.instanceMatrix.needsUpdate = true;
+      ads.needsUpdate = true;
     };
-    fill(this.roofBoards.all, this.roofPosters, boardR2, 30);
-    fill(this.banners.all, this.bannerPosters, r2, 80);
+    fill(this.boards.all, this.posterMesh, boardR2);
+    fill(this.roofBoards.all, this.roofMesh, boardR2);
+    fill(this.banners.all, this.bannerMesh, r2);
     // Wires: three per span, sagging a little in the middle.
     const w: number[] = [];
     const wireReach = Math.min(160, this.opts.radiusM);

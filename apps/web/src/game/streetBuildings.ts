@@ -5,6 +5,7 @@
 //
 // Work is spread over frames (a few milliseconds each) so loading new streets never makes the game stutter.
 import * as THREE from 'three';
+import { addCutout } from './cutout';
 import { VectorTile } from '@mapbox/vector-tile';
 import { PbfReader } from 'pbf';
 
@@ -26,7 +27,9 @@ type Footprint = { ring: Float32Array; minX: number; maxX: number; minZ: number;
 export type StreetLine = { kind: string; pts: Float32Array; edge?: boolean; bridge?: boolean; name?: string };
 /** The middle of a roof: where tanks and signs can go. */
 export type Roof = { x: number; z: number; top: number; id: number };
-export type StreetsListener = (roads: StreetLine[], roofs: Roof[]) => void;
+/** A place from the map (a filling station, bank, school...): its kind, name and where it is. */
+export type Poi = { kind: string; name: string; x: number; z: number };
+export type StreetsListener = (roads: StreetLine[], roofs: Roof[], pois: Poi[]) => void;
 
 const tileX = (lng: number) => Math.floor(((lng + 180) / 360) * 2 ** Z);
 const tileY = (lat: number) => {
@@ -62,6 +65,7 @@ function clip(ring: { x: number; y: number }[]) {
 // The wall material: lit like everything else, with windows, doors and shutters painted in by the shader.
 function wallMaterial() {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0 });
+  queueMicrotask(() => addCutout(m)); // after the facade shader below is set
   m.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader
       .replace('void main() {', 'attribute vec3 facade;\nvarying vec3 vFacade;\nvoid main() {\n  vFacade = facade;')
@@ -228,7 +232,19 @@ export class StreetBuildings {
         }
         const roofs = this.roofs;
         this.roofs = [];
-        this.onStreets!(roads, roofs);
+        const pois: Poi[] = [];
+        const poiLayer = tile.layers.pois;
+        if (poiLayer) {
+          for (let i = 0; i < poiLayer.length; i++) {
+            const f = poiLayer.feature(i);
+            if (f.type !== 1) continue; // points only
+            const p = f.loadGeometry()[0]?.[0];
+            if (!p || p.x < 0 || p.y < 0 || p.x > EXTENT || p.y > EXTENT) continue;
+            const [x, z] = this.toLocal(...toLngLat(p.x, p.y));
+            pois.push({ kind: String(f.properties.kind), name: f.properties.name ? String(f.properties.name) : '', x, z });
+          }
+        }
+        this.onStreets!(roads, roofs, pois);
       });
     }
   }

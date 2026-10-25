@@ -20,6 +20,9 @@ import { Flyovers } from '../game/flyovers';
 import { BigScreen } from '../game/bigScreen';
 import { RoadSigns } from '../game/roadSigns';
 import { planStation } from '../game/trotroStation';
+import { Places } from '../game/places';
+import { CUT } from '../game/cutout';
+import { AD_CLOCK } from '../game/adScreens';
 import { Voices, mateCall } from '../game/voices';
 import { TALKS, asNode, type TalkNode } from '../game/talks';
 import { box, merge, paint } from '../game/vehicles3d';
@@ -316,10 +319,17 @@ const layer: maplibregl.CustomLayerInterface = {
   render(_gl, args) {
     const projection = new THREE.Matrix4().fromArray(args.defaultProjectionData.mainMatrix as unknown as number[]);
     camera3d.projectionMatrix = projection.multiply(placeMatrix);
+    // The camera's position in the scene (for the see-through cut): the point the projection sends
+    // to infinity.
+    camEye.set(0, 0, 1, 0).applyMatrix4(camInverse.copy(camera3d.projectionMatrix).invert());
+    if (Math.abs(camEye.w) > 1e-9) CUT.camera.value = [camEye.x / camEye.w, camEye.y / camEye.w, camEye.z / camEye.w];
     renderer.resetState();
     renderer.render(scene, camera3d);
   },
 };
+
+const camEye = new THREE.Vector4();
+const camInverse = new THREE.Matrix4();
 
 // ---------- Controls: touch, keyboard and game controllers ----------
 
@@ -674,6 +684,9 @@ function step(player: Player, dt: number, t: number) {
   player.actions.run.setEffectiveTimeScale(Math.max(0.7, s / 3.8));
   player.mixer.update(dt);
   if (rideBlend > 0.01) ridePose(player, rideBlend);
+  player.root.updateMatrixWorld(true);
+  thief.person?.root.updateMatrixWorld(true);
+  placeBag(player);
 
   // Camera: follows behind the player, turning a little after them, closer on foot.
   state.camHeading += angleDiff(state.heading, state.camHeading) * Math.min(1, dt * (state.onOkada ? 2.6 : 3.2));
@@ -723,6 +736,11 @@ function step(player: Player, dt: number, t: number) {
     if (k >= 1) story.fly = null;
   }
   map.jumpTo(cam);
+  // Where the camera is (in the scene's metres), for the see-through cut round the player.
+  {
+    CUT.player.value = state.onOkada ? [state.x, 1.2, state.z] : [state.x, 1.0 + state.y, state.z];
+    CUT.radius.value = story.shot ? 0 : 1.5;
+  }
   checkPlace(here);
   buildings.update(here, state.x, state.z);
   followSun(state.x, state.z);
@@ -778,9 +796,11 @@ function step(player: Player, dt: number, t: number) {
   }
   for (const sc of moreScreens) sc.update(Date.now() / 1000, state.x, state.z, screenEvery);
   if (life) roadSigns.update(state.x, state.z, life.namePlates, life.junctions);
+  places.update(state.x, state.z);
   streetTraffic?.update(here[0], here[1], Date.now() / 1000, TRAFFIC_LANE_M, state);
   updateStats(dt);
   updateButtons();
+  AD_CLOCK.value = (Date.now() / 1000) % 86400; // small numbers: the GPU counts in low precision
   updateThief(dt);
   streetVoices(performance.now() / 1000);
   story.onFrame?.();
@@ -817,7 +837,7 @@ function vehicleAt(x: number, z: number, room: number) {
   return null;
 }
 function solidAt(x: number, z: number, room: number) {
-  return buildings.blocked(x, z, room) || !!life?.solid(x, z, room) || !!vehicleAt(x, z, room);
+  return buildings.blocked(x, z, room) || !!life?.solid(x, z, room) || !!vehicleAt(x, z, room) || places.solid(x, z, room);
 }
 function pushOutOfVehicles(room: number) {
   for (let i = 0; i < 3; i++) {
@@ -1373,29 +1393,58 @@ function placeOnPavement() {
 let startedAt = performance.now();
 
 // The thief: a boy with your bag, running away through the crowd and the traffic.
-const thief = { on: false, person: null as Person | null, x: 0, z: 0, heading: 0, speed: 0, time: 0, phase: 'pass' as 'pass' | 'run', done: null as (() => void) | null };
+const thief = { on: false, person: null as Person | null, x: 0, z: 0, heading: 0, speed: 0, time: 0, phase: 'pass' as 'pass' | 'run', done: null as (() => void) | null, grabbed: null as (() => void) | null };
+
+// Your travel bag (the blue bag from the film): you hold it in your right hand until the boy
+// snatches it; then it is in his hand as he runs.
+const bag = (() => {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(merge([
+    paint(box(0.46, 0.3, 0.24, 0, -0.27, 0), '#2a4f86'),
+    paint(box(0.47, 0.06, 0.25, 0, -0.36, 0), '#1d3760'),
+    paint(box(0.3, 0.12, 0.02, 0, -0.25, 0.125), '#1d3760'), // front pocket
+    paint(box(0.03, 0.14, 0.03, 0.08, -0.07, 0), '#141414'), // handles
+    paint(box(0.03, 0.14, 0.03, -0.08, -0.07, 0), '#141414'),
+    paint(box(0.19, 0.03, 0.03, 0, -0.01, 0), '#141414'),
+  ]), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 }));
+  body.castShadow = true;
+  g.add(body);
+  g.visible = false;
+  scene.add(g);
+  return { group: g, holder: 'none' as 'none' | 'player' | 'thief' };
+})();
+const handPos = new THREE.Vector3();
+function placeBag(player: Player) {
+  const who = bag.holder === 'player' ? player : bag.holder === 'thief' ? thief.person : null;
+  bag.group.visible = !!who && (bag.holder !== 'thief' || thief.on) && !state.onOkada;
+  if (!who || !bag.group.visible) return;
+  const hand = who.bones.hand_r ?? who.bones.Hand_R ?? Object.values(who.bones).find((b) => /hand.?r/i.test(b.name));
+  if (!hand) return;
+  hand.getWorldPosition(handPos);
+  bag.group.position.copy(handPos);
+  bag.group.rotation.set(0, who.root.rotation.y, 0);
+}
 async function loadThief() {
   const boy = await createPerson({ shirt: '#c8442e', trousers: '#1b1b1d', shoes: '#2b2b2e', hair: '#141110', skin: '#665d58' }, 'male', 'lite');
   boy.root.scale.setScalar(0.86);
-  const bag = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.36, 0.14), new THREE.MeshStandardMaterial({ color: 0x6b4a2b, roughness: 0.8 }));
-  bag.position.set(0.28, 0.95, 0.05);
-  boy.root.add(bag);
   boy.actions.run.play();
   boy.model.traverse((o) => (o.castShadow = PRESET.shadows));
   thief.person = boy;
 }
-function runThief(): Promise<void> {
+function runThief(): { grabbed: Promise<void>; gone: Promise<void> } {
   const boy = thief.person;
-  if (!boy) return Promise.resolve();
-  // He comes from behind, brushes past you and runs on ahead.
+  if (!boy) return { grabbed: Promise.resolve(), gone: Promise.resolve() };
+  // He runs up from behind, on your right (the hand with the bag), snatches it and runs on ahead.
   thief.on = true;
   thief.phase = 'pass';
   thief.time = performance.now() / 1000; // when the chase began (clock time)
   thief.heading = state.heading;
-  thief.x = state.x - Math.sin(state.heading) * 5 + Math.cos(state.heading) * 0.7;
-  thief.z = state.z + Math.cos(state.heading) * 5 + Math.sin(state.heading) * 0.7;
+  thief.x = state.x - Math.sin(state.heading) * 7 + Math.cos(state.heading) * 0.6;
+  thief.z = state.z + Math.cos(state.heading) * 7 + Math.sin(state.heading) * 0.6;
   scene.add(boy.root);
-  return new Promise((resolve) => (thief.done = resolve));
+  const grabbed = new Promise<void>((resolve) => (thief.grabbed = resolve));
+  const gone = new Promise<void>((resolve) => (thief.done = resolve));
+  return { grabbed, gone };
 }
 function updateThief(dt: number) {
   const boy = thief.person;
@@ -1404,8 +1453,31 @@ function updateThief(dt: number) {
   let want = thief.heading;
   if (thief.phase === 'pass') {
     thief.speed = 5.2;
+    // Straight at your right hand, where the bag is.
+    const tx = state.x + Math.cos(state.heading) * 0.55;
+    const tz = state.z + Math.sin(state.heading) * 0.55;
+    want = Math.atan2(tx - thief.x, -(tz - thief.z));
+    if (Math.hypot(tx - thief.x, tz - thief.z) < 0.7 && bag.holder === 'player') {
+      // The snatch: the bag goes from your hand to his.
+      bag.holder = 'thief';
+      thief.grabbed?.();
+      thief.heading = state.heading;
+    }
     const ahead = (thief.x - state.x) * Math.sin(state.heading) - (thief.z - state.z) * Math.cos(state.heading);
-    if (ahead > 4) thief.phase = 'run';
+    if (bag.holder === 'thief' && ahead > 3) thief.phase = 'run';
+    if (bag.holder !== 'thief') {
+      // On his way in: no steering round things (he comes straight for you).
+      thief.heading = want;
+      const nx = thief.x + Math.sin(want) * thief.speed * dt;
+      const nz = thief.z - Math.cos(want) * thief.speed * dt;
+      [thief.x, thief.z] = [nx, nz];
+      boy.root.position.set(thief.x, 0, thief.z);
+      boy.root.rotation.set(0, Math.PI - want, 0);
+      boy.actions.run.setEffectiveTimeScale(thief.speed / 3.8);
+      boy.mixer.update(dt);
+      return;
+    }
+    want = state.heading; // then on ahead
   } else {
     // Away from you, faster when you get close; he always just gets away.
     want = Math.atan2(thief.x - state.x, -(thief.z - state.z));
@@ -1460,6 +1532,7 @@ const placeCard = (name: string) => {
 async function playOpening(start: StartChoice) {
   const home = start.hometown;
   homeTown = home;
+  bag.holder = 'player'; // you arrive holding your travel bag
   cine.preload(useFilmClip ? ['/film/circle.webp'] : ['/film/village.webp', '/film/hands.webp', '/film/bus.webp', '/film/circle.webp']);
   story.busy = story.frozen = true;
   goalChip.classList.add('hidden');
@@ -1502,9 +1575,10 @@ async function playOpening(start: StartChoice) {
   await cine.black(false, 0.3);
   await cine.say('', 'Circle. Noise, crowds, hawkers everywhere. You made it to Accra.');
   // 3. The bag.
-  const chase = runThief();
-  await cine.wait(1.3);
-  life?.scenes?.onSpeak?.(state.x, state.z, 1.9, 'Hey! My bag!');
+  const { grabbed, gone: chase } = runThief();
+  await Promise.race([grabbed, new Promise((r) => setTimeout(r, 6000))]);
+  bag.holder = 'thief';
+  life?.scenes?.onSpeak?.(state.x, state.z, 1.9, 'Hey! My bag!', playerBody, 4242);
   setMoney(0);
   await cine.say('', 'A boy grabs your bag: your money, your phone and Grandma’s letter!', 3);
   cine.end();
@@ -1621,8 +1695,10 @@ const pendingBatches: { pts: [number, number][]; lanes: 1 | 2; half: number; bri
 const buildings = new StreetBuildings(
   (lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT],
   { light: 220, standard: 320, ultra: 450 }[tier],
-  (roads, roofs) => {
+  (roads, roofs, pois) => {
     life?.add(roads, roofs);
+    // The real places from the map: filling stations, bus stops, banks, churches, schools...
+    places.add(pois, placeFor);
     // Bridges become real flyovers (the Kwame Nkrumah Interchange at Circle).
     const ROAD_HALF: Record<string, number> = { highway: 7, major_road: 5, minor_road: 3.25, other: 2.4 };
     flyovers.add(roads.filter((r) => r.bridge).map((r) => ({ pts: r.pts, half: ROAD_HALF[r.kind] ?? 4 })));
@@ -1734,6 +1810,59 @@ function placeBubbles(now: number) {
     b.el.style.opacity = visible && now < b.until - 0.3 ? '1' : '0';
     if (visible) b.el.style.transform = `translate(${((projected.x / projected.w + 1) / 2) * w}px, ${((1 - projected.y / projected.w) / 2) * h}px) translate(-50%, -100%)`;
   }
+}
+
+// Real places (filling stations, bus stops and signboards for banks, pharmacies, churches...).
+const places = new Places();
+const fuelWhy: string[] = [];
+scene.add(places.group);
+function placeFor(x: number, z: number, kind: 'fuel' | 'stop' | 'sign') {
+  if (!life) return null;
+  const toRoad = life.roadDirNear(x, z, kind === 'fuel' ? 45 : 60);
+  if (kind === 'fuel') fuelWhy.push(toRoad === null ? 'no road' : 'ok?');
+  if (toRoad === null) return null;
+  if (kind === 'fuel') {
+    // The forecourt must be open ground (no buildings), with its front at the road.
+    const F = [Math.sin(toRoad), -Math.cos(toRoad)];
+    const R = [Math.cos(toRoad), Math.sin(toRoad)];
+    // Slide the station so its front edge (10 m ahead of the middle) is at the road's edge.
+    let cx = x;
+    let cz = z;
+    for (let k = 0; k < 40 && !life.roadAt(cx + F[0] * 10.5, cz + F[1] * 10.5, 0.3); k++) [cx, cz] = [cx + F[0], cz + F[1]];
+    for (let k = 0; k < 40 && life.roadAt(cx + F[0] * 9.5, cz + F[1] * 9.5, 0.3); k++) [cx, cz] = [cx - F[0], cz - F[1]];
+    // Mostly open ground (the map often draws the station's own shop as a building: a little is fine).
+    let blockedN = 0;
+    let n = 0;
+    for (let u = -10; u <= 10; u += 2.5)
+      for (let v = -9; v <= 8; v += 2.5) {
+        const px = cx + R[0] * u + F[0] * v;
+        const pz = cz + R[1] * u + F[1] * v;
+        n++;
+        if (v < 6 && life.roadAt(px, pz, 0)) {
+          fuelWhy.push('road in yard');
+          return null;
+        }
+        if (buildings.blocked(px, pz, 0.1)) blockedN++;
+      }
+    if (blockedN > n * 0.3) {
+      fuelWhy.push('buildings ' + blockedN + '/' + n);
+      return null;
+    }
+    life.clearArea(cx, cz, 13);
+    return { x: cx, z: cz, face: toRoad };
+  }
+  // A shelter or signboard: at the roadside in front of the place, facing the road.
+  const F = [Math.sin(toRoad), -Math.cos(toRoad)];
+  let px = x;
+  let pz = z;
+  for (let k = 0; k < 60; k++) {
+    const nx = px + F[0];
+    const nz = pz + F[1];
+    if (life.roadAt(nx, nz, kind === 'stop' ? 1.6 : 1.1)) break;
+    [px, pz] = [nx, nz];
+  }
+  if (life.roadAt(px, pz, 0.6) || buildings.blocked(px, pz, 0.2)) return null;
+  return { x: px, z: pz, face: toRoad };
 }
 
 // The trotro station at Circle: the nearest open ground (no buildings, no roads) big enough for
@@ -1851,7 +1980,7 @@ async function start() {
     streetTraffic.signals = signals;
     if (life) life.vehicleAt = vehicleAt;
     streetTraffic.onHoot = (x, z) => honk(Math.hypot(x - state.x, z - state.z), true);
-    if (debug) Object.assign(window, { __street: { state, sky, look, life, story, thief, signals, lightFor, flyovers, pinch, bigScreen, roadSigns, getStation: () => station, traffic: streetTraffic, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
+    if (debug) Object.assign(window, { __street: { state, sky, look, life, story, thief, signals, lightFor, flyovers, pinch, bigScreen, roadSigns, getStation: () => station, places, fuelWhy, bag, traffic: streetTraffic, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
   }
 
   document.getElementById('loading')!.remove();

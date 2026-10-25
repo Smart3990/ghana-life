@@ -7,6 +7,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import type { Kind, Placed, Traffic } from './traffic';
+import { slidingAdMaterial } from './adScreens';
 
 // Modern vehicles (public/models/vehicles): small models of today's Accra traffic (Corolla-size
 // sedans, Vitz-size hatchbacks, RAV4-size SUVs, Hilux-size pickups, Hiace-size trotros, buses and
@@ -148,13 +149,14 @@ function adAtlas(ads: VehicleAd[], canvas = document.createElement('canvas')) {
 // [half width, bottom, top, back end, front end].
 // Full wraps, as on Accra's buses and trotros: from just above the wheels up over the windows to
 // the roof line, from behind the driver's door to the back.
-const AD_PANELS: Partial<Record<BatchKey, [number, number, number, number, number]>> = {
-  trotro: [0.885, 0.7, 2.02, -2.42, 1.35],
-  sprinter: [0.985, 0.76, 2.45, -2.9, 1.5],
-  bus: [1.262, 1.0, 2.92, -5.25, 3.55], // stops before the front door
-  truck: [1.165, 1.1, 2.6, -3.7, 1.85],
+const AD_PANELS: Partial<Record<BatchKey, [number, number, number, number, number, number]>> = {
+  // [half width, bottom, top, back end, front end, the back face's position]
+  trotro: [0.885, 0.7, 2.02, -2.42, 1.35, -2.52],
+  sprinter: [0.985, 0.76, 2.45, -2.9, 1.5, -3.02],
+  bus: [1.262, 1.0, 2.92, -5.25, 3.55, -5.43], // stops before the front door
+  truck: [1.165, 1.1, 2.6, -3.7, 1.85, -3.83],
 };
-function adPanels([hw, y0, y1, z0, z1]: [number, number, number, number, number]) {
+function adPanels([hw, y0, y1, z0, z1, zb]: [number, number, number, number, number, number]) {
   // Two flat panels, one on each side, each reading the right way round from outside.
   const pos: number[] = [];
   const uv: number[] = [];
@@ -180,6 +182,14 @@ function adPanels([hw, y0, y1, z0, z1]: [number, number, number, number, number]
 }
 const AD_TIME = { value: 0 };
 function adMaterial(map: THREE.Texture) {
+  // The same sliding change as the billboards (the next advert slides in every 8 seconds).
+  const sliding = slidingAdMaterial(map, AD_ROWS, 8) as THREE.MeshStandardMaterial;
+  sliding.polygonOffset = true;
+  sliding.polygonOffsetFactor = -2;
+  sliding.side = THREE.FrontSide;
+  return sliding;
+}
+export function oldAdMaterial(map: THREE.Texture) {
   const m = new THREE.MeshStandardMaterial({ map, roughness: 0.55, polygonOffset: true, polygonOffsetFactor: -2 });
   // The wrap changes advert every 8 seconds (each vehicle at its own moment), like a moving screen.
   m.onBeforeCompile = (shader) => {

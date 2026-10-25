@@ -246,6 +246,11 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
   - **The film's lines are spoken too:** Grandma, the bus mate, Auntie Dede, Uncle Kwame and you.
   - **Recorded voices later:** any line can be replaced by a real recording (brief 15.3) by putting `/voices/<line id>.mp3` in `public/voices` and listing it in `public/voices/index.json`. ImagineArt's voice generator needs a paid plan, and its voices are American or British only, so it was not used.
 
+  - **You always see yourself** (`src/game/cutout.ts`): when a kiosk, shop, umbrella or building stands between the camera and you, a soft hole opens through it so you stay in view.
+  - **Real places where they really are** (`src/game/places.ts`): the map's own points of interest become things in the street. A filling station on the map becomes a filling station there (canopy, pumps, shop, price board, fictional brand "SIKA OIL"); bus stops get shelters; banks, ATMs, pharmacies, churches, mosques, schools, clinics, hotels, chop bars, salons, markets, police, supermarkets, Mobile Money, phone shops and more get their sign at their real spot (fictional names only). Test: 4 filling stations, 19 bus stops, 105 signs around Circle.
+  - **The bag snatch:** you hold your bag in your hand; the thief runs up, grabs it out of your hand and runs off with it while you stand watching.
+  - **Billboards like video** (`src/game/adScreens.ts`): roadside, rooftop and kerb boards slide to a new advert every few seconds, each board at its own time. Every board has a front and a back, so you see adverts from both directions. Bus, trotro, sprinter and truck wraps change too and now have a back panel.
+
 ## Waiting on the owner
 
 - Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.
