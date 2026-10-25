@@ -571,7 +571,7 @@ export class StreetTraffic {
     const fixedMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, metalness: 0.1 });
     const models: Record<BatchKey, Model> = { car: car(false), hatch: car(false), sprinter: trotro(), motorking: motorKing(), taxi: car(true), trotro: trotro(), tricycle: pragya(), okada: okada(), bus: bus(), truck: truck(), pickup: pickup(), suv: suv() };
     this.batches = {} as typeof this.batches;
-    const adCanvas = document.createElement('canvas');
+    const adCanvas = this.adCanvas;
     const adMat = adMaterial(adAtlas(DEFAULT_ADS, adCanvas));
     // Advertisers' adverts, when there are any.
     fetch('/data/ads.json')
@@ -686,6 +686,9 @@ export class StreetTraffic {
   signals: { shouldStop: (x: number, z: number, heading: number, half: number, t: number) => boolean } | null = null;
   private ads: Partial<Record<BatchKey, THREE.InstancedMesh>> = {};
   private taxiSigns!: THREE.InstancedMesh;
+  /** The story's own vehicles (the car that blocks you in the chase, Uncle Kwame's car): moved by
+   *  the story, drawn with the others, and solid. */
+  story: { key: BatchKey; kind: Kind; id: number; x: number; z: number; heading: number; colour: string; shown: boolean; moving: boolean }[] = [];
   /** Vehicles parked for good (the trotro station): drawn with the others, and solid. */
   parked: { key: BatchKey; id: number; x: number; z: number; heading: number; colour: string }[] = [];
   /** Share of vehicles shown (1 = all), lowered when the phone struggles. */
@@ -696,11 +699,47 @@ export class StreetTraffic {
   onHoot: ((x: number, z: number) => void) | null = null;
   /** Called every frame for each vehicle stopped because the player stands in its way. */
   onBlocked: ((v: { id: number; x: number; z: number; heading: number; kind: string; halfW: number; half: number; waited: number }) => void) | null = null;
+  /** Vehicles not drawn (the story has taken their place on the road). */
+  hide = new Set<number>();
+  private lane = 1.35;
+  private adCanvas = document.createElement('canvas');
+  /** Where a vehicle's route goes at a distance s (in the scene's metres), for driving along it. */
+  routeAt(v: Placed['v'], s: number) {
+    const p = this.traffic.at(v, s, this.lane);
+    const [x, z] = this.toLocal(p.lon, p.lat);
+    return { x, z, heading: p.heading, bridge: !!p.bridge };
+  }
+  /** What a vehicle is and which advert it carries (null: no advert space on it). */
+  vehicleInfo(v: Placed['v']) {
+    const key: BatchKey = v.kind === 'car' && v.id % 3 === 0 ? 'hatch' : v.kind === 'trotro' && v.id % 3 === 0 ? 'sprinter' : v.kind === 'tricycle' && v.id % 2 === 0 ? 'motorking' : v.kind;
+    const r = ((v.id * 2246822519) >>> 0) / 4294967296;
+    const ad = this.ads[key] && r < 0.8 ? Math.floor(r * 1.25 * AD_ROWS) % AD_ROWS : null;
+    return { key, ad };
+  }
+  /** A picture of one vehicle advert (for the advert card). */
+  vehicleAdPicture(row: number) {
+    const src = this.adCanvas;
+    const c = document.createElement('canvas');
+    c.width = 512;
+    c.height = 128;
+    const h = src.height / AD_ROWS;
+    c.getContext('2d')!.drawImage(src, 0, (AD_ROWS - 1 - row) * h, src.width, h, 0, 0, 512, 128);
+    return c.toDataURL('image/webp', 0.85);
+  }
+  /** Show the player's own advert on every vehicle that carries this row (a preview, only for them). */
+  previewAd(row: number, ad: VehicleAd) {
+    const g = document.createElement('canvas');
+    adAtlas([ad], g);
+    const h = this.adCanvas.height / AD_ROWS;
+    this.adCanvas.getContext('2d')!.drawImage(g, 0, (AD_ROWS - 1) * (g.height / AD_ROWS), g.width, g.height / AD_ROWS, 0, (AD_ROWS - 1 - row) * h, this.adCanvas.width, h);
+    for (const m of Object.values(this.ads)) if (m) ((m.material as THREE.MeshStandardMaterial).map as THREE.Texture).needsUpdate = true;
+  }
   /** Vehicles told to stay where they are (a driver who got out). */
   hold = new Set<number>();
   private blockedTotal = new Map<number, number>();
 
   update(lon: number, lat: number, t: number, lane: number, player?: { x: number; z: number }) {
+    this.lane = lane;
     const dt = this.lastT ? Math.min(0.1, Math.max(0, t - this.lastT)) : 0;
     // How far the shared clock really moved on (a slow phone can take longer than 0.1 s per frame):
     // a waiting vehicle is held back by all of it, so it never creeps forward.
@@ -713,6 +752,7 @@ export class StreetTraffic {
     // so nothing flickers in and out.
     const placed: Placed[] = this.traffic
       .near(lon, lat, t, this.radiusM, this.limit * 2, lane)
+      .filter((p) => !this.hide.has(p.v.id))
       .filter((p) => this.density >= 1 || ((p.v.id * 2654435761) >>> 0) / 4294967296 < this.density)
       .slice(0, this.limit);
     // A vehicle held back for a while can be behind its timetable spot, which may already be out of
@@ -883,10 +923,24 @@ export class StreetTraffic {
       if (!changed) break;
     }
     for (const k of [...this.stuck.keys()]) if (!stuckNow.has(k)) this.stuck.delete(k); // they got apart
+    // 4. The story's own vehicles (a taxi braking in the chase, Uncle Kwame's car) never move for
+    //    traffic: anything that would drive into one waits behind it.
+    for (const q of this.story) {
+      if (!q.shown) continue;
+      const b = { x: q.x, z: q.z, fx: Math.sin(q.heading), fz: -Math.cos(q.heading), half: KIND_LENGTH[q.kind] / 2, halfW: KIND_WIDTH[q.kind] / 2, up: false } as L;
+      for (const a of local) {
+        if (a.up || waiting.has(a.p.v.id) || Math.abs(b.x - a.x) > 16 || Math.abs(b.z - a.z) > 16) continue;
+        if (inPath(a, b) || touching(a, b)) {
+          wait(a.p);
+          refresh(a);
+        }
+      }
+    }
     // Forget vehicles that have gone.
     if (this.held.size > 4000) for (const id of [...this.held.keys()]) if (!before.has(id)) this.held.delete(id);
     this.boxes = local.filter((a) => !a.up).map((a) => ({ x: a.x, z: a.z, fx: a.fx, fz: a.fz, half: a.half, halfW: a.halfW }));
     for (const q of this.parked) this.boxes.push({ x: q.x, z: q.z, fx: Math.sin(q.heading), fz: -Math.cos(q.heading), half: 2.7, halfW: 0.95 });
+    for (const q of this.story) if (q.shown) this.boxes.push({ x: q.x, z: q.z, fx: Math.sin(q.heading), fz: -Math.cos(q.heading), half: KIND_LENGTH[q.kind] / 2, halfW: KIND_WIDTH[q.kind] / 2 });
     const adCount: Partial<Record<BatchKey, number>> = {};
     let signs = 0;
     const counts: Record<BatchKey, number> = { car: 0, hatch: 0, sprinter: 0, motorking: 0, taxi: 0, trotro: 0, tricycle: 0, okada: 0, bus: 0, truck: 0, pickup: 0, suv: 0 };
@@ -907,6 +961,7 @@ export class StreetTraffic {
       draws.push({ key, id: p.v.id, x, z, ground, heading: p.heading, colour: p.v.colour, bounce: true });
     }
     for (const q of this.parked) draws.push({ ...q, ground: 0, bounce: false });
+    for (const q of this.story) if (q.shown) draws.push({ key: q.key, id: q.id, x: q.x, z: q.z, heading: q.heading, colour: q.colour, ground: 0, bounce: q.moving });
     for (const d of draws) {
       const b = this.batches[d.key];
       if (counts[d.key] >= b.body.instanceMatrix.count) continue;

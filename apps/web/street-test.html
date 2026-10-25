@@ -168,6 +168,7 @@
       .cine-bars i:first-child { top: 0; }
       .cine-bars i:last-child { bottom: 0; }
       body.cine .cine-bars i { height: 11vh; }
+      body.auto .act, body.auto #stick { opacity: 0; pointer-events: none; }
       body.cine #radar, body.cine #hud-top, body.cine .act, body.cine #stick, body.cine #help, body.cine #me, body.cine #goal, body.cine #debug { opacity: 0; pointer-events: none; }
       #radar, #hud-top, .act, #stick { transition: opacity .4s; }
       /* Film pictures: full screen, with a slow camera move */
@@ -238,12 +239,12 @@
         animation: fm-drop .5s both cubic-bezier(.3,1.6,.5,1); }
       .fm-pin span { display: grid; place-items: center; width: 100%; height: 100%; transform: rotate(45deg); font-size: 14px; line-height: 1; }
       @keyframes fm-drop { from { opacity: 0; translate: 0 -40px; } 60% { opacity: 1; } }
-      .fm-board { position: relative; width: 74px; padding-bottom: 16px; pointer-events: none; animation: fm-drop .6s both cubic-bezier(.3,1.6,.5,1); filter: drop-shadow(0 4px 4px rgba(0,0,0,.35)); }
+      .fm-board { position: relative; width: 74px; padding-bottom: 16px; cursor: pointer; animation: fm-drop .6s both cubic-bezier(.3,1.6,.5,1); filter: drop-shadow(0 4px 4px rgba(0,0,0,.35)); }
       .fm-board img { display: block; width: 74px; height: 42px; border: 3px solid #16171a; border-radius: 3px; background: #16171a; }
       .fm-board i { position: absolute; left: 18px; right: 18px; bottom: 0; height: 16px; border-left: 4px solid #3a3b3e; border-right: 4px solid #3a3b3e; }
       .fm-area { font: 800 11px system-ui, sans-serif; letter-spacing: .14em; text-transform: uppercase; color: #5a3a12; text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 6px #fff; pointer-events: none; white-space: nowrap; animation: fm-fade 1s .8s both; }
       @keyframes fm-fade { from { opacity: 0; } }
-      .fm-you { position: relative; width: 44px; height: 44px; }
+      .fm-you { position: relative; width: 44px; height: 44px; pointer-events: none; }
       .fm-you i { position: absolute; inset: 0; border-radius: 50%; background: rgba(31,95,168,.25); animation: fm-pulse 1.8s infinite; }
       .fm-you b { position: absolute; left: 12px; top: 7px; width: 0; height: 0; border-left: 10px solid transparent; border-right: 10px solid transparent; border-bottom: 26px solid #1f5fa8; filter: drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1.5px #fff) drop-shadow(0 3px 3px rgba(0,0,0,.4)); }
       @keyframes fm-pulse { from { transform: scale(.4); opacity: 1; } to { transform: scale(1.6); opacity: 0; } }
@@ -338,6 +339,35 @@
       .ph-choices { display: flex; flex-direction: column; gap: 6px; width: 100%; }
       .ph-choices .ph-btn { background: #1c2620; color: #f2efe6; border: 1px solid #e3a92b; text-align: left; font-weight: 600; }
       .ph-hang { flex: none; margin-top: 10px; width: 50px; height: 50px; border-radius: 50%; border: 0; background: #c8442e; font-size: 24px; transform: rotate(135deg); box-shadow: 0 4px 12px rgba(200,68,46,.5); }
+
+      /* The advert card (tap a billboard on the map, or a vehicle with an advert) */
+      #adcard { position: fixed; inset: 0; z-index: 46; display: flex; justify-content: flex-end; align-items: center; pointer-events: none; font-family: system-ui, sans-serif; }
+      #adcard.hidden { display: none; }
+      #adcard .ac-body { pointer-events: auto; position: relative; width: min(360px, 92vw); max-height: 94vh; overflow-y: auto; margin-right: max(12px, var(--safe-r, 0px)); background: #121a14; color: #f2efe6; border-radius: 18px; box-shadow: 0 18px 50px rgba(0,0,0,.55); border-top: 5px solid transparent;
+        border-image: repeating-linear-gradient(90deg, #e3a92b 0 14px, #121a14 14px 20px, #c8442e 20px 34px, #2f8f57 34px 48px, #1f5fa8 48px 58px) 5; animation: ac-in .3s cubic-bezier(.2,.9,.3,1.1); scrollbar-width: none; }
+      @keyframes ac-in { from { transform: translateX(40px); opacity: 0; } }
+      #adcard .ac-in { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 8px; }
+      #adcard .ac-x { position: absolute; right: 10px; top: 10px; width: 32px; height: 32px; border-radius: 50%; border: 0; background: #2e3a32; color: #f2efe6; font-size: 15px; z-index: 1; }
+      #adcard .ac-kind { color: #e3a92b; font-size: 10px; letter-spacing: .16em; font-weight: 800; }
+      #adcard h3 { margin: 0 34px 2px 0; font-size: 17px; }
+      #adcard .ac-pic { position: relative; border-radius: 10px; overflow: hidden; border: 4px solid #16171a; background: #16171a; }
+      #adcard .ac-pic img { display: block; width: 100%; }
+      #adcard .ac-pic span { position: absolute; left: 8px; top: 8px; font-size: 10px; font-weight: 800; color: #fff; background: #c8442e; padding: 2px 6px; border-radius: 4px; animation: ac-live 1.4s infinite; }
+      @keyframes ac-live { 50% { opacity: .55; } }
+      #adcard .ac-note { color: #c9d3cb; font-size: 12px; line-height: 1.45; margin: 0; }
+      #adcard .ac-price { display: flex; flex-direction: column; background: #1c2620; border: 1px solid #2e3a32; border-radius: 12px; padding: 9px 12px; }
+      #adcard .ac-price b { font-size: 18px; color: #f2c21a; }
+      #adcard .ac-price span { font-size: 11px; color: #c9d3cb; }
+      #adcard .ac-go { border: 0; border-radius: 12px; padding: 12px; background: #e3a92b; color: #121a14; font: 800 14px system-ui, sans-serif; }
+      #adcard .ac-send { border: 0; border-radius: 12px; padding: 10px; background: #2e3a32; color: #8a968d; font: 700 13px system-ui, sans-serif; }
+      #adcard label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: #c9d3cb; font-weight: 600; }
+      #adcard input:not([type=file]) { background: #1c2620; border: 1px solid #2e3a32; border-radius: 9px; padding: 8px 10px; color: #f2efe6; font: 14px system-ui, sans-serif; }
+      #adcard .ac-preview { width: 100%; border-radius: 8px; border: 3px solid #16171a; }
+      #adcard .ac-row { display: flex; align-items: center; gap: 10px; justify-content: space-between; }
+      #adcard .ac-file { flex-direction: row; align-items: center; background: #1c2620; border: 1px dashed #e3a92b; border-radius: 10px; padding: 8px 10px; color: #f2efe6; font-size: 12px; cursor: pointer; }
+      #adcard .ac-colours { display: flex; gap: 5px; }
+      #adcard .ac-colours button { width: 24px; height: 24px; border-radius: 50%; border: 2px solid transparent; }
+      #adcard .ac-colours button.on { border-color: #f2efe6; }
     </style>
   </head>
   <body>

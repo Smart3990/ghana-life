@@ -7,7 +7,7 @@
 import type { Arm, Junction } from './signals';
 import * as THREE from 'three';
 import { slidingAdMaterial, twoSidedFace } from './adScreens';
-import { AD_COUNT, adSheet } from './adPosters';
+import { AD_COUNT, adSheet, drawAd, type AdDesign } from './adPosters';
 import { box, merge, paint, shadowTexture } from './vehicles3d';
 import type { Roof, StreetLine } from './streetBuildings';
 import { CrowdBatch, lookFor, MIX, type Clip, type CrowdBody, type Kind as PersonKind, type Look } from './crowd';
@@ -293,6 +293,8 @@ export class StreetLife {
     // The advert sheet: photos and graphics like real campaigns (adPosters.ts); smaller on Light phones.
     const atlas = adSheet(opts.people < 150 ? 512 : 768, () => (atlasTex.needsUpdate = true));
     const atlasTex = new THREE.CanvasTexture(atlas);
+    this.adSheetCanvas = atlas;
+    this.adTex = atlasTex;
     atlasTex.colorSpace = THREE.SRGBColorSpace;
     atlasTex.anisotropy = 4;
     const adMat = slidingAdMaterial(atlasTex, POSTERS, 7, true); // bright, like a screen
@@ -342,6 +344,15 @@ export class StreetLife {
   private poles!: Batch;
   boards!: Batch;
   private posterMesh!: THREE.InstancedMesh;
+  private adSheetCanvas!: HTMLCanvasElement;
+  private adTex!: THREE.CanvasTexture;
+  /** Show the player's own advert in one of the advert places on the billboards (a preview, only for them). */
+  previewAd(row: number, design: AdDesign, photo: HTMLImageElement | null) {
+    const W = this.adSheetCanvas.width;
+    const H = Math.round((W * 9) / 16);
+    drawAd(this.adSheetCanvas.getContext('2d')!, design, (POSTERS - 1 - row) * H, W, H, photo);
+    this.adTex.needsUpdate = true;
+  }
   private roofMesh!: THREE.InstancedMesh;
   private bannerMesh!: THREE.InstancedMesh;
   private roofBoards!: Batch;

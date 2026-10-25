@@ -96,6 +96,8 @@ walkAll(test, (n) => {
     const who = textOf(n.arguments[0]);
     const line = textOf(n.arguments[1]);
     if (who && line && FILM[who]) add(`Story: ${FILM[who].split(' (')[0]}`, FILM[who], line);
+    // Lines with a version for a woman and a man player: girl ? '...' : '...'
+    if (who && FILM[who] && n.arguments[1].type === 'ConditionalExpression') for (const b of [n.arguments[1].consequent, n.arguments[1].alternate]) { const t = textOf(b); if (t) add(`Story: ${FILM[who].split(' (')[0]}`, FILM[who], t); }
   }
   // Film cues and moving pictures: [time, 'WHO', 'line'] or ['WHO', 'line'] lists.
   if (f === 'cine.picture' || f === 'cine.video') {
@@ -108,6 +110,13 @@ walkAll(test, (n) => {
   if (/onSpeak/.test(f) && n.arguments.length >= 4) {
     for (const s of strings(n.arguments[3])) if (s !== 'female') add('Story: shouts', 'You and Auntie Dede (in the street)', s);
   }
+});
+
+// Lines kept in lists in the story: [time, 'WHO', 'line'] (the ride home).
+walkAll(test, (a) => {
+  if (a.type !== 'ArrayExpression') return;
+  const parts = a.elements.map((e) => (e ? textOf(e) : null));
+  for (let i = 0; i + 1 < parts.length; i++) if (parts[i] && FILM[parts[i]] && parts[i + 1]) add(`Story: ${FILM[parts[i]].split(' (')[0]}`, FILM[parts[i]], parts[i + 1]);
 });
 
 // 2. Drivers, mates and people in the street.

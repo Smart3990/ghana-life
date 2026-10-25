@@ -1,18 +1,8 @@
 [
  {
-  "id": "my-child-go-and-make-us-proud",
-  "line": "My child, go and make us proud.",
-  "who": "Grandma (old woman, warm, slow)"
- },
- {
-  "id": "go-and-make-us-proud",
-  "line": "Go and make us proud.",
-  "who": "Grandma (old woman, warm, slow)"
- },
- {
-  "id": "accra-accra-accra-last-seat-come-come",
-  "line": "Accra! Accra! Accra! Last seat, come, come!",
-  "who": "Bus mate (young man, loud)"
+  "id": "move-move-my-bag",
+  "line": "Move! Move! My bag!",
+  "who": "You and Auntie Dede (in the street)"
  },
  {
   "id": "hey-my-bag",
@@ -30,13 +20,28 @@
   "who": "You and Auntie Dede (in the street)"
  },
  {
+  "id": "my-child-go-and-make-us-proud",
+  "line": "My child, go and make us proud.",
+  "who": "Grandma (old woman, warm, slow)"
+ },
+ {
+  "id": "go-and-make-us-proud",
+  "line": "Go and make us proud.",
+  "who": "Grandma (old woman, warm, slow)"
+ },
+ {
+  "id": "accra-accra-accra-last-seat-come-come",
+  "line": "Accra! Accra! Accra! Last seat, come, come!",
+  "who": "Bus mate (young man, loud)"
+ },
+ {
   "id": "ei-sit-down-my-child-what-happened",
   "line": "Ei! Sit down, my child. What happened?",
   "who": "Auntie Dede (woman about 50, loud and motherly)"
  },
  {
-  "id": "sorry-ooo-eat-small-who-do-you-know-in-accra",
-  "line": "Sorry, ooo. Eat small. Who do you know in Accra?",
+  "id": "sorry-ooo-who-do-you-know-in-accra",
+  "line": "Sorry, ooo. Who do you know in Accra?",
   "who": "Auntie Dede (woman about 50, loud and motherly)"
  },
  {
@@ -45,8 +50,28 @@
   "who": "Auntie Dede (woman about 50, loud and motherly)"
  },
  {
-  "id": "don-t-worry-accra-will-not-swallow-you-eat",
-  "line": "Don’t worry. Accra will not swallow you. Eat!",
+  "id": "hello-is-this-uncle-kwame-your-niece-is-here-with-me-at-circ",
+  "line": "Hello? Is this Uncle Kwame? Your niece is here with me at Circle. A boy took her bag.",
+  "who": "Auntie Dede (woman about 50, loud and motherly)"
+ },
+ {
+  "id": "hello-is-this-uncle-kwame-your-nephew-is-here-with-me-at-cir",
+  "line": "Hello? Is this Uncle Kwame? Your nephew is here with me at Circle. A boy took his bag.",
+  "who": "Auntie Dede (woman about 50, loud and motherly)"
+ },
+ {
+  "id": "by-the-lorry-station-the-kelewele-umbrella-okay-okay-bye-bye",
+  "line": "By the lorry station, the kelewele umbrella. Okay, okay. Bye bye.",
+  "who": "Auntie Dede (woman about 50, loud and motherly)"
+ },
+ {
+  "id": "he-is-coming-don-t-worry-accra-will-not-swallow-you-here-eat",
+  "line": "He is coming. Don’t worry, Accra will not swallow you. Here, eat!",
+  "who": "Auntie Dede (woman about 50, loud and motherly)"
+ },
+ {
+  "id": "ah-no-no-okay-thank-you-take-good-care-of-this-one",
+  "line": "Ah, no, no… okay, thank you. Take good care of this one!",
   "who": "Auntie Dede (woman about 50, loud and motherly)"
  },
  {
@@ -60,8 +85,43 @@
   "who": "You, the player (young man about 20; a young woman reads them for a female player)"
  },
  {
-  "id": "stay-there-i-m-coming",
-  "line": "Stay there. I’m coming.",
+  "id": "everything-is-moving-so-fast",
+  "line": "Everything is moving so fast…",
+  "who": "You, the player (young man about 20; a young woman reads them for a female player)"
+ },
+ {
+  "id": "ei-okay-no-problem-tell-her-to-stay-there-i-am-coming-very-s",
+  "line": "Ei! Okay, no problem. Tell her to stay there. I am coming very soon.",
+  "who": "Uncle Kwame (man about 55, deep and calm)"
+ },
+ {
+  "id": "ei-okay-no-problem-tell-him-to-stay-there-i-am-coming-very-s",
+  "line": "Ei! Okay, no problem. Tell him to stay there. I am coming very soon.",
+  "who": "Uncle Kwame (man about 55, deep and calm)"
+ },
+ {
+  "id": "auntie-thank-you-oo-god-bless-you-for-looking-after-my-niece",
+  "line": "Auntie, thank you oo! God bless you for looking after my niece.",
+  "who": "Uncle Kwame (man about 55, deep and calm)"
+ },
+ {
+  "id": "auntie-thank-you-oo-god-bless-you-for-looking-after-my-nephe",
+  "line": "Auntie, thank you oo! God bless you for looking after my nephew.",
+  "who": "Uncle Kwame (man about 55, deep and calm)"
+ },
+ {
+  "id": "welcome-home-this-is-our-compound-come-in-let-me-show-you-yo",
+  "line": "Welcome home. This is our compound. Come in, let me show you your corner.",
+  "who": "Uncle Kwame (man about 55, deep and calm)"
+ },
+ {
+  "id": "this-is-accra-busy-busy-you-will-learn-it-fast",
+  "line": "This is Accra. Busy, busy. You will learn it fast.",
+  "who": "Uncle Kwame (man about 55, deep and calm)"
+ },
+ {
+  "id": "ha-tomorrow-i-will-show-you-around-today-you-rest",
+  "line": "Ha! Tomorrow I will show you around. Today, you rest.",
   "who": "Uncle Kwame (man about 55, deep and calm)"
  },
  {

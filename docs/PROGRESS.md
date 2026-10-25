@@ -266,6 +266,17 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
   - **Billboards on the big map:** each shows its advert on two little legs; a few spread out on "All", every one under the new 📺 Ads filter.
   - **Lines said to you fit you:** a woman player hears "my daughter", "my sister", "Madam", "Sista"; a man hears "my son", "my brother", "Massa", "Bra" (`src/game/address.ts`), in the street, in talks, from drivers and on phone calls. The voice script lists both versions (244 lines).
 
+  - **The chase:** when the boy snatches the bag, you run after him at once (the story runs you, the buttons step aside). He darts across the road; a taxi cuts across right in front of you and brakes hard ("Ei! Madam/Massa, watch the road!"); you run round the back of it, and he is gone down the far pavement. Then "You lost him" and Mission 1.
+  - **Auntie Dede's scene, redone:** story people are always in full detail and the picture is sharper during scenes; the camera cuts between a side shot and close shots aimed at faces. You sit and tell her what happened (talking with your hands), hand her the slip of paper with Uncle Kwame's number, she puts her phone to her ear and calls him ("Okay, no problem. Tell him/her to stay there. I am coming very soon."), then she hands you a wrap of hot kelewele and you eat it standing at her stall.
+  - **Uncle Kwame arrives:** "Forty minutes later…", his dark blue car comes along the real road and stops at the stall (traffic queues behind it); he walks over, thanks her, hands her money, and calls you by your day name. You both walk to the car.
+  - **The ride home (about 14 seconds):** through the real streets, looking out of your window from your seat, then from behind the car in the traffic, while Uncle talks to you.
+  - **Uncle Kwame's compound house** (`src/game/compound.ts`, our own design): walled yard, blue gate, five rooms under a tin roof with a veranda, kitchen corner, water drum, poly tank on a stand, washing line, mango tree, bench and chairs. It is placed on open ground with its gate to the road. "Chapter 1 · From Ada to Accra", Uncle welcomes you, and the goal is to walk into the compound.
+  - **Tap a vehicle with an advert:** it stops (up to 30 s), the mate calls to you, and a card shows its advert, the price (₵250 a week, trotro route pack; brief 18.2) and "Put your advert here".
+  - **Tap a billboard on the big map:** its card with the advert, the price (₵350 a week) and "Put your advert here".
+  - **Put your advert here:** business name, big and small words, button, your own picture and colours; a live preview, then "Preview it in the city" shows it on that space for you only. Paying and going live come with the server and the advertiser page; phone numbers and links are taken out of the words.
+  - The character models already had more moves; now used: talking on the phone, eating, pushing (the driver who pushes you aside), talking in a chair, picking up, nodding.
+  - Story timers now count game time, so slow phones see the same scenes, not cut short.
+
 ## Waiting on the owner
 
 - Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.

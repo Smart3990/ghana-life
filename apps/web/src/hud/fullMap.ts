@@ -23,6 +23,8 @@ type View = {
   /** Billboards: where they stand and which advert they show (its picture, from adThumb). */
   boards: { lng: number; lat: number; ad: number }[];
   adPicture: (ad: number) => string;
+  /** Tapping a billboard opens its advert card. */
+  openAd: (ad: number) => void;
 };
 
 const GROUPS: Group[] = [
@@ -300,6 +302,10 @@ export class FullMap {
         if (animate) el.style.animationDelay = `${Math.min(1.6, 0.3 + i * 0.03)}s`;
         if (!pics.has(b.ad)) pics.set(b.ad, view.adPicture(b.ad));
         el.innerHTML = `<img alt="" src="${pics.get(b.ad)}"><i></i>`;
+        el.addEventListener('click', (e) => {
+          e.stopPropagation();
+          view.openAd(b.ad);
+        });
         this.markers.push(new maplibregl.Marker({ element: el, anchor: 'bottom' }).setLngLat([b.lng, b.lat]).addTo(this.map!));
       });
     }

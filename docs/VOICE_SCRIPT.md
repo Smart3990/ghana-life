@@ -15,6 +15,17 @@ Lines said to the player come twice when it matters: once for a man ("my son", "
 
 Lines with `{...}` in them say a name the game fills in (your hometown, a place): the phone's voice says those for now.
 
+## Story: shouts
+
+*Who:* You and Auntie Dede (in the street)
+
+| File | Line |
+| --- | --- |
+| `move-move-my-bag.mp3` | Move! Move! My bag! |
+| `hey-my-bag.mp3` | Hey! My bag! |
+| `hey-my-daughter-come-come-here.mp3` | Hey! My daughter! Come, come here! |
+| `hey-my-son-come-come-here.mp3` | Hey! My son! Come, come here! |
+
 ## Story: Grandma
 
 *Who:* Grandma (old woman, warm, slow)
@@ -32,16 +43,6 @@ Lines with `{...}` in them say a name the game fills in (your hometown, a place)
 | --- | --- |
 | `accra-accra-accra-last-seat-come-come.mp3` | Accra! Accra! Accra! Last seat, come, come! |
 
-## Story: shouts
-
-*Who:* You and Auntie Dede (in the street)
-
-| File | Line |
-| --- | --- |
-| `hey-my-bag.mp3` | Hey! My bag! |
-| `hey-my-daughter-come-come-here.mp3` | Hey! My daughter! Come, come here! |
-| `hey-my-son-come-come-here.mp3` | Hey! My son! Come, come here! |
-
 ## Story: Auntie Dede
 
 *Who:* Auntie Dede (woman about 50, loud and motherly)
@@ -49,9 +50,13 @@ Lines with `{...}` in them say a name the game fills in (your hometown, a place)
 | File | Line |
 | --- | --- |
 | `ei-sit-down-my-child-what-happened.mp3` | Ei! Sit down, my child. What happened? |
-| `sorry-ooo-eat-small-who-do-you-know-in-accra.mp3` | Sorry, ooo. Eat small. Who do you know in Accra? |
+| `sorry-ooo-who-do-you-know-in-accra.mp3` | Sorry, ooo. Who do you know in Accra? |
 | `give-me-his-number-i-will-call-him-on-my-phone.mp3` | Give me his number. I will call him on my phone. |
-| `don-t-worry-accra-will-not-swallow-you-eat.mp3` | Don’t worry. Accra will not swallow you. Eat! |
+| `hello-is-this-uncle-kwame-your-niece-is-here-with-me-at-circ.mp3` | Hello? Is this Uncle Kwame? Your niece is here with me at Circle. A boy took her bag. |
+| `hello-is-this-uncle-kwame-your-nephew-is-here-with-me-at-cir.mp3` | Hello? Is this Uncle Kwame? Your nephew is here with me at Circle. A boy took his bag. |
+| `by-the-lorry-station-the-kelewele-umbrella-okay-okay-bye-bye.mp3` | By the lorry station, the kelewele umbrella. Okay, okay. Bye bye. |
+| `he-is-coming-don-t-worry-accra-will-not-swallow-you-here-eat.mp3` | He is coming. Don’t worry, Accra will not swallow you. Here, eat! |
+| `ah-no-no-okay-thank-you-take-good-care-of-this-one.mp3` | Ah, no, no… okay, thank you. Take good care of this one! |
 
 ## Story: You, the player
 
@@ -61,6 +66,7 @@ Lines with `{...}` in them say a name the game fills in (your hometown, a place)
 | --- | --- |
 | `a-boy-took-my-bag-my-money-my-phone-everything.mp3` | A boy took my bag. My money, my phone… everything. |
 | `my-uncle-uncle-kwame.mp3` | My uncle. Uncle Kwame. |
+| `everything-is-moving-so-fast.mp3` | Everything is moving so fast… |
 
 ## Story: Uncle Kwame
 
@@ -68,7 +74,14 @@ Lines with `{...}` in them say a name the game fills in (your hometown, a place)
 
 | File | Line |
 | --- | --- |
-| `stay-there-i-m-coming.mp3` | Stay there. I’m coming. |
+| `ei-okay-no-problem-tell-her-to-stay-there-i-am-coming-very-s.mp3` | Ei! Okay, no problem. Tell her to stay there. I am coming very soon. |
+| `ei-okay-no-problem-tell-him-to-stay-there-i-am-coming-very-s.mp3` | Ei! Okay, no problem. Tell him to stay there. I am coming very soon. |
+| `auntie-thank-you-oo-god-bless-you-for-looking-after-my-niece.mp3` | Auntie, thank you oo! God bless you for looking after my niece. |
+| `auntie-thank-you-oo-god-bless-you-for-looking-after-my-nephe.mp3` | Auntie, thank you oo! God bless you for looking after my nephew. |
+| (filled in by the game) | {dayName}! Welcome to Accra. Come, let us go home. |
+| `welcome-home-this-is-our-compound-come-in-let-me-show-you-yo.mp3` | Welcome home. This is our compound. Come in, let me show you your corner. |
+| `this-is-accra-busy-busy-you-will-learn-it-fast.mp3` | This is Accra. Busy, busy. You will learn it fast. |
+| `ha-tomorrow-i-will-show-you-around-today-you-rest.mp3` | Ha! Tomorrow I will show you around. Today, you rest. |
 
 ## Drivers when you stand in the road
 
@@ -509,4 +522,4 @@ Lines with `{...}` in them say a name the game fills in (your hometown, a place)
 
 ---
 
-244 lines to record.
+256 lines to record.

@@ -111,10 +111,10 @@ export function drawAd(g: CanvasRenderingContext2D, d: AdDesign, top: number, W:
   // The headline: as big as fits in three lines.
   let size = 15 * u;
   let lines: string[] = [];
-  for (; size > 8 * u; size -= u) {
+  for (; size > 6 * u; size -= u * 0.5) {
     g.font = `900 ${size}px system-ui, sans-serif`;
     lines = wrap(g, d.head, textW);
-    if (lines.length <= 3) break;
+    if (lines.length <= 3 && lines.every((l) => g.measureText(l).width <= textW)) break;
   }
   g.fillStyle = ink;
   g.textBaseline = 'alphabetic';
