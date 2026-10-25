@@ -30,6 +30,8 @@ import { SkyTraffic } from '../game/sky3d';
 import { StreetSound } from '../game/streetSound';
 import { createPerson, type Move, type Person } from '../game/person';
 import { Minimap } from '../hud/minimap';
+import { FullMap } from '../hud/fullMap';
+import { Phone, type MissionRow, type Destination } from '../hud/phone';
 import { TouchControls } from '../hud/touchControls';
 import { landscapeGate } from '../hud/landscape';
 import { Cinema, startScreen, type StartChoice } from '../hud/cinema';
@@ -355,7 +357,11 @@ const touch = new TouchControls(document.getElementById('stick-zone')!, document
   act: actButton,
   brake: btn('btn-brake'),
 });
-btn('btn-phone').addEventListener('click', () => toast('Your phone is coming soon', 'Missions, map, friends and the ride app'));
+btn('btn-phone').addEventListener('click', () => {
+  if (document.body.classList.contains('cine')) return;
+  phone.toggle();
+  document.getElementById('btn-phone')?.classList.remove('dot');
+});
 // The energy chip opens the full "you" card (energy, vibe, money, heat); tap again or anywhere to close.
 const meCard = document.getElementById('me')!;
 const meButton = btn('btn-me');
@@ -809,6 +815,14 @@ function step(player: Player, dt: number, t: number) {
   const blips = state.onOkada || !hasOkada ? [] : [{ x: state.okadaX, z: state.okadaZ, color: '#c8442e', size: 5 }];
   if (story.auntie) blips.push({ x: story.auntie.x, z: story.auntie.z, color: '#e3a92b', size: 7 });
   if (thief.on) blips.push({ x: thief.x, z: thief.z, color: '#f2efe6', size: 4 });
+  if (waypoint) {
+    blips.push({ x: waypoint.x, z: waypoint.z, color: '#2dd4bf', size: 7 });
+    if (Math.hypot(waypoint.x - state.x, waypoint.z - state.z) < 22) {
+      toast('You have arrived', waypoint.name);
+      waypoint = null;
+      if (!story.goal) goalChip.classList.add('hidden');
+    }
+  }
   minimap?.update(state.x, state.z, state.camHeading + look.yaw, blips);
   void t;
 }
@@ -1345,8 +1359,12 @@ function ayekoo(title: string, line: string) {
   missionEl.classList.add('ayekoo');
 }
 const moneyEl = document.getElementById('money')!;
-function setMoney(cedis: number) {
+let cashNow = 0;
+const cashLog: { what: string; amount: number; time: string }[] = [];
+function setMoney(cedis: number, what = '') {
   // What the story says you have. Real money will always come from the server.
+  if (what && cedis !== cashNow) cashLog.push({ what, amount: cedis - cashNow, time: new Date().toUTCString().slice(17, 22) });
+  cashNow = cedis;
   const text = `₵ ${cedis.toLocaleString('en-GH')}`;
   moneyEl.textContent = text;
   document.getElementById('me-sika')!.textContent = text;
@@ -1536,7 +1554,7 @@ async function playOpening(start: StartChoice) {
   cine.preload(useFilmClip ? ['/film/circle.webp'] : ['/film/village.webp', '/film/hands.webp', '/film/bus.webp', '/film/circle.webp']);
   story.busy = story.frozen = true;
   goalChip.classList.add('hidden');
-  setMoney(50);
+  setMoney(50, 'From Grandma for the journey');
   // 1. Home: title cards on black.
   cine.begin();
   await cine.black(true, 0.01);
@@ -1579,7 +1597,7 @@ async function playOpening(start: StartChoice) {
   await Promise.race([grabbed, new Promise((r) => setTimeout(r, 6000))]);
   bag.holder = 'thief';
   life?.scenes?.onSpeak?.(state.x, state.z, 1.9, 'Hey! My bag!', playerBody, 4242);
-  setMoney(0);
+  setMoney(0, 'Bag stolen at Circle');
   await cine.say('', 'A boy grabs your bag: your money, your phone and Grandma’s letter!', 3);
   cine.end();
   story.frozen = false;
@@ -1642,6 +1660,7 @@ async function playOpening(start: StartChoice) {
     story.shot = null;
     cine.end();
     ayekoo('Mission 1 complete', 'You found Auntie Dede. Uncle Kwame is on his way.');
+    storyStep.auntie = true;
     me.vibe += 5;
     await new Promise((r) => setTimeout(r, 3500));
     cine.begin();
@@ -1687,6 +1706,102 @@ async function runAutoTest() {
 }
 
 let minimap: Minimap | null = null;
+// The big map: tap the minimap. Shows the real streets, you, your goal and every place found.
+const lngLatOf = (x: number, z: number) => ({ lng: START[0] + x / M_LON, lat: START[1] - z / M_LAT });
+const fullMap = new FullMap(() => {
+  const goalAt = story.auntie ?? waypoint ?? null;
+  const list = places.list().map((p) => ({ ...lngLatOf(p.x, p.z), kind: p.kind }));
+  if (station) list.push({ ...lngLatOf(station.x, station.z), kind: 'LORRY STATION' });
+  return {
+    you: { ...lngLatOf(state.x, state.z), heading: state.heading },
+    goal: goalAt ? { ...lngLatOf(goalAt.x, goalAt.z), label: story.auntie ? story.goal || 'Your goal' : waypoint?.name ?? 'Your goal' } : null,
+    places: list,
+    areas: PLACES.map((a) => ({ name: a.name, lng: a.at[0], lat: a.at[1] })),
+  };
+});
+// Where the Ride app is taking you (a teal marker on the maps).
+let waypoint: Destination | null = null;
+const storyStep = { auntie: false };
+const CHAPTER_1 = ['Welcome Chop', 'Get Connected', 'Mate for a Day', 'Lights Off', 'Two Years Advance', 'Your Own Key'];
+// City Feed: what is happening in the city (fictional people and businesses only).
+const feedPosts: { who: string; text: string; time: string; gold?: boolean }[] = [];
+const FEED = [
+  { who: 'Ghanaverse News', text: 'Auntie Akos: “Chale, this one too!” A goat stopped traffic at Circle for ten minutes this morning.', gold: true },
+  { who: 'Circle Traffic', text: 'Heavy traffic on the Ring Road towards Kaneshie. Okadas are moving, trotros are not.' },
+  { who: 'SIKA OIL', text: 'Fuel price board updated at every SIKA OIL filling station today.' },
+  { who: 'Ghanaverse Weather', text: 'Hot and dusty this afternoon, 32°C. Rain clouds over Madina later.' },
+  { who: 'Kokomlemle Market', text: 'Fresh tomatoes just arrived. The market women say: come early, they will finish.' },
+  { who: 'Ghanaverse News', text: 'Chidi from Lagos: “Wahala dey!” Bag snatchers seen near the lorry station. Hold your things well.', gold: true },
+  { who: 'Adabraka Chop Bar', text: 'Waakye is ready. Banku and tilapia from 6 pm.' },
+  { who: 'Ghanaverse Police', text: 'Officers on foot patrol at Circle tonight. Report thieves to the police station near you.' },
+  { who: 'Asylum Down Youth', text: 'Street football at the park this evening. Everybody is welcome.' },
+];
+let feedNext = 0;
+const postFeed = () => {
+  const f = FEED[feedNext++ % FEED.length];
+  feedPosts.push({ ...f, time: new Date().toUTCString().slice(17, 22) });
+  if (feedPosts.length > 30) feedPosts.shift();
+  document.getElementById('btn-phone')?.classList.toggle('dot', !!phone?.newPosts());
+};
+
+const phone: Phone = new Phone({
+  money: () => cashNow,
+  history: () => cashLog,
+  goal: () => story.goal || (waypoint ? `Go to ${waypoint.name}` : goalChip.classList.contains('hidden') ? '' : goalText.textContent ?? ''),
+  missions: () => {
+    const rows: MissionRow[] = [
+      { title: 'Arrive in Accra', goal: 'The trotro to Circle', state: 'done' },
+      { title: 'Mission 1 · Find the kelewele auntie', goal: 'Cross at the zebra and find Auntie Dede', state: storyStep.auntie ? 'done' : 'now' },
+    ];
+    CHAPTER_1.forEach((t, i) => rows.push({ title: `Chapter 1 · ${t}`, goal: '', state: storyStep.auntie && i === 0 ? 'next' : 'locked' }));
+    if (storyStep.auntie) rows[2].goal = 'Uncle Kwame will call you about this';
+    return rows;
+  },
+  openMap: () => fullMap.open(),
+  destinations: () => {
+    const list: Destination[] = PLACES.map((a) => ({ name: a.name, x: (a.at[0] - START[0]) * M_LON, z: (START[1] - a.at[1]) * M_LAT, kind: 'AREA' }));
+    for (const f of places.fuelNear(state.x, state.z, 2500).slice(0, 4)) list.push({ name: 'SIKA OIL filling station', x: f.x, z: f.z, kind: 'FILLING STATION' });
+    if (station) list.push({ name: 'Circle lorry station', x: station.x, z: station.z, kind: 'LORRY STATION' });
+    return list
+      .map((d) => ({ ...d, dist: Math.hypot(d.x - state.x, d.z - state.z) }))
+      .filter((d) => d.dist > 40)
+      .sort((a, b) => a.dist - b.dist)
+      .filter((d, i, all) => d.kind !== 'FILLING STATION' || all.findIndex((o) => o.kind === 'FILLING STATION') === i || d.dist > 600);
+  },
+  setWaypoint: (d) => {
+    waypoint = d;
+    if (d) {
+      toast('Marked on your map', d.name);
+      if (!story.goal) {
+        goalChip.classList.remove('hidden');
+        goalText.textContent = `Go to ${d.name}`;
+      }
+    }
+  },
+  waypoint: () => waypoint,
+  feed: () => feedPosts,
+  say: (text, who) => voices.say(text, who, 1, 2),
+  stopTalking: () => voices.stop(),
+  nickname: () => 'Newcomer',
+  storyDone: (step) => (step === 'auntie' ? storyStep.auntie : false),
+  muted: () => voices.muted,
+  toggleSound: () => document.getElementById('btn-sound')?.click(),
+  tier: () => tier,
+});
+for (let i = 0; i < 4; i++) postFeed();
+setInterval(postFeed, 90_000);
+document.getElementById('minimap')!.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (!document.body.classList.contains('cine')) fullMap.open();
+});
+addEventListener('keydown', (e) => {
+  if (e.key === 'm' || e.key === 'M') fullMap.toggle();
+  if (e.key === 'Escape') {
+    fullMap.close();
+    phone.close();
+  }
+  if (e.key === 'p' || e.key === 'P') phone.toggle();
+});
 // Real 3D buildings near the player (the map's own blocks are switched off at street level).
 // Trees, lights, kiosks, umbrellas, polytanks and people, placed along the same streets.
 let life: StreetLife | null = null;
@@ -1987,6 +2102,7 @@ async function start() {
   startedAt = performance.now();
   if (skipStory) {
     setMoney(0);
+    storyStep.auntie = true;
     setTimeout(() => (help.style.opacity = '0'), 7000);
   } else {
     help.style.opacity = '0';
