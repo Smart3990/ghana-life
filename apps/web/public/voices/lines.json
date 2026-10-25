@@ -1,0 +1,1137 @@
+[
+ {
+  "id": "my-child-go-and-make-us-proud",
+  "line": "My child, go and make us proud.",
+  "who": "Grandma (old woman, warm, slow)"
+ },
+ {
+  "id": "go-and-make-us-proud",
+  "line": "Go and make us proud.",
+  "who": "Grandma (old woman, warm, slow)"
+ },
+ {
+  "id": "accra-accra-accra-last-seat-come-come",
+  "line": "Accra! Accra! Accra! Last seat, come, come!",
+  "who": "Bus mate (young man, loud)"
+ },
+ {
+  "id": "hey-my-bag",
+  "line": "Hey! My bag!",
+  "who": "You and Auntie Dede (in the street)"
+ },
+ {
+  "id": "hey-my-daughter-come-come-here",
+  "line": "Hey! My daughter! Come, come here!",
+  "who": "You and Auntie Dede (in the street)"
+ },
+ {
+  "id": "hey-my-son-come-come-here",
+  "line": "Hey! My son! Come, come here!",
+  "who": "You and Auntie Dede (in the street)"
+ },
+ {
+  "id": "ei-sit-down-my-child-what-happened",
+  "line": "Ei! Sit down, my child. What happened?",
+  "who": "Auntie Dede (woman about 50, loud and motherly)"
+ },
+ {
+  "id": "sorry-ooo-eat-small-who-do-you-know-in-accra",
+  "line": "Sorry, ooo. Eat small. Who do you know in Accra?",
+  "who": "Auntie Dede (woman about 50, loud and motherly)"
+ },
+ {
+  "id": "give-me-his-number-i-will-call-him-on-my-phone",
+  "line": "Give me his number. I will call him on my phone.",
+  "who": "Auntie Dede (woman about 50, loud and motherly)"
+ },
+ {
+  "id": "don-t-worry-accra-will-not-swallow-you-eat",
+  "line": "Don’t worry. Accra will not swallow you. Eat!",
+  "who": "Auntie Dede (woman about 50, loud and motherly)"
+ },
+ {
+  "id": "a-boy-took-my-bag-my-money-my-phone-everything",
+  "line": "A boy took my bag. My money, my phone… everything.",
+  "who": "You, the player (young man about 20; a young woman reads them for a female player)"
+ },
+ {
+  "id": "my-uncle-uncle-kwame",
+  "line": "My uncle. Uncle Kwame.",
+  "who": "You, the player (young man about 20; a young woman reads them for a female player)"
+ },
+ {
+  "id": "stay-there-i-m-coming",
+  "line": "Stay there. I’m coming.",
+  "who": "Uncle Kwame (man about 55, deep and calm)"
+ },
+ {
+  "id": "chale-comot-for-road",
+  "line": "Chale, comot for road!",
+  "who": "Drivers (men, annoyed but not angry, shouting from the car)"
+ },
+ {
+  "id": "massa-move-you-no-see-the-car",
+  "line": "Massa, move! You no see the car?",
+  "who": "Drivers (men, annoyed but not angry, shouting from the car)"
+ },
+ {
+  "id": "herh-give-way-my-brother",
+  "line": "Herh! Give way, my brother!",
+  "who": "Drivers (men, annoyed but not angry, shouting from the car)"
+ },
+ {
+  "id": "charley-wait-ooo-make-i-pass",
+  "line": "Charley, wait ooo! Make I pass!",
+  "who": "Drivers (men, annoyed but not angry, shouting from the car)"
+ },
+ {
+  "id": "ei-you-want-make-car-jam-you",
+  "line": "Ei! You want make car jam you?",
+  "who": "Drivers (men, annoyed but not angry, shouting from the car)"
+ },
+ {
+  "id": "bra-abeg-shift-small",
+  "line": "Bra, abeg shift small!",
+  "who": "Drivers (men, annoyed but not angry, shouting from the car)"
+ },
+ {
+  "id": "jimmy-move-from-the-road",
+  "line": "Jimmy! Move from the road!",
+  "who": "Drivers (men, annoyed but not angry, shouting from the car)"
+ },
+ {
+  "id": "mepa-wo-kyew-twe-wo-ho",
+  "line": "Mepa wo kyew, twe wo ho!",
+  "who": "Drivers (men, annoyed but not angry, shouting from the car)"
+ },
+ {
+  "id": "make-way-make-way-we-dey-go",
+  "line": "Make way, make way! We dey go!",
+  "who": "Drivers (men, annoyed but not angry, shouting from the car)"
+ },
+ {
+  "id": "ah-you-no-hear-horn-move",
+  "line": "Ah! You no hear horn? Move!",
+  "who": "Drivers (men, annoyed but not angry, shouting from the car)"
+ },
+ {
+  "id": "ah-sister-brother-move-passengers-dey-wait",
+  "line": "Ah! Sister, brother, move! Passengers dey wait!",
+  "who": "Trotro mates (young men, loud)"
+ },
+ {
+  "id": "circle-circle-move-we-dey-go-circle",
+  "line": "Circle, Circle! Move, we dey go Circle!",
+  "who": "Trotro mates (young men, loud)"
+ },
+ {
+  "id": "chale-you-go-pay-our-time-move",
+  "line": "Chale, you go pay our time? Move!",
+  "who": "Trotro mates (young men, loud)"
+ },
+ {
+  "id": "massa-i-beg-go-side",
+  "line": "Massa, I beg, go side!",
+  "who": "Driver (man, firm)"
+ },
+ {
+  "id": "chale-the-road-no-be-your-room",
+  "line": "Chale, the road no be your room!",
+  "who": "Driver (man, firm)"
+ },
+ {
+  "id": "herh-go-the-pavement",
+  "line": "Herh, go the pavement!",
+  "who": "Driver (man, firm)"
+ },
+ {
+  "id": "chale-the-traffic-today",
+  "line": "Chale, the traffic today!",
+  "who": "Anyone: men, women, children (two or three different voices)"
+ },
+ {
+  "id": "i-am-coming-i-am-coming",
+  "line": "I am coming, I am coming!",
+  "who": "Anyone: men, women, children (two or three different voices)"
+ },
+ {
+  "id": "did-you-watch-the-match-yesterday",
+  "line": "Did you watch the match yesterday?",
+  "who": "Anyone: men, women, children (two or three different voices)"
+ },
+ {
+  "id": "charley-how-be",
+  "line": "Charley, how be?",
+  "who": "Anyone: men, women, children (two or three different voices)"
+ },
+ {
+  "id": "mummy-wait-for-me",
+  "line": "Mummy, wait for me!",
+  "who": "Anyone: men, women, children (two or three different voices)"
+ },
+ {
+  "id": "ei-the-sun-is-hot-oo",
+  "line": "Ei, the sun is hot oo!",
+  "who": "Anyone: men, women, children (two or three different voices)"
+ },
+ {
+  "id": "where-are-you-i-am-at-circle",
+  "line": "Where are you? I am at Circle.",
+  "who": "Anyone: men, women, children (two or three different voices)"
+ },
+ {
+  "id": "let-us-go-and-buy-waakye",
+  "line": "Let us go and buy waakye.",
+  "who": "Anyone: men, women, children (two or three different voices)"
+ },
+ {
+  "id": "this-trotro-is-too-slow",
+  "line": "This trotro is too slow!",
+  "who": "Anyone: men, women, children (two or three different voices)"
+ },
+ {
+  "id": "hello-i-can-t-hear-you",
+  "line": "Hello? I can’t hear you!",
+  "who": "Anyone: men, women, children (two or three different voices)"
+ },
+ {
+  "id": "ei-look-at-that-one",
+  "line": "Ei, look at that one!",
+  "who": "Anyone: men, women, children (two or three different voices)"
+ },
+ {
+  "id": "tomorrow-we-go-to-kaneshie-market",
+  "line": "Tomorrow we go to Kaneshie market.",
+  "who": "Anyone: men, women, children (two or three different voices)"
+ },
+ {
+  "id": "my-brother-how-far",
+  "line": "My brother, how far?",
+  "who": "Anyone: men, women, children (two or three different voices)"
+ },
+ {
+  "id": "i-will-call-you-back",
+  "line": "I will call you back.",
+  "who": "Anyone: men, women, children (two or three different voices)"
+ },
+ {
+  "id": "ah-see-this-price",
+  "line": "Ah, see this price!",
+  "who": "Anyone: men, women, children (two or three different voices)"
+ },
+ {
+  "id": "chale",
+  "line": "Chale!",
+  "who": "Anyone: men and women"
+ },
+ {
+  "id": "ei-my-friend",
+  "line": "Ei, my friend!",
+  "who": "Anyone: men and women"
+ },
+ {
+  "id": "how-far",
+  "line": "How far?",
+  "who": "Anyone: men and women"
+ },
+ {
+  "id": "akwaaba",
+  "line": "Akwaaba!",
+  "who": "Anyone: men and women"
+ },
+ {
+  "id": "boss-come-and-buy",
+  "line": "Boss, come and buy!",
+  "who": "Anyone: men and women"
+ },
+ {
+  "id": "bra-you-dey",
+  "line": "Bra, you dey?",
+  "who": "Anyone: men and women"
+ },
+ {
+  "id": "sister-come",
+  "line": "Sister, come!",
+  "who": "Anyone: men and women"
+ },
+ {
+  "id": "ete-sen",
+  "line": "Ete sen?",
+  "who": "Anyone: men and women"
+ },
+ {
+  "id": "wo-ho-te-sen",
+  "line": "Wo ho te sen?",
+  "who": "Anyone: men and women"
+ },
+ {
+  "id": "i-dey-how-about-you",
+  "line": "I dey, how about you?",
+  "who": "Anyone: men and women"
+ },
+ {
+  "id": "fine-fine",
+  "line": "Fine, fine!",
+  "who": "Anyone: men and women"
+ },
+ {
+  "id": "chale-i-dey-kraa",
+  "line": "Chale, I dey kraa!",
+  "who": "Anyone: men and women"
+ },
+ {
+  "id": "we-dey-here-oo",
+  "line": "We dey here oo!",
+  "who": "Anyone: men and women"
+ },
+ {
+  "id": "medaase",
+  "line": "Medaase!",
+  "who": "Anyone: men and women"
+ },
+ {
+  "id": "god-dey",
+  "line": "God dey!",
+  "who": "Anyone: men and women"
+ },
+ {
+  "id": "come-and-buy",
+  "line": "Come and buy!",
+  "who": "Market women and hawkers (loud, sing-song)"
+ },
+ {
+  "id": "pure-water-pure-water",
+  "line": "Pure water! Pure water!",
+  "who": "Market women and hawkers (loud, sing-song)"
+ },
+ {
+  "id": "fresh-bread",
+  "line": "Fresh bread!",
+  "who": "Market women and hawkers (loud, sing-song)"
+ },
+ {
+  "id": "ice-cold",
+  "line": "Ice cold!",
+  "who": "Market women and hawkers (loud, sing-song)"
+ },
+ {
+  "id": "credit-dey",
+  "line": "Credit dey!",
+  "who": "Market women and hawkers (loud, sing-song)"
+ },
+ {
+  "id": "kenkey-hot",
+  "line": "Kenkey hot!",
+  "who": "Market women and hawkers (loud, sing-song)"
+ },
+ {
+  "id": "waakye-dey",
+  "line": "Waakye dey!",
+  "who": "Market women and hawkers (loud, sing-song)"
+ },
+ {
+  "id": "welcome-what-do-you-want",
+  "line": "Welcome! What do you want?",
+  "who": "Market women and hawkers"
+ },
+ {
+  "id": "my-customer",
+  "line": "My customer!",
+  "who": "Market women and hawkers"
+ },
+ {
+  "id": "everything-dey-come",
+  "line": "Everything dey, come!",
+  "who": "Market women and hawkers"
+ },
+ {
+  "id": "special-price-for-you",
+  "line": "Special price for you!",
+  "who": "Market women and hawkers"
+ },
+ {
+  "id": "phones-phones",
+  "line": "Phones! Phones!",
+  "who": "Young men (fast, cheeky)"
+ },
+ {
+  "id": "charger-earpiece-power-bank",
+  "line": "Charger, earpiece, power bank!",
+  "who": "Young men (fast, cheeky)"
+ },
+ {
+  "id": "screen-guard-boss",
+  "line": "Screen guard, boss!",
+  "who": "Young men (fast, cheeky)"
+ },
+ {
+  "id": "credit-and-data-dey",
+  "line": "Credit and data dey!",
+  "who": "Young men (fast, cheeky)"
+ },
+ {
+  "id": "bring-your-phone-i-fix-am",
+  "line": "Bring your phone, I fix am!",
+  "who": "Young men (fast, cheeky)"
+ },
+ {
+  "id": "original-charger-come",
+  "line": "Original charger, come!",
+  "who": "Young men (fast, cheeky)"
+ },
+ {
+  "id": "last-seat-last-seat",
+  "line": "Last seat, last seat!",
+  "who": "Bus mates and hawkers ({dest} is a place name: the phone says those for now)"
+ },
+ {
+  "id": "bread-bread",
+  "line": "Bread, bread!",
+  "who": "Bus mates and hawkers ({dest} is a place name: the phone says those for now)"
+ },
+ {
+  "id": "meat-pie-ice-cold-drink",
+  "line": "Meat pie, ice cold drink!",
+  "who": "Bus mates and hawkers ({dest} is a place name: the phone says those for now)"
+ },
+ {
+  "id": "circle-circle-circle",
+  "line": "Circle! Circle! Circle!",
+  "who": "Bus mates (young men, very loud, fast)"
+ },
+ {
+  "id": "circle-circle-one-more-come",
+  "line": "Circle, Circle! One more, come!",
+  "who": "Bus mates (young men, very loud, fast)"
+ },
+ {
+  "id": "circle-straight-come-come",
+  "line": "Circle! Straight! Come, come!",
+  "who": "Bus mates (young men, very loud, fast)"
+ },
+ {
+  "id": "accra-accra-accra",
+  "line": "Accra! Accra! Accra!",
+  "who": "Bus mates (young men, very loud, fast)"
+ },
+ {
+  "id": "accra-accra-one-more-come",
+  "line": "Accra, Accra! One more, come!",
+  "who": "Bus mates (young men, very loud, fast)"
+ },
+ {
+  "id": "accra-straight-come-come",
+  "line": "Accra! Straight! Come, come!",
+  "who": "Bus mates (young men, very loud, fast)"
+ },
+ {
+  "id": "kaneshie-kaneshie-kaneshie",
+  "line": "Kaneshie! Kaneshie! Kaneshie!",
+  "who": "Bus mates (young men, very loud, fast)"
+ },
+ {
+  "id": "kaneshie-kaneshie-one-more-come",
+  "line": "Kaneshie, Kaneshie! One more, come!",
+  "who": "Bus mates (young men, very loud, fast)"
+ },
+ {
+  "id": "kaneshie-straight-come-come",
+  "line": "Kaneshie! Straight! Come, come!",
+  "who": "Bus mates (young men, very loud, fast)"
+ },
+ {
+  "id": "madina-madina-madina",
+  "line": "Madina! Madina! Madina!",
+  "who": "Bus mates (young men, very loud, fast)"
+ },
+ {
+  "id": "madina-madina-one-more-come",
+  "line": "Madina, Madina! One more, come!",
+  "who": "Bus mates (young men, very loud, fast)"
+ },
+ {
+  "id": "madina-straight-come-come",
+  "line": "Madina! Straight! Come, come!",
+  "who": "Bus mates (young men, very loud, fast)"
+ },
+ {
+  "id": "lapaz-lapaz-lapaz",
+  "line": "Lapaz! Lapaz! Lapaz!",
+  "who": "Bus mates (young men, very loud, fast)"
+ },
+ {
+  "id": "lapaz-lapaz-one-more-come",
+  "line": "Lapaz, Lapaz! One more, come!",
+  "who": "Bus mates (young men, very loud, fast)"
+ },
+ {
+  "id": "lapaz-straight-come-come",
+  "line": "Lapaz! Straight! Come, come!",
+  "who": "Bus mates (young men, very loud, fast)"
+ },
+ {
+  "id": "achimota-achimota-achimota",
+  "line": "Achimota! Achimota! Achimota!",
+  "who": "Bus mates (young men, very loud, fast)"
+ },
+ {
+  "id": "achimota-achimota-one-more-come",
+  "line": "Achimota, Achimota! One more, come!",
+  "who": "Bus mates (young men, very loud, fast)"
+ },
+ {
+  "id": "achimota-straight-come-come",
+  "line": "Achimota! Straight! Come, come!",
+  "who": "Bus mates (young men, very loud, fast)"
+ },
+ {
+  "id": "kasoa-kasoa-kasoa",
+  "line": "Kasoa! Kasoa! Kasoa!",
+  "who": "Bus mates (young men, very loud, fast)"
+ },
+ {
+  "id": "kasoa-kasoa-one-more-come",
+  "line": "Kasoa, Kasoa! One more, come!",
+  "who": "Bus mates (young men, very loud, fast)"
+ },
+ {
+  "id": "kasoa-straight-come-come",
+  "line": "Kasoa! Straight! Come, come!",
+  "who": "Bus mates (young men, very loud, fast)"
+ },
+ {
+  "id": "tema-tema-tema",
+  "line": "Tema! Tema! Tema!",
+  "who": "Bus mates (young men, very loud, fast)"
+ },
+ {
+  "id": "tema-tema-one-more-come",
+  "line": "Tema, Tema! One more, come!",
+  "who": "Bus mates (young men, very loud, fast)"
+ },
+ {
+  "id": "tema-straight-come-come",
+  "line": "Tema! Straight! Come, come!",
+  "who": "Bus mates (young men, very loud, fast)"
+ },
+ {
+  "id": "odorkor-odorkor-odorkor",
+  "line": "Odorkor! Odorkor! Odorkor!",
+  "who": "Bus mates (young men, very loud, fast)"
+ },
+ {
+  "id": "odorkor-odorkor-one-more-come",
+  "line": "Odorkor, Odorkor! One more, come!",
+  "who": "Bus mates (young men, very loud, fast)"
+ },
+ {
+  "id": "odorkor-straight-come-come",
+  "line": "Odorkor! Straight! Come, come!",
+  "who": "Bus mates (young men, very loud, fast)"
+ },
+ {
+  "id": "adabraka-adabraka-adabraka",
+  "line": "Adabraka! Adabraka! Adabraka!",
+  "who": "Bus mates (young men, very loud, fast)"
+ },
+ {
+  "id": "adabraka-adabraka-one-more-come",
+  "line": "Adabraka, Adabraka! One more, come!",
+  "who": "Bus mates (young men, very loud, fast)"
+ },
+ {
+  "id": "adabraka-straight-come-come",
+  "line": "Adabraka! Straight! Come, come!",
+  "who": "Bus mates (young men, very loud, fast)"
+ },
+ {
+  "id": "osu-osu-osu",
+  "line": "Osu! Osu! Osu!",
+  "who": "Bus mates (young men, very loud, fast)"
+ },
+ {
+  "id": "osu-osu-one-more-come",
+  "line": "Osu, Osu! One more, come!",
+  "who": "Bus mates (young men, very loud, fast)"
+ },
+ {
+  "id": "osu-straight-come-come",
+  "line": "Osu! Straight! Come, come!",
+  "who": "Bus mates (young men, very loud, fast)"
+ },
+ {
+  "id": "spintex-spintex-spintex",
+  "line": "Spintex! Spintex! Spintex!",
+  "who": "Bus mates (young men, very loud, fast)"
+ },
+ {
+  "id": "spintex-spintex-one-more-come",
+  "line": "Spintex, Spintex! One more, come!",
+  "who": "Bus mates (young men, very loud, fast)"
+ },
+ {
+  "id": "spintex-straight-come-come",
+  "line": "Spintex! Straight! Come, come!",
+  "who": "Bus mates (young men, very loud, fast)"
+ },
+ {
+  "id": "dansoman-dansoman-dansoman",
+  "line": "Dansoman! Dansoman! Dansoman!",
+  "who": "Bus mates (young men, very loud, fast)"
+ },
+ {
+  "id": "dansoman-dansoman-one-more-come",
+  "line": "Dansoman, Dansoman! One more, come!",
+  "who": "Bus mates (young men, very loud, fast)"
+ },
+ {
+  "id": "dansoman-straight-come-come",
+  "line": "Dansoman! Straight! Come, come!",
+  "who": "Bus mates (young men, very loud, fast)"
+ },
+ {
+  "id": "nkrumah-circle-nkrumah-circle-nkrumah-circle",
+  "line": "Nkrumah Circle! Nkrumah Circle! Nkrumah Circle!",
+  "who": "Bus mates (young men, very loud, fast)"
+ },
+ {
+  "id": "nkrumah-circle-nkrumah-circle-one-more-come",
+  "line": "Nkrumah Circle, Nkrumah Circle! One more, come!",
+  "who": "Bus mates (young men, very loud, fast)"
+ },
+ {
+  "id": "nkrumah-circle-straight-come-come",
+  "line": "Nkrumah Circle! Straight! Come, come!",
+  "who": "Bus mates (young men, very loud, fast)"
+ },
+ {
+  "id": "good-afternoon-you-look-new-here-where-are-you-from",
+  "line": "Good afternoon! You look new here. Where are you from?",
+  "who": "Anyone"
+ },
+ {
+  "id": "work-dey-but-you-must-hustle-start-small-my-friend",
+  "line": "Work dey, but you must hustle. Start small, my friend.",
+  "who": "Anyone"
+ },
+ {
+  "id": "good-family-is-everything-in-this-city-stay-close-to-him",
+  "line": "Good. Family is everything in this city. Stay close to him.",
+  "who": "Anyone"
+ },
+ {
+  "id": "ha-this-one-is-small-come-back-at-closing-time-you-will-see",
+  "line": "Ha! This one is small. Come back at closing time, you will see crowd!",
+  "who": "Anyone"
+ },
+ {
+  "id": "no-problem-safe-journey-eh",
+  "line": "No problem. Safe journey, eh!",
+  "who": "Anyone"
+ },
+ {
+  "id": "chale-how-far-you-dey-okay",
+  "line": "Chale, how far? You dey okay?",
+  "who": "Anyone"
+ },
+ {
+  "id": "i-dey-kraa-by-his-grace-where-are-you-going",
+  "line": "I dey kraa! By His grace. Where are you going?",
+  "who": "Anyone"
+ },
+ {
+  "id": "ei-sorry-oo-was-it-at-the-station",
+  "line": "Ei, sorry oo! Was it at the station?",
+  "who": "Anyone"
+ },
+ {
+  "id": "those-boys-be-careful-with-your-phone-too-eh",
+  "line": "Those boys! Be careful with your phone too, eh.",
+  "who": "Anyone"
+ },
+ {
+  "id": "accra-is-fast-next-time-hold-your-things-in-front",
+  "line": "Accra is fast. Next time, hold your things in front.",
+  "who": "Anyone"
+ },
+ {
+  "id": "hello-are-you-looking-for-somewhere",
+  "line": "Hello! Are you looking for somewhere?",
+  "who": "Anyone"
+ },
+ {
+  "id": "the-station-is-just-there-ask-the-mate-for-your-place-he-wil",
+  "line": "The station is just there. Ask the mate for your place, he will shout it.",
+  "who": "Anyone"
+ },
+ {
+  "id": "buy-waakye-or-kenkey-from-the-aunties-cheap-and-it-fills-you",
+  "line": "Buy waakye or kenkey from the aunties. Cheap and it fills your belly.",
+  "who": "Anyone"
+ },
+ {
+  "id": "enjoy-but-hold-your-pocket-well-eh",
+  "line": "Enjoy! But hold your pocket well, eh.",
+  "who": "Anyone"
+ },
+ {
+  "id": "i-came-to-find-work",
+  "line": "I came to find work.",
+  "who": "You, the player"
+ },
+ {
+  "id": "my-uncle-lives-here",
+  "line": "My uncle lives here.",
+  "who": "You, the player"
+ },
+ {
+  "id": "i-just-arrived-is-circle-always-this-busy",
+  "line": "I just arrived. Is Circle always this busy?",
+  "who": "You, the player"
+ },
+ {
+  "id": "sorry-i-am-in-a-hurry",
+  "line": "Sorry, I am in a hurry.",
+  "who": "You, the player"
+ },
+ {
+  "id": "i-dey-chale-and-you",
+  "line": "I dey, chale. And you?",
+  "who": "You, the player"
+ },
+ {
+  "id": "not-really-somebody-stole-my-bag",
+  "line": "Not really. Somebody stole my bag.",
+  "who": "You, the player"
+ },
+ {
+  "id": "yes-a-boy-in-red",
+  "line": "Yes, a boy in red.",
+  "who": "You, the player"
+ },
+ {
+  "id": "i-don-t-know-it-was-so-fast",
+  "line": "I don’t know. It was so fast.",
+  "who": "You, the player"
+ },
+ {
+  "id": "yes-where-can-i-get-a-trotro",
+  "line": "Yes, where can I get a trotro?",
+  "who": "You, the player"
+ },
+ {
+  "id": "where-can-i-eat-something-cheap",
+  "line": "Where can I eat something cheap?",
+  "who": "You, the player"
+ },
+ {
+  "id": "no-i-am-just-walking-around",
+  "line": "No, I am just walking around.",
+  "who": "You, the player"
+ },
+ {
+  "id": "alaikum-salaam-it-is-long-i-just-arrived",
+  "line": "Alaikum salaam. It is long, I just arrived.",
+  "who": "You, the player"
+ },
+ {
+  "id": "alaikum-salaam-fine-thank-you",
+  "line": "Alaikum salaam. Fine, thank you.",
+  "who": "You, the player"
+ },
+ {
+  "id": "alaikum-salaam-i-am-fine-thank-you",
+  "line": "Alaikum salaam. I am fine, thank you.",
+  "who": "You, the player"
+ },
+ {
+  "id": "i-am-new-here-and-lost-a-little",
+  "line": "I am new here and lost a little.",
+  "who": "You, the player"
+ },
+ {
+  "id": "yes-every-sunday",
+  "line": "Yes, every Sunday.",
+  "who": "You, the player"
+ },
+ {
+  "id": "not-here-yet-i-just-arrived",
+  "line": "Not here yet. I just arrived.",
+  "who": "You, the player"
+ },
+ {
+  "id": "where-is-your-mummy",
+  "line": "Where is your mummy?",
+  "who": "You, the player"
+ },
+ {
+  "id": "no-i-just-came-to-accra",
+  "line": "No, I just came to Accra.",
+  "who": "You, the player"
+ },
+ {
+  "id": "which-school-do-you-go-to",
+  "line": "Which school do you go to?",
+  "who": "You, the player"
+ },
+ {
+  "id": "yes-i-finished",
+  "line": "Yes, I finished.",
+  "who": "You, the player"
+ },
+ {
+  "id": "study-hard-eh",
+  "line": "Study hard, eh.",
+  "who": "You, the player"
+ },
+ {
+  "id": "no-load-today-they-took-my-bag",
+  "line": "No load today. They took my bag.",
+  "who": "You, the player"
+ },
+ {
+  "id": "how-much-do-you-charge",
+  "line": "How much do you charge?",
+  "who": "You, the player"
+ },
+ {
+  "id": "how-much",
+  "line": "How much?",
+  "who": "You, the player"
+ },
+ {
+  "id": "not-today-thank-you",
+  "line": "Not today, thank you.",
+  "who": "You, the player"
+ },
+ {
+  "id": "just-looking-for-now",
+  "line": "Just looking for now.",
+  "who": "You, the player"
+ },
+ {
+  "id": "how-much-is-it",
+  "line": "How much is it?",
+  "who": "You, the player"
+ },
+ {
+  "id": "i-have-no-money-now",
+  "line": "I have no money now.",
+  "who": "You, the player"
+ },
+ {
+  "id": "let-me-think-about-it",
+  "line": "Let me think about it.",
+  "who": "You, the player"
+ },
+ {
+  "id": "my-phone-was-stolen-how-much-is-a-new-one",
+  "line": "My phone was stolen. How much is a new one?",
+  "who": "You, the player"
+ },
+ {
+  "id": "i-have-no-money-yet",
+  "line": "I have no money yet.",
+  "who": "You, the player"
+ },
+ {
+  "id": "show-me-the-cheapest-one",
+  "line": "Show me the cheapest one.",
+  "who": "You, the player"
+ },
+ {
+  "id": "just-looking",
+  "line": "Just looking.",
+  "who": "You, the player"
+ },
+ {
+  "id": "how-much-to-kaneshie",
+  "line": "How much to Kaneshie?",
+  "who": "You, the player"
+ },
+ {
+  "id": "not-today",
+  "line": "Not today.",
+  "who": "You, the player"
+ },
+ {
+  "id": "salaam-alaikum-my-brother-how-is-your-day",
+  "line": "Salaam alaikum, my brother. How is your day?",
+  "who": "A Muslim man"
+ },
+ {
+  "id": "welcome-take-your-time-you-will-know-accra-small-small",
+  "line": "Welcome. Take your time, you will know Accra small small.",
+  "who": "A Muslim man"
+ },
+ {
+  "id": "alhamdulillah-go-well",
+  "line": "Alhamdulillah. Go well.",
+  "who": "A Muslim man"
+ },
+ {
+  "id": "salaam-alaikum-you-look-tired-my-dear-are-you-okay",
+  "line": "Salaam alaikum. You look tired, my dear. Are you okay?",
+  "who": "A Muslim woman"
+ },
+ {
+  "id": "good-drink-some-water-the-sun-is-hot-today",
+  "line": "Good. Drink some water, the sun is hot today.",
+  "who": "A Muslim woman"
+ },
+ {
+  "id": "ask-the-people-at-the-kiosks-everybody-will-help-you",
+  "line": "Ask the people at the kiosks. Everybody will help you.",
+  "who": "A Muslim woman"
+ },
+ {
+  "id": "god-bless-you-my-dear-do-you-go-to-church",
+  "line": "God bless you, my dear! Do you go to church?",
+  "who": "A church person"
+ },
+ {
+  "id": "praise-god-come-and-visit-our-choir-on-sunday",
+  "line": "Praise God! Come and visit our choir on Sunday.",
+  "who": "A church person"
+ },
+ {
+  "id": "then-welcome-to-accra-god-will-guide-you-eh",
+  "line": "Then welcome to Accra. God will guide you, eh.",
+  "who": "A church person"
+ },
+ {
+  "id": "good-afternoon-please-what-is-your-name",
+  "line": "Good afternoon, please! What is your name?",
+  "who": "A child"
+ },
+ {
+  "id": "i-am-kofi-i-am-going-home-to-eat",
+  "line": "I am Kofi! I am going home to eat.",
+  "who": "A child"
+ },
+ {
+  "id": "she-is-selling-over-there-at-the-umbrella",
+  "line": "She is selling over there! At the umbrella.",
+  "who": "A child"
+ },
+ {
+  "id": "good-afternoon-please-are-you-a-teacher",
+  "line": "Good afternoon, please! Are you a teacher?",
+  "who": "A school pupil"
+ },
+ {
+  "id": "okay-we-are-going-home-school-was-long-today",
+  "line": "Okay! We are going home. School was long today.",
+  "who": "A school pupil"
+ },
+ {
+  "id": "the-one-behind-the-market-did-you-finish-school",
+  "line": "The one behind the market! Did you finish school?",
+  "who": "A school pupil"
+ },
+ {
+  "id": "ei-you-are-lucky-we-have-exams-next-week",
+  "line": "Ei, you are lucky! We have exams next week.",
+  "who": "A school pupil"
+ },
+ {
+  "id": "yes-please-thank-you",
+  "line": "Yes, please! Thank you!",
+  "who": "A school pupil"
+ },
+ {
+  "id": "please-you-want-somebody-to-carry-your-load",
+  "line": "Please, you want somebody to carry your load?",
+  "who": "A kayayo (woman carrying loads)"
+ },
+ {
+  "id": "ei-sorry-be-careful-at-the-station-my-brother",
+  "line": "Ei, sorry! Be careful at the station, my brother.",
+  "who": "A kayayo (woman carrying loads)"
+ },
+ {
+  "id": "small-small-depends-on-the-load-and-where-you-are-going",
+  "line": "Small, small. Depends on the load and where you are going.",
+  "who": "A kayayo (woman carrying loads)"
+ },
+ {
+  "id": "pure-water-ice-cold-you-want-some",
+  "line": "Pure water, ice cold! You want some?",
+  "who": "A hawker"
+ },
+ {
+  "id": "fifty-pesewas-only-cold-cold",
+  "line": "Fifty pesewas only! Cold, cold.",
+  "who": "A hawker"
+ },
+ {
+  "id": "no-problem-next-time-my-customer",
+  "line": "No problem. Next time, my customer!",
+  "who": "A hawker"
+ },
+ {
+  "id": "my-customer-what-are-you-looking-for",
+  "line": "My customer! What are you looking for?",
+  "who": "A seller"
+ },
+ {
+  "id": "look-well-everything-is-fresh",
+  "line": "Look well, everything is fresh!",
+  "who": "A seller"
+ },
+ {
+  "id": "for-you-special-price-how-many-do-you-want",
+  "line": "For you, special price! How many do you want?",
+  "who": "A seller"
+ },
+ {
+  "id": "ah-come-back-when-you-have-eh-i-will-keep-one-for-you",
+  "line": "Ah. Come back when you have, eh. I will keep one for you.",
+  "who": "A seller"
+ },
+ {
+  "id": "okay-i-am-here-till-evening",
+  "line": "Okay, I am here till evening.",
+  "who": "A seller"
+ },
+ {
+  "id": "boss-phones-chargers-power-bank-what-do-you-need",
+  "line": "Boss! Phones, chargers, power bank! What do you need?",
+  "who": "A phone seller"
+ },
+ {
+  "id": "sorry-boss-small-phones-start-from-three-hundred-cedis-you-w",
+  "line": "Sorry, boss! Small phones start from three hundred cedis. You want to see?",
+  "who": "A phone seller"
+ },
+ {
+  "id": "no-wahala-when-you-get-money-come-here-first-i-will-do-you-g",
+  "line": "No wahala. When you get money, come here first, I will do you good price.",
+  "who": "A phone seller"
+ },
+ {
+  "id": "this-one-strong-battery-dual-sim-come-back-with-the-money-eh",
+  "line": "This one! Strong battery, dual SIM. Come back with the money, eh.",
+  "who": "A phone seller"
+ },
+ {
+  "id": "look-well-boss-original-stuff-only",
+  "line": "Look well, boss! Original stuff only.",
+  "who": "A phone seller"
+ },
+ {
+  "id": "where-are-you-going-kaneshie-madina-come-come",
+  "line": "Where are you going? Kaneshie? Madina? Come, come!",
+  "who": "A bus mate"
+ },
+ {
+  "id": "five-cedis-one-more-seat-come-and-sit",
+  "line": "Five cedis! One more seat, come and sit!",
+  "who": "A bus mate"
+ },
+ {
+  "id": "ei-then-you-go-walk-oo-next-time",
+  "line": "Ei! Then you go walk oo. Next time!",
+  "who": "A bus mate"
+ },
+ {
+  "id": "okay-kaneshie-kaneshie-kaneshie",
+  "line": "Okay! Kaneshie! Kaneshie! Kaneshie!",
+  "who": "A bus mate"
+ },
+ {
+  "id": "hehe-that-woman-is-good-stay-near-her-stall-i-am-coming-traf",
+  "line": "Hehe, that woman is good. Stay near her stall, I am coming. Traffic at Circle is terrible.",
+  "who": "Uncle Kwame"
+ },
+ {
+  "id": "ei-go-and-buy-something-waakye-anything-you-need-strength-fo",
+  "line": "Ei! Go and buy something. Waakye, anything. You need strength for Accra.",
+  "who": "Uncle Kwame"
+ },
+ {
+  "id": "i-know-i-know-don-t-worry-we-will-get-you-a-new-phone-and-a",
+  "line": "I know, I know. Don’t worry. We will get you a new phone and a SIM. First, let me reach you.",
+  "who": "Uncle Kwame"
+ },
+ {
+  "id": "hello-who-is-this-the-network-is-breaking-call-me-again-when",
+  "line": "Hello? Who is this? … The network is breaking. Call me again when you reach Circle.",
+  "who": "Uncle Kwame"
+ },
+ {
+  "id": "yes-auntie-dede-gave-me-kelewele",
+  "line": "Yes, Auntie Dede gave me kelewele.",
+  "who": "You, the player"
+ },
+ {
+  "id": "not-yet-uncle",
+  "line": "Not yet, Uncle.",
+  "who": "You, the player"
+ },
+ {
+  "id": "uncle-my-bag-is-gone",
+  "line": "Uncle, my bag is gone…",
+  "who": "You, the player"
+ },
+ {
+  "id": "i-am-fine-auntie-thank-you",
+  "line": "I am fine, Auntie. Thank you.",
+  "who": "You, the player"
+ },
+ {
+  "id": "auntie-where-is-the-filling-station",
+  "line": "Auntie, where is the filling station?",
+  "who": "You, the player"
+ },
+ {
+  "id": "yes-grandma-i-have-reached",
+  "line": "Yes, Grandma. I have reached.",
+  "who": "You, the player"
+ },
+ {
+  "id": "grandma-someone-stole-my-bag",
+  "line": "Grandma, someone stole my bag.",
+  "who": "You, the player"
+ },
+ {
+  "id": "my-son-are-you-fine-come-and-buy-kelewele-i-have-the-hot-one",
+  "line": "My son! Are you fine? Come and buy kelewele, I have the hot one now.",
+  "who": "Auntie Dede"
+ },
+ {
+  "id": "good-accra-will-not-swallow-you-greet-your-uncle-for-me",
+  "line": "Good. Accra will not swallow you. Greet your uncle for me.",
+  "who": "Auntie Dede"
+ },
+ {
+  "id": "check-your-map-my-son-look-for-the-pump-they-are-everywhere",
+  "line": "Check your map, my son. Look for the pump. They are everywhere.",
+  "who": "Auntie Dede"
+ },
+ {
+  "id": "hello-i-don-t-know-this-number-oo-who-is-calling",
+  "line": "Hello? I don’t know this number oo. Who is calling?",
+  "who": "Auntie Dede"
+ },
+ {
+  "id": "my-child-have-you-reached-accra-are-you-eating-well",
+  "line": "My child! Have you reached Accra? Are you eating well?",
+  "who": "Grandma"
+ },
+ {
+  "id": "god-be-praised-greet-your-uncle-and-keep-the-letter-safe",
+  "line": "God be praised. Greet your uncle. And keep the letter safe.",
+  "who": "Grandma"
+ },
+ {
+  "id": "ei-accra-people-don-t-worry-my-child-your-uncle-will-help-yo",
+  "line": "Ei! Accra people! Don’t worry, my child. Your uncle will help you. Be careful.",
+  "who": "Grandma"
+ },
+ {
+  "id": "welcome-to-ghanaverse-ride-open-the-ride-app-on-your-phone-t",
+  "line": "Welcome to Ghanaverse Ride. Open the Ride app on your phone to choose okada, taxi or trotro. Thank you.",
+  "who": "Ride Help"
+ }
+]

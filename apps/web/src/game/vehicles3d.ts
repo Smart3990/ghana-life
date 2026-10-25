@@ -679,6 +679,8 @@ export class StreetTraffic {
   // the player and keeps its distance from the vehicle in front, then slowly catches up again.
   private held = new Map<number, number>();
   private blockedFor = new Map<number, number>();
+  private stuck = new Map<number, number>();
+  private lastPlaced = new Map<number, Placed>();
   private lastT = 0;
   /** Traffic lights: vehicles stop at the line on red (set by the street test). */
   signals: { shouldStop: (x: number, z: number, heading: number, half: number, t: number) => boolean } | null = null;
@@ -692,9 +694,17 @@ export class StreetTraffic {
   deckHeight: ((x: number, z: number) => number) | null = null;
   /** Called when a driver hoots at the player (x, z in metres). */
   onHoot: ((x: number, z: number) => void) | null = null;
+  /** Called every frame for each vehicle stopped because the player stands in its way. */
+  onBlocked: ((v: { id: number; x: number; z: number; heading: number; kind: string; halfW: number; half: number; waited: number }) => void) | null = null;
+  /** Vehicles told to stay where they are (a driver who got out). */
+  hold = new Set<number>();
+  private blockedTotal = new Map<number, number>();
 
   update(lon: number, lat: number, t: number, lane: number, player?: { x: number; z: number }) {
     const dt = this.lastT ? Math.min(0.1, Math.max(0, t - this.lastT)) : 0;
+    // How far the shared clock really moved on (a slow phone can take longer than 0.1 s per frame):
+    // a waiting vehicle is held back by all of it, so it never creeps forward.
+    const moved = this.lastT ? Math.min(3, Math.max(0, t - this.lastT)) : 0;
     this.lastT = t;
     // Every vehicle has a timetable position (the shared clock) and is "held back" behind it when it
     // has to wait. Waiting only ever stops a vehicle where it is: it never jumps backwards, and it
@@ -705,6 +715,18 @@ export class StreetTraffic {
       .near(lon, lat, t, this.radiusM, this.limit * 2, lane)
       .filter((p) => this.density >= 1 || ((p.v.id * 2654435761) >>> 0) / 4294967296 < this.density)
       .slice(0, this.limit);
+    // A vehicle held back for a while can be behind its timetable spot, which may already be out of
+    // range: keep drawing it where it really is, so it never vanishes.
+    const listed = new Set(placed.map((p) => p.v.id));
+    const [mx, mz] = this.toLocal(lon, lat);
+    for (const [id, old] of this.lastPlaced) {
+      if (listed.has(id) || (this.held.get(id) ?? 0) < 0.01) continue;
+      const [ox, oz] = this.toLocal(old.lon, old.lat);
+      if (Math.hypot(ox - mx, oz - mz) > this.radiusM) continue;
+      placed.push({ ...old, s: old.s + old.v.speed * moved });
+    }
+    this.lastPlaced.clear();
+    for (const p of placed) this.lastPlaced.set(p.v.id, p);
     this.placed = placed;
     const before = new Map<number, number>(); // held at the start of this frame
     const waiting = new Set<number>();
@@ -712,7 +734,7 @@ export class StreetTraffic {
       if (waiting.has(p.v.id)) return;
       waiting.add(p.v.id);
       // Hold back by exactly the distance the timetable moved on: the vehicle stays put.
-      this.held.set(p.v.id, (before.get(p.v.id) ?? 0) + p.v.speed * dt);
+      this.held.set(p.v.id, (before.get(p.v.id) ?? 0) + p.v.speed * moved);
     };
     const place = (p: Placed) => {
       const held = this.held.get(p.v.id) ?? 0;
@@ -743,7 +765,11 @@ export class StreetTraffic {
         const side = Math.abs((player.x - x) * -fz + (player.z - z) * fx);
         byPlayer = ahead > -half && ahead < half + 9 && side < 1.7;
       }
-      if (byPlayer || this.signals?.shouldStop(x, z, p.heading, half, t)) wait(p);
+      if (byPlayer || this.hold.has(p.v.id) || this.signals?.shouldStop(x, z, p.heading, half, t)) wait(p);
+      const total = byPlayer ? (this.blockedTotal.get(p.v.id) ?? 0) + dt : 0;
+      if (total) this.blockedTotal.set(p.v.id, total);
+      else this.blockedTotal.delete(p.v.id);
+      if (byPlayer) this.onBlocked?.({ id: p.v.id, x, z, heading: p.heading, kind: p.v.kind, halfW: KIND_WIDTH[p.v.kind] / 2, half, waited: total });
       // Hoot after waiting a moment for the player.
       const waited = byPlayer ? (this.blockedFor.get(p.v.id) ?? 0) + dt : 0;
       if (waited > 1.2 && this.onHoot) {
@@ -757,7 +783,7 @@ export class StreetTraffic {
     //    the street below never see each other.
     const local = placed.map((p) => {
       const [x, z] = this.toLocal(p.lon, p.lat);
-      return { p, x, z, fx: Math.sin(p.heading), fz: -Math.cos(p.heading), half: KIND_LENGTH[p.v.kind] / 2, halfW: KIND_WIDTH[p.v.kind] / 2, up: !!p.bridge };
+      return { p, x, z, fx: Math.sin(p.heading), fz: -Math.cos(p.heading), half: KIND_LENGTH[p.v.kind] / 2, halfW: KIND_WIDTH[p.v.kind] / 2, up: !!p.bridge && (!this.deckHeight || this.deckHeight(x, z) > 2.5) };
     });
     type L = (typeof local)[number];
     const inPath = (a: L, b: L) => {
@@ -773,7 +799,7 @@ export class StreetTraffic {
       if (side > a.halfW + across + 0.2) return false;
       return ahead < a.half + along + 1.6;
     };
-    for (let pass = 0; pass < 2; pass++) {
+    for (let pass = 0; pass < 5; pass++) {
       for (const a of local) {
         if (waiting.has(a.p.v.id)) continue;
         for (const b of local) {
@@ -792,6 +818,71 @@ export class StreetTraffic {
         }
       }
     }
+    // 3. Last check: no two vehicle bodies may ever overlap (a car turning across another, two meeting
+    //    at a U-turn). If a move would make them touch, the one driving into the other stays where it
+    //    was. Two that drive straight at each other: the higher number waits; if they are stuck for
+    //    3 seconds, the lower number squeezes past.
+    const corners = (A: L, grow: number) => {
+      const h = A.half + grow;
+      const w = A.halfW + grow * 0.5;
+      return [[1, 1], [1, -1], [-1, -1], [-1, 1]].map(([a, b]) => [A.x + A.fx * h * a - A.fz * w * b, A.z + A.fz * h * a + A.fx * w * b]);
+    };
+    const touching = (A: L, B: L) => {
+      // Oncoming vehicles may pass close (mirrors almost brushing), as they do on Accra's narrow roads.
+      const grow = A.fx * B.fx + A.fz * B.fz < -0.7 ? -0.2 : 0.05;
+      const ca = corners(A, grow);
+      const cb = corners(B, grow);
+      for (const [ax, az] of [[A.fx, A.fz], [-A.fz, A.fx], [B.fx, B.fz], [-B.fz, B.fx]]) {
+        let a0 = Infinity, a1 = -Infinity, b0 = Infinity, b1 = -Infinity;
+        for (const c of ca) { const d = c[0] * ax + c[1] * az; a0 = Math.min(a0, d); a1 = Math.max(a1, d); }
+        for (const c of cb) { const d = c[0] * ax + c[1] * az; b0 = Math.min(b0, d); b1 = Math.max(b1, d); }
+        if (a1 < b0 || b1 < a0) return false;
+      }
+      return true;
+    };
+    const refresh = (a: L) => {
+      place(a.p);
+      [a.x, a.z] = this.toLocal(a.p.lon, a.p.lat);
+      a.fx = Math.sin(a.p.heading);
+      a.fz = -Math.cos(a.p.heading);
+    };
+    const stuckNow = new Set<number>(); // pairs stuck nose to nose this frame
+    for (let pass = 0; pass < 6; pass++) {
+      let changed = false;
+      for (let i = 0; i < local.length; i++) {
+        const a = local[i];
+        for (let j = i + 1; j < local.length; j++) {
+          const b = local[j];
+          if (a.up !== b.up || Math.abs(b.x - a.x) > 14 || Math.abs(b.z - a.z) > 14) continue;
+          if (!touching(a, b)) continue;
+          const intoB = (b.x - a.x) * a.fx + (b.z - a.z) * a.fz; // how much b is in front of a
+          const intoA = (a.x - b.x) * b.fx + (a.z - b.z) * b.fz;
+          let stop: L[] = [];
+          if (intoB > 0 && intoA > 0) {
+            // Nose to nose.
+            const key = Math.min(a.p.v.id, b.p.v.id) * 1e6 + Math.max(a.p.v.id, b.p.v.id);
+            const stuck = (this.stuck.get(key) ?? 0) + (stuckNow.has(key) ? 0 : dt);
+            stuckNow.add(key);
+            this.stuck.set(key, stuck);
+            const low = a.p.v.id < b.p.v.id ? a : b;
+            const high = low === a ? b : a;
+            stop = stuck > 3 ? [high] : [a, b];
+          } else {
+            const first = intoB >= intoA ? a : b;
+            // Already standing still: then the other one must stop instead.
+            stop = [waiting.has(first.p.v.id) ? (first === a ? b : a) : first];
+          }
+          for (const x of stop) {
+            if (waiting.has(x.p.v.id)) continue;
+            wait(x.p);
+            refresh(x);
+            changed = true;
+          }
+        }
+      }
+      if (!changed) break;
+    }
+    for (const k of [...this.stuck.keys()]) if (!stuckNow.has(k)) this.stuck.delete(k); // they got apart
     // Forget vehicles that have gone.
     if (this.held.size > 4000) for (const id of [...this.held.keys()]) if (!before.has(id)) this.held.delete(id);
     this.boxes = local.filter((a) => !a.up).map((a) => ({ x: a.x, z: a.z, fx: a.fx, fz: a.fz, half: a.half, halfW: a.halfW }));

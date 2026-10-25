@@ -21,7 +21,6 @@ import { BigScreen } from '../game/bigScreen';
 import { RoadSigns } from '../game/roadSigns';
 import { planStation } from '../game/trotroStation';
 import { Places } from '../game/places';
-import { CUT } from '../game/cutout';
 import { AD_CLOCK } from '../game/adScreens';
 import { Voices, mateCall } from '../game/voices';
 import { TALKS, asNode, type TalkNode } from '../game/talks';
@@ -31,6 +30,7 @@ import { StreetSound } from '../game/streetSound';
 import { createPerson, type Move, type Person } from '../game/person';
 import { Minimap } from '../hud/minimap';
 import { FullMap } from '../hud/fullMap';
+import type { PlaceAt } from '../game/places';
 import { Phone, type MissionRow, type Destination } from '../hud/phone';
 import { TouchControls } from '../hud/touchControls';
 import { landscapeGate } from '../hud/landscape';
@@ -321,10 +321,10 @@ const layer: maplibregl.CustomLayerInterface = {
   render(_gl, args) {
     const projection = new THREE.Matrix4().fromArray(args.defaultProjectionData.mainMatrix as unknown as number[]);
     camera3d.projectionMatrix = projection.multiply(placeMatrix);
-    // The camera's position in the scene (for the see-through cut): the point the projection sends
-    // to infinity.
+    // The camera's position in the scene (for keeping the player in view): the point the projection
+    // sends to infinity.
     camEye.set(0, 0, 1, 0).applyMatrix4(camInverse.copy(camera3d.projectionMatrix).invert());
-    if (Math.abs(camEye.w) > 1e-9) CUT.camera.value = [camEye.x / camEye.w, camEye.y / camEye.w, camEye.z / camEye.w];
+    if (Math.abs(camEye.w) > 1e-9) camAt.set(camEye.x / camEye.w, camEye.y / camEye.w, camEye.z / camEye.w);
     renderer.resetState();
     renderer.render(scene, camera3d);
   },
@@ -332,6 +332,82 @@ const layer: maplibregl.CustomLayerInterface = {
 
 const camEye = new THREE.Vector4();
 const camInverse = new THREE.Matrix4();
+const camAt = new THREE.Vector3(0, -1, 0); // y < 0: not known yet
+
+// ---------- Keeping the player in view ----------
+// Nothing is ever cut away. When a shop, kiosk, building or bus stands between the camera and you,
+// the camera swings round to the nearest clear side (all the way round to your front if it must),
+// or comes in closer. When the view behind you is clear again, it swings back.
+const camAvoid = { yaw: 0, pitch: 0, zoom: 0, want: null as [number, number, number] | null, check: 0, clearFor: 0 };
+/** How tall what stands at (x, z) is, in metres (0: nothing there). */
+function heightAtView(x: number, z: number) {
+  if (buildings.blocked(x, z, 0.1)) return 9;
+  if (vehicleAt(x, z, 0.05)) return 2.7;
+  if (places.solid(x, z, 0.1)) return 4.5;
+  return life?.viewHeight(x, z) ?? 0;
+}
+/** Is the line from the player's chest to a camera at this place blocked? */
+function viewBlocked(px: number, pz: number, ex: number, ey: number, ez: number) {
+  const len = Math.hypot(ex - px, ez - pz);
+  const steps = Math.max(4, Math.ceil(len / 0.6));
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    if (t * len < 0.8) continue; // right beside the player (his own shoulder) does not count
+    const y = 1.3 + (ey - 1.3) * t;
+    const sx = px + (ex - px) * t;
+    const sz = pz + (ez - pz) * t;
+    if (heightAtView(sx, sz) > y) return true;
+    // A flyover deck overhead (about 1.2 m thick) is in the way too.
+    if (deckNear) {
+      const deck = flyovers.heightAt(sx, sz);
+      if (deck > 2 && y > deck - 1.4 && y < deck + 0.4) return true;
+    }
+  }
+  return false;
+}
+// Ways to move the camera, best first: [swing round (degrees), look down more (degrees), distance].
+const VIEW_TRIES: [number, number, number][] = [];
+{
+  const add = (swings: number[], down: number, k: number) => {
+    for (const a of swings) for (const sgn of a ? [1, -1] : [1]) VIEW_TRIES.push([sgn * a, down, k]);
+  };
+  add([25, 50, 75], 0, 1);
+  add([0, 30, 60], 16, 1);
+  add([100, 130, 160, 180], 0, 1);
+  add([0, 40, 80, 120, 180], 28, 0.75);
+  add([0, 45, 90, 135, 180], 34, 0.55);
+}
+let deckNear = false; // is a flyover close (only then are decks checked: it saves work)
+function keepPlayerInView(dt: number, baseBearing: number, basePitch: number) {
+  camAvoid.check -= dt;
+  if (camAt.y > 0 && camAvoid.check <= 0) {
+    camAvoid.check = 0.12;
+    deckNear = flyovers.heightAt(state.x, state.z) > 0 || flyovers.heightAt(camAt.x, camAt.z) > 0;
+    // How far the camera is with no swing, from where it is now.
+    const reach = Math.hypot(camAt.x - state.x, camAt.y, camAt.z - state.z) * 2 ** camAvoid.zoom;
+    const clear = (yawDeg: number, downDeg: number, k: number) => {
+      const b = baseBearing + (yawDeg * Math.PI) / 180;
+      const p = ((basePitch - downDeg) * Math.PI) / 180;
+      const r = reach * k;
+      return !viewBlocked(state.x, state.z, state.x - Math.sin(b) * r * Math.sin(p), r * Math.cos(p), state.z + Math.cos(b) * r * Math.sin(p));
+    };
+    if (clear(0, 0, 1)) {
+      camAvoid.clearFor += 0.12;
+      if (camAvoid.clearFor > 0.6) camAvoid.want = null;
+    } else {
+      camAvoid.clearFor = 0;
+      const w = camAvoid.want;
+      if (!w || !clear(w[0], w[1], w[2])) {
+        camAvoid.want = VIEW_TRIES.find((t) => clear(t[0], t[1], t[2])) ?? [0, 36, 0.42]; // boxed in: high and close
+      }
+    }
+  }
+  const [yaw, down, k] = camAvoid.want ?? [0, 0, 1];
+  const ease = Math.min(1, dt * 3);
+  camAvoid.yaw += angleDiff((yaw * Math.PI) / 180, camAvoid.yaw) * ease;
+  camAvoid.pitch += (-down - camAvoid.pitch) * ease;
+  camAvoid.zoom += (-Math.log2(k) - camAvoid.zoom) * ease;
+}
 
 // ---------- Controls: touch, keyboard and game controllers ----------
 
@@ -711,11 +787,12 @@ function step(player: Player, dt: number, t: number) {
   const height = map.getContainer().clientHeight;
   // Keep the player the same share of the screen on short (sideways) and tall screens.
   const fit = Math.log2(Math.max(280, height) / 820);
+  if (!story.shot && !story.fly) keepPlayerInView(dt, state.camHeading + look.yaw, Math.min(85, state.pitch + look.pitch));
   const cam = {
     center: here,
-    bearing: ((state.camHeading + look.yaw) * 180) / Math.PI,
-    zoom: state.zoom + fit + pinch.zoom,
-    pitch: Math.min(85, state.pitch + look.pitch),
+    bearing: ((state.camHeading + look.yaw + camAvoid.yaw) * 180) / Math.PI,
+    zoom: state.zoom + fit + pinch.zoom + camAvoid.zoom,
+    pitch: Math.min(85, state.pitch + look.pitch + camAvoid.pitch),
     padding: { top: height * PLAYER_SCREEN_DROP, bottom: 0, left: 0, right: 0 },
   };
   if (story.shot) {
@@ -742,11 +819,6 @@ function step(player: Player, dt: number, t: number) {
     if (k >= 1) story.fly = null;
   }
   map.jumpTo(cam);
-  // Where the camera is (in the scene's metres), for the see-through cut round the player.
-  {
-    CUT.player.value = state.onOkada ? [state.x, 1.2, state.z] : [state.x, 1.0 + state.y, state.z];
-    CUT.radius.value = story.shot ? 0 : 1.5;
-  }
   checkPlace(here);
   buildings.update(here, state.x, state.z);
   followSun(state.x, state.z);
@@ -803,11 +875,18 @@ function step(player: Player, dt: number, t: number) {
   for (const sc of moreScreens) sc.update(Date.now() / 1000, state.x, state.z, screenEvery);
   if (life) roadSigns.update(state.x, state.z, life.namePlates, life.junctions);
   places.update(state.x, state.z);
+  // Places whose road was not loaded yet, or whose spot was tight: try again every 3 seconds.
+  placeRetry -= dt;
+  if (placeRetry <= 0) {
+    placeRetry = 3;
+    places.retry(placeFor, state.x, state.z);
+  }
   streetTraffic?.update(here[0], here[1], Date.now() / 1000, TRAFFIC_LANE_M, state);
   updateStats(dt);
   updateButtons();
   AD_CLOCK.value = (Date.now() / 1000) % 86400; // small numbers: the GPU counts in low precision
   updateThief(dt);
+  updateDriver(dt);
   streetVoices(performance.now() / 1000);
   story.onFrame?.();
   if (auntie.group.visible) auntie.person?.mixer.update(dt);
@@ -1528,6 +1607,163 @@ function updateThief(dt: number) {
   }
 }
 
+// ---------- Standing in the road ----------
+// A vehicle never hits you. It stops; the mate or driver shouts at you, then hoots; if you still
+// stand there, some drivers get down, walk up and push you out of the way (a push, never a blow),
+// then get back in and drive on.
+const SHOUTS = [
+  'Chale, comot for road!',
+  'Massa, move! You no see the car?',
+  'Herh! Give way, my brother!',
+  'Charley, wait ooo! Make I pass!',
+  'Ei! You want make car jam you?',
+  'Bra, abeg shift small!',
+  'Jimmy! Move from the road!',
+  'Mepa wo kyew, twe wo ho!',
+  'Make way, make way! We dey go!',
+  'Ah! You no hear horn? Move!',
+];
+const MATE_SHOUTS = ['Ah! Sister, brother, move! Passengers dey wait!', 'Circle, Circle! Move, we dey go Circle!', 'Chale, you go pay our time? Move!'];
+const PUSH_LINES = ['Massa, I beg, go side!', 'Chale, the road no be your room!', 'Herh, go the pavement!'];
+const driver = {
+  person: null as Person | null,
+  loading: false,
+  phase: 'none' as 'none' | 'out' | 'push' | 'back',
+  car: null as null | { id: number; x: number; z: number; heading: number; halfW: number; half: number },
+  x: 0,
+  z: 0,
+  heading: 0,
+  time: 0,
+};
+const nagged = new Map<number, { shout: number; hoot: number }>();
+const shove = { vx: 0, vz: 0, left: 0 };
+const pick = <T,>(list: T[], seed: number) => list[Math.abs(Math.floor(seed)) % list.length];
+async function loadDriver() {
+  if (driver.person || driver.loading) return;
+  driver.loading = true;
+  const man = await createPerson({ shirt: '#1f5fa8', trousers: '#2a2a2e', shoes: '#2b2b2e', hair: '#141110', skin: '#6e625b' }, 'male', 'lite');
+  man.actions.walk.play();
+  man.actions.interact.setLoop(THREE.LoopOnce, 1);
+  man.model.traverse((o) => (o.castShadow = PRESET.shadows));
+  driver.person = man;
+}
+function onVehicleBlocked(v: { id: number; x: number; z: number; heading: number; kind: string; halfW: number; half: number; waited: number }) {
+  if (story.busy) return;
+  const now = performance.now() / 1000;
+  const n = nagged.get(v.id) ?? { shout: 0, hoot: 0 };
+  const mouthX = v.x + Math.sin(v.heading) * v.half * 0.6;
+  const mouthZ = v.z - Math.cos(v.heading) * v.half * 0.6;
+  // 1. A shout (the mate on a trotro, otherwise the driver), then again every few seconds.
+  if (v.waited > 0.9 && now - n.shout > 5) {
+    n.shout = now;
+    const line = v.kind === 'trotro' && v.id % 2 ? pick(MATE_SHOUTS, v.id + now) : pick(SHOUTS, v.id * 7 + now);
+    showBubble(mouthX, mouthZ, 2.3, line);
+    void voices.say(line, { body: 'male', seed: v.id }, 1, 1);
+  }
+  // 2. The horn, again and again while you stay.
+  if (v.waited > 2 && now - n.hoot > 2.5) {
+    n.hoot = now;
+    honk(Math.hypot(v.x - state.x, v.z - state.z), true);
+  }
+  nagged.set(v.id, n);
+  if (nagged.size > 200) nagged.clear();
+  // 3. Some drivers get down and push you aside (about half of them, after 7 seconds).
+  if (v.waited > 7 && driver.phase === 'none' && driver.person && v.kind !== 'okada' && ((v.id * 2654435761) >>> 0) % 2 === 0 && !state.onOkada) {
+    const side = Math.sign((state.x - v.x) * Math.cos(v.heading) + (state.z - v.z) * Math.sin(v.heading)) || 1;
+    // He gets out on the side you are standing, so he walks straight to you.
+    driver.car = { id: v.id, x: v.x, z: v.z, heading: v.heading, halfW: v.halfW, half: v.half };
+    driver.x = v.x + Math.cos(v.heading) * (v.halfW + 0.45) * side;
+    driver.z = v.z + Math.sin(v.heading) * (v.halfW + 0.45) * side;
+    driver.phase = 'out';
+    driver.time = 0; // seconds in this phase (game time, so slow phones work the same)
+    streetTraffic?.hold.add(v.id);
+    scene.add(driver.person.root);
+    const line = pick(PUSH_LINES, v.id);
+    showBubble(driver.x, driver.z, 1.9, line);
+    void voices.say(line, { body: 'male', seed: v.id }, 1, 2);
+  }
+}
+function updateDriver(dt: number) {
+  // Being pushed: a short shove, slowing down, never into a wall or kiosk.
+  if (shove.left > 0) {
+    // Pushed: a quick stumble to the side, never into a wall, kiosk or vehicle.
+    const len = Math.hypot(shove.vx, shove.vz) || 1;
+    const step = Math.min(shove.left, Math.min(6, 1.5 + shove.left * 3) * dt);
+    shove.left -= step;
+    const nx = state.x + (shove.vx / len) * step;
+    const nz = state.z + (shove.vz / len) * step;
+    if (!solidAt(nx, nz, 0.3)) [state.x, state.z] = [nx, nz];
+    else shove.left = 0;
+  }
+  const man = driver.person;
+  if (!man || driver.phase === 'none' || !driver.car) return;
+  driver.time += dt;
+  const car = driver.car;
+  let tx = state.x;
+  let tz = state.z;
+  if (driver.phase === 'back') {
+    const side = Math.sign((driver.x - car.x) * Math.cos(car.heading) + (driver.z - car.z) * Math.sin(car.heading)) || 1;
+    tx = car.x + Math.cos(car.heading) * (car.halfW + 0.4) * side;
+    tz = car.z + Math.sin(car.heading) * (car.halfW + 0.4) * side;
+  }
+  const dx = tx - driver.x;
+  const dz = tz - driver.z;
+  const d = Math.hypot(dx, dz);
+  if (driver.phase === 'out') {
+    if (d < 0.85) {
+      // The push: you are moved off the lane, away from the vehicle's path.
+      driver.phase = 'push';
+      driver.time = 0;
+      man.actions.walk.stop();
+      man.actions.interact.reset().play();
+      // Far enough to the side that the vehicle can pass (its half width plus 2 m), not more.
+      const sideNow = (state.x - car.x) * Math.cos(car.heading) + (state.z - car.z) * Math.sin(car.heading);
+      let across = Math.sign(sideNow) || 1;
+      let need = Math.max(1.2, car.halfW + 2 - Math.abs(sideNow));
+      // If that side is blocked (a kiosk, a wall), push to the other side instead.
+      const free = (dir: number, m: number) => {
+        for (let k = 0.5; k <= m; k += 0.5) if (solidAt(state.x + Math.cos(car.heading) * dir * k, state.z + Math.sin(car.heading) * dir * k, 0.3)) return false;
+        return true;
+      };
+      if (!free(across, need)) {
+        const other = car.halfW + 2 + Math.abs(sideNow);
+        if (free(-across, other)) [across, need] = [-across, other];
+      }
+      shove.vx = Math.cos(car.heading) * across * need;
+      shove.vz = Math.sin(car.heading) * across * need;
+      shove.left = need; // metres still to go
+      // Best of all: towards the nearest pavement, so you end up off the road.
+      const pave = life?.pavementNear(state.x, state.z, 0.5);
+      if (pave) {
+        const d2 = Math.hypot(pave.x - state.x, pave.z - state.z);
+        if (d2 > 0.3 && d2 < 7) [shove.vx, shove.vz, shove.left] = [pave.x - state.x, pave.z - state.z, d2];
+      }
+    } else if (driver.time > 12) [driver.phase, driver.time] = ['back', 0];
+  } else if (driver.phase === 'push') {
+    if (driver.time > 1.1) {
+      [driver.phase, driver.time] = ['back', 0];
+      man.actions.interact.stop();
+      man.actions.walk.reset().play();
+    }
+  } else if (driver.phase === 'back' && (d < 0.4 || driver.time > 10)) {
+    // Back in the car: on his way.
+    scene.remove(man.root);
+    streetTraffic?.hold.delete(car.id);
+    driver.phase = 'none';
+    driver.car = null;
+    return;
+  }
+  if (driver.phase !== 'push' && d > 0.05) {
+    driver.heading = Math.atan2(dx, -dz);
+    const step = Math.min(d, 1.5 * dt);
+    driver.x += (dx / d) * step;
+    driver.z += (dz / d) * step;
+  }
+  man.root.position.set(driver.x, 0, driver.z);
+  man.root.rotation.set(0, Math.PI - driver.heading, 0);
+  man.mixer.update(dt);
+}
+
 // A gold marker over the person the story wants you to find.
 const marker = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.55, 4), new THREE.MeshBasicMaterial({ color: 0xe3a92b }));
 marker.rotation.x = Math.PI;
@@ -1708,7 +1944,7 @@ async function runAutoTest() {
 let minimap: Minimap | null = null;
 // The big map: tap the minimap. Shows the real streets, you, your goal and every place found.
 const lngLatOf = (x: number, z: number) => ({ lng: START[0] + x / M_LON, lat: START[1] - z / M_LAT });
-const fullMap = new FullMap(() => {
+const fullMap = new FullMap(tier, () => {
   const goalAt = story.auntie ?? waypoint ?? null;
   const list = places.list().map((p) => ({ ...lngLatOf(p.x, p.z), kind: p.kind }));
   if (station) list.push({ ...lngLatOf(station.x, station.z), kind: 'LORRY STATION' });
@@ -1717,6 +1953,8 @@ const fullMap = new FullMap(() => {
     goal: goalAt ? { ...lngLatOf(goalAt.x, goalAt.z), label: story.auntie ? story.goal || 'Your goal' : waypoint?.name ?? 'Your goal' } : null,
     places: list,
     areas: PLACES.map((a) => ({ name: a.name, lng: a.at[0], lat: a.at[1] })),
+    cars: () => (streetTraffic?.placed ?? []).map((p) => ({ lng: p.lon, lat: p.lat, kind: p.v.kind })),
+    here: placeLabel.textContent ?? '',
   };
 });
 // Where the Ride app is taking you (a teal marker on the maps).
@@ -1930,41 +2168,60 @@ function placeBubbles(now: number) {
 // Real places (filling stations, bus stops and signboards for banks, pharmacies, churches...).
 const places = new Places();
 const fuelWhy: string[] = [];
+let placeRetry = 3;
 scene.add(places.group);
-function placeFor(x: number, z: number, kind: 'fuel' | 'stop' | 'sign') {
+function placeFor(x: number, z: number, kind: 'fuel' | 'stop' | 'sign', tries = 0): PlaceAt {
   if (!life) return null;
-  const toRoad = life.roadDirNear(x, z, kind === 'fuel' ? 45 : 60);
+  // The map sometimes puts the point on the road itself: start from the pavement beside it.
+  if (life.roadAt(x, z, 0.5)) {
+    const pave = life.pavementNear(x, z, 0.5);
+    if (pave && Math.hypot(pave.x - x, pave.z - z) < 20) [x, z] = [pave.x, pave.z];
+  }
+  // Main roads first; any street (a side road) if there is none, and further on later tries.
+  const reach = (kind === 'fuel' ? 45 : 60) + tries * 8;
+  const toRoad = life.roadDirNear(x, z, reach) ?? life.roadDirNear(x, z, reach, 2);
   if (kind === 'fuel') fuelWhy.push(toRoad === null ? 'no road' : 'ok?');
   if (toRoad === null) return null;
   if (kind === 'fuel') {
-    // The forecourt must be open ground (no buildings), with its front at the road.
+    // The forecourt must be open ground with its front at the road. Tried full size first, then
+    // smaller (a roadside station), and slid along the road a little, so every real one fits.
     const F = [Math.sin(toRoad), -Math.cos(toRoad)];
     const R = [Math.cos(toRoad), Math.sin(toRoad)];
-    // Slide the station so its front edge (10 m ahead of the middle) is at the road's edge.
-    let cx = x;
-    let cz = z;
-    for (let k = 0; k < 40 && !life.roadAt(cx + F[0] * 10.5, cz + F[1] * 10.5, 0.3); k++) [cx, cz] = [cx + F[0], cz + F[1]];
-    for (let k = 0; k < 40 && life.roadAt(cx + F[0] * 9.5, cz + F[1] * 9.5, 0.3); k++) [cx, cz] = [cx - F[0], cz - F[1]];
-    // Mostly open ground (the map often draws the station's own shop as a building: a little is fine).
-    let blockedN = 0;
-    let n = 0;
-    for (let u = -10; u <= 10; u += 2.5)
-      for (let v = -9; v <= 8; v += 2.5) {
-        const px = cx + R[0] * u + F[0] * v;
-        const pz = cz + R[1] * u + F[1] * v;
-        n++;
-        if (v < 6 && life.roadAt(px, pz, 0)) {
+    for (const scale of [1, 0.82, 0.66]) {
+      for (const slide of [0, 5, -5, 10, -10, 16, -16]) {
+        let cx = x + R[0] * slide;
+        let cz = z + R[1] * slide;
+        const front = 10 * scale;
+        for (let k = 0; k < 45 && !life.roadAt(cx + F[0] * (front + 0.5), cz + F[1] * (front + 0.5), 0.3); k++) [cx, cz] = [cx + F[0], cz + F[1]];
+        for (let k = 0; k < 45 && life.roadAt(cx + F[0] * (front - 0.5), cz + F[1] * (front - 0.5), 0.3); k++) [cx, cz] = [cx - F[0], cz - F[1]];
+        let blockedN = 0;
+        let n = 0;
+        let road = false;
+        for (let u = -10; u <= 10 && !road; u += 2.5)
+          for (let v = -9; v <= 8; v += 2.5) {
+            const px = cx + (R[0] * u + F[0] * v) * scale;
+            const pz = cz + (R[1] * u + F[1] * v) * scale;
+            n++;
+            if (v < 6 && life.roadAt(px, pz, 0)) {
+              road = true;
+              break;
+            }
+            if (buildings.blocked(px, pz, 0.1)) blockedN++;
+          }
+        if (road) {
           fuelWhy.push('road in yard');
-          return null;
+          continue;
         }
-        if (buildings.blocked(px, pz, 0.1)) blockedN++;
+        // The map often draws the station's own shop as a building: some is fine (more on later tries).
+        if (blockedN > n * (tries >= 4 ? 0.5 : 0.3)) {
+          fuelWhy.push('buildings ' + blockedN + '/' + n);
+          continue;
+        }
+        life.clearArea(cx, cz, 13 * scale);
+        return { x: cx, z: cz, face: toRoad, scale };
       }
-    if (blockedN > n * 0.3) {
-      fuelWhy.push('buildings ' + blockedN + '/' + n);
-      return null;
     }
-    life.clearArea(cx, cz, 13);
-    return { x: cx, z: cz, face: toRoad };
+    return null;
   }
   // A shelter or signboard: at the roadside in front of the place, facing the road.
   const F = [Math.sin(toRoad), -Math.cos(toRoad)];
@@ -1976,8 +2233,15 @@ function placeFor(x: number, z: number, kind: 'fuel' | 'stop' | 'sign') {
     if (life.roadAt(nx, nz, kind === 'stop' ? 1.6 : 1.1)) break;
     [px, pz] = [nx, nz];
   }
-  if (life.roadAt(px, pz, 0.6) || buildings.blocked(px, pz, 0.2)) return null;
-  return { x: px, z: pz, face: toRoad };
+  // Blocked right in front (a wall, the road itself)? Slide along the road a little to find room.
+  const R = [Math.cos(toRoad), Math.sin(toRoad)];
+  for (const slide of [0, 2.5, -2.5, 5, -5, 8, -8]) {
+    let sx = px + R[0] * slide;
+    let sz = pz + R[1] * slide;
+    for (let k = 0; k < 6 && life.roadAt(sx, sz, 0.6); k++) [sx, sz] = [sx - F[0] * 0.7, sz - F[1] * 0.7]; // back off the road
+    if (!life.roadAt(sx, sz, 0.6) && !buildings.blocked(sx, sz, 0.2) && !places.solid(sx, sz, 0.3)) return { x: sx, z: sz, face: toRoad };
+  }
+  return null;
 }
 
 // The trotro station at Circle: the nearest open ground (no buildings, no roads) big enough for
@@ -2094,8 +2358,9 @@ async function start() {
     streetTraffic.deckHeight = (x, z) => flyovers.heightAt(x, z);
     streetTraffic.signals = signals;
     if (life) life.vehicleAt = vehicleAt;
-    streetTraffic.onHoot = (x, z) => honk(Math.hypot(x - state.x, z - state.z), true);
-    if (debug) Object.assign(window, { __street: { state, sky, look, life, story, thief, signals, lightFor, flyovers, pinch, bigScreen, roadSigns, getStation: () => station, places, fuelWhy, bag, traffic: streetTraffic, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
+    streetTraffic.onBlocked = onVehicleBlocked;
+    void loadDriver();
+    if (debug) Object.assign(window, { __street: { state, sky, look, life, story, thief, signals, lightFor, flyovers, pinch, bigScreen, roadSigns, getStation: () => station, places, fuelWhy, bag, driver, shove, fullMap, phone, camAvoid, camAt, viewBlocked, heightAtView, solidAt, traffic: streetTraffic, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
   }
 
   document.getElementById('loading')!.remove();
@@ -2114,6 +2379,9 @@ async function start() {
     requestAnimationFrame(loop);
     // Light phones run at a steady 30 frames a second: skip every other screen refresh.
     if (now - last < frameMs - 2) return;
+    // While the big map is open, the street behind it runs slowly (8 times a second): the traffic
+    // on the map still moves, and the phone does not draw two maps at full speed.
+    if (fullMap.isOpen && now - last < 120) return;
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     step(player, dt, now / 1000);

@@ -7,7 +7,9 @@
     "dev": "vite --host",
     "build": "tsc --noEmit && vite build",
     "preview": "npm run build && wrangler dev",
-    "deploy": "node ../../scripts/check-deploy-data.mjs && npm run build && wrangler deploy"
+    "deploy": "node ../../scripts/check-deploy-data.mjs && npm run build && wrangler deploy",
+    "voices": "node scripts/voice-script.mjs",
+    "voices:index": "node scripts/voice-script.mjs --index"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.64.0",

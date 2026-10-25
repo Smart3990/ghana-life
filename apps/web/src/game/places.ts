@@ -5,7 +5,6 @@
 // Names on signs are what the place is ("PHARMACY", "CHURCH") or our own made-up brands, never the
 // real business's name or logo (no real brands without permission).
 import * as THREE from 'three';
-import { addCutout } from './cutout';
 import { box, merge, paint } from './vehicles3d';
 import type { Poi } from './streetBuildings';
 
@@ -19,22 +18,27 @@ const SIGNS: { kinds: string[]; label: string; sub: string; bg: string; ink: str
   { kinds: ['school', 'kindergarten', 'college', 'university', 'driving_school'], label: 'SCHOOL', sub: 'Knowledge is power', bg: '#8e1b1b', ink: '#ffffff' },
   { kinds: ['hospital', 'clinic', 'doctors', 'dentist'], label: 'CLINIC', sub: 'Outpatients · Lab', bg: '#ffffff', ink: '#c8102e' },
   { kinds: ['hotel', 'guest_house', 'hostel'], label: 'HOTEL', sub: 'Rooms available', bg: '#121a14', ink: '#e3a92b' },
-  { kinds: ['fast_food', 'restaurant', 'cafe', 'bakery', 'pastry'], label: 'CHOP BAR', sub: 'Waakye · Banku · Fufu', bg: '#c2410c', ink: '#ffffff' },
-  { kinds: ['hairdresser', 'beauty'], label: 'BARBERING & SALON', sub: 'Haircut · Braids', bg: '#2a2c33', ink: '#ffffff' },
-  { kinds: ['marketplace'], label: 'MARKET', sub: 'Foodstuff · Provisions', bg: '#e3a92b', ink: '#121a14' },
+  { kinds: ['fast_food', 'restaurant', 'cafe', 'bakery', 'pastry', 'ice_cream', 'food_court'], label: 'CHOP BAR', sub: 'Waakye · Banku · Fufu', bg: '#c2410c', ink: '#ffffff' },
+  { kinds: ['hairdresser', 'beauty', 'cosmetics'], label: 'BARBERING & SALON', sub: 'Haircut · Braids', bg: '#2a2c33', ink: '#ffffff' },
+  { kinds: ['marketplace', 'greengrocer', 'butcher'], label: 'MARKET', sub: 'Foodstuff · Provisions', bg: '#e3a92b', ink: '#121a14' },
   { kinds: ['police'], label: 'POLICE STATION', sub: 'Ghanaverse Police Service', bg: '#0b2a5a', ink: '#ffffff' },
   { kinds: ['fire_station'], label: 'FIRE STATION', sub: 'Emergency', bg: '#c8102e', ink: '#ffffff' },
   { kinds: ['supermarket', 'convenience', 'department_store'], label: 'SUPERMARKET', sub: 'Provisions · Drinks', bg: '#2f8f57', ink: '#ffffff' },
-  { kinds: ['mobile_money_agent'], label: 'MOBILE MONEY', sub: 'Cash in · Cash out', bg: '#f2c21a', ink: '#121a14' },
-  { kinds: ['electronics', 'mobile_phone', 'computer'], label: 'PHONES & ELECTRONICS', sub: 'Repairs · Accessories', bg: '#121a14', ink: '#2dd4bf' },
+  { kinds: ['mobile_money_agent', 'telecommunication'], label: 'MOBILE MONEY', sub: 'Cash in · Cash out', bg: '#f2c21a', ink: '#121a14' },
+  { kinds: ['electronics', 'mobile_phone', 'computer', 'internet_cafe'], label: 'PHONES & ELECTRONICS', sub: 'Repairs · Accessories', bg: '#121a14', ink: '#2dd4bf' },
   { kinds: ['clothes', 'tailor', 'boutique', 'shoes', 'fabric'], label: 'FASHION HOUSE', sub: 'Kente · Wax print · Sewing', bg: '#7a3fb0', ink: '#ffffff' },
   { kinds: ['post_office'], label: 'POST OFFICE', sub: 'Letters · Parcels', bg: '#c8442e', ink: '#ffffff' },
   { kinds: ['bus_station'], label: 'BUS TERMINAL', sub: 'Intercity buses', bg: '#0f6b3a', ink: '#ffffff' },
-  { kinds: ['car_repair', 'tyres', 'car_parts', 'car'], label: 'FITTING SHOP', sub: 'Mechanic · Tyres · Spare parts', bg: '#3a3d42', ink: '#f2c21a' },
+  { kinds: ['car_repair', 'tyres', 'car_parts'], label: 'FITTING SHOP', sub: 'Mechanic · Tyres · Spare parts', bg: '#3a3d42', ink: '#f2c21a' },
   { kinds: ['lottery', 'bookmaker', 'gambling'], label: 'LOTTO KIOSK', sub: 'Results daily', bg: '#e3a92b', ink: '#8e1b1b' },
-  { kinds: ['bar', 'pub', 'nightclub'], label: 'DRINKING SPOT', sub: 'Cold drinks · Music', bg: '#121a14', ink: '#ff5a3c' },
+  { kinds: ['bar', 'pub', 'nightclub', 'alcohol', 'beverages'], label: 'DRINKING SPOT', sub: 'Cold drinks · Music', bg: '#121a14', ink: '#ff5a3c' },
   { kinds: ['copyshop', 'print_shop', 'stationery', 'books'], label: 'PRINTING & BOOKS', sub: 'Photocopy · Printing', bg: '#1f5fa8', ink: '#ffffff' },
-  { kinds: ['hardware', 'paint', 'electrician'], label: 'HARDWARE', sub: 'Building materials', bg: '#e3a92b', ink: '#121a14' },
+  { kinds: ['hardware', 'paint', 'electrician', 'doityourself'], label: 'HARDWARE', sub: 'Building materials', bg: '#e3a92b', ink: '#121a14' },
+  { kinds: ['studio', 'photo', 'music'], label: 'STUDIO', sub: 'Photos · Music · Video', bg: '#6a4c93', ink: '#ffffff' },
+  { kinds: ['car', 'motorcycle'], label: 'CAR SALES', sub: 'Home used · Clean papers', bg: '#ffffff', ink: '#1f5fa8' },
+  { kinds: ['toilets', 'public_bath'], label: 'PUBLIC TOILET', sub: 'Toilet · Bath · ₵1', bg: '#2f8f57', ink: '#ffffff' },
+  { kinds: ['taxi'], label: 'TAXI RANK', sub: 'Drop · Charter', bg: '#f2c21a', ink: '#121a14' },
+  { kinds: ['car_wash'], label: 'CAR WASH', sub: 'Wash · Polish · Vacuum', bg: '#1e8c86', ink: '#ffffff' },
 ];
 const ROWS = SIGNS.length;
 const signFor = (p: Poi) => {
@@ -147,7 +151,9 @@ function busShelter() {
 
 const SIGN_POSTS = merge([paint(box(0.12, 2.4, 0.12, -1.3, 1.2, -0.05), '#5d5a55'), paint(box(0.12, 2.4, 0.12, 1.3, 1.2, -0.05), '#5d5a55')]);
 
-type Placed = { kind: 'fuel' | 'stop' | 'sign'; x: number; z: number; face: number; row: number };
+type Placed = { kind: 'fuel' | 'stop' | 'sign'; x: number; z: number; face: number; row: number; scale: number };
+export type PlaceAt = { x: number; z: number; face: number; scale?: number } | null;
+type Finder = (x: number, z: number, kind: 'fuel' | 'stop' | 'sign', tries: number) => PlaceAt;
 
 export class Places {
   readonly group = new THREE.Group();
@@ -161,13 +167,14 @@ export class Places {
   private m = new THREE.Matrix4();
   private q = new THREE.Quaternion();
   private p = new THREE.Vector3();
-  private one = new THREE.Vector3(1, 1, 1);
+  private sc = new THREE.Vector3(1, 1, 1);
   private up = new THREE.Vector3(0, 1, 0);
   private last = { x: Infinity, z: Infinity, n: -1 };
+  /** What the map had and what was built, per kind (for checking that nothing real is missing). */
+  stats: Record<string, { seen: number; built: number; same: number; near?: number; nearBuilt?: number }> = {};
 
   constructor() {
     const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75, side: THREE.DoubleSide });
-    addCutout(mat);
     const mk = (g: THREE.BufferGeometry, m: THREE.Material, n: number) => {
       const mesh = new THREE.InstancedMesh(g, m, n);
       mesh.count = 0;
@@ -209,22 +216,52 @@ export class Places {
 
   /**
    * New places from a tile. place(x, z) finds where the thing can stand (at the roadside in front
-   * of the place) and which way it faces, or null.
+   * of the place) and which way it faces, or null. What cannot be placed yet (its road is not loaded,
+   * or the spot is tight) waits and is tried again (retry), so every real place gets built.
    */
-  add(pois: Poi[], place: (x: number, z: number, kind: 'fuel' | 'stop' | 'sign') => { x: number; z: number; face: number } | null) {
+  add(pois: Poi[], place: Finder) {
     for (const p of pois) {
       const key = `${p.kind}:${Math.round(p.x)}:${Math.round(p.z)}`;
       if (this.seen.has(key)) continue;
       this.seen.add(key);
       const kind = p.kind === 'fuel' ? 'fuel' : p.kind === 'bus_stop' ? 'stop' : signFor(p) >= 0 ? 'sign' : null;
+      this.stats[p.kind] ??= { seen: 0, built: 0, same: 0 };
+      this.stats[p.kind].seen++;
+      if (Math.hypot(p.x, p.z) < 300) this.stats[p.kind].near = (this.stats[p.kind].near ?? 0) + 1;
       if (!kind) continue;
-      // Not two of the same too close together (the map often has a place twice).
-      if (this.all.some((o) => o.kind === kind && Math.hypot(o.x - p.x, o.z - p.z) < (kind === 'fuel' ? 40 : 12))) continue;
-      const at = place(p.x, p.z, kind);
-      if (!at) continue;
-      this.all.push({ kind, x: at.x, z: at.z, face: at.face, row: kind === 'sign' ? signFor(p) : 0 });
+      this.tryPlace(p, kind, place, 0);
     }
     this.last.n = -1;
+  }
+
+  private pending: { p: Poi; kind: 'fuel' | 'stop' | 'sign'; tries: number }[] = [];
+  private tryPlace(p: Poi, kind: 'fuel' | 'stop' | 'sign', place: Finder, tries: number) {
+    const row = kind === 'sign' ? signFor(p) : 0;
+    // Not two of the same thing too close together (the map often has a place twice).
+    if (this.all.some((o) => o.kind === kind && o.row === row && Math.hypot(o.x - p.x, o.z - p.z) < (kind === 'fuel' ? 35 : kind === 'stop' ? 18 : 8))) {
+      this.stats[p.kind].same++;
+      return true;
+    }
+    const at = place(p.x, p.z, kind, tries);
+    if (!at) {
+      if (tries < 8) this.pending.push({ p, kind, tries: tries + 1 });
+      return false;
+    }
+    this.all.push({ kind, x: at.x, z: at.z, face: at.face, row, scale: at.scale ?? 1 });
+    this.stats[p.kind].built++;
+    if (Math.hypot(p.x, p.z) < 300) this.stats[p.kind].nearBuilt = (this.stats[p.kind].nearBuilt ?? 0) + 1;
+    this.last.n = -1;
+    return true;
+  }
+
+  /** Try again the places that could not be built yet (call every few seconds). */
+  retry(place: Finder, x: number, z: number) {
+    const now = this.pending;
+    this.pending = [];
+    for (const w of now) {
+      if (Math.hypot(w.p.x - x, w.p.z - z) > 420) this.pending.push(w); // too far: later
+      else this.tryPlace(w.p, w.kind, place, w.tries);
+    }
   }
 
   /** Every place found so far, with what it is (for the big map). */
@@ -246,14 +283,15 @@ export class Places {
       // Into the place's own directions: u across, v towards the road.
       const c = Math.cos(p.face);
       const s = Math.sin(p.face);
-      const u = -(dx * c + dz * s); // across (the model's +x)
-      const v = dx * s - dz * c; // towards the road (the model's +z)
+      const u = -(dx * c + dz * s) / p.scale; // across (the model's +x)
+      const v = (dx * s - dz * c) / p.scale; // towards the road (the model's +z)
+      const r = room / p.scale;
       if (p.kind === 'fuel') {
-        if (Math.abs(u) < 4 + room && v > -9 - room && v < -5 + room) return true; // shop
-        for (const ix of [-3, 3]) if (Math.abs(u - ix) < 0.6 + room && Math.abs(v - 1) < 2.5 + room) return true; // pump islands
-        for (const cx of [-5, 5]) for (const cz of [-2, 4]) if (Math.hypot(u - cx, v - cz) < 0.3 + room) return true;
+        if (Math.abs(u) < 4 + r && v > -9 - room && v < -5 + r) return true; // shop
+        for (const ix of [-3, 3]) if (Math.abs(u - ix) < 0.6 + r && Math.abs(v - 1) < 2.5 + r) return true; // pump islands
+        for (const cx of [-5, 5]) for (const cz of [-2, 4]) if (Math.hypot(u - cx, v - cz) < 0.3 + r) return true;
       } else if (p.kind === 'stop') {
-        if (Math.abs(u) < 1.7 + room && Math.abs(v + 0.6) < 0.2 + room) return true;
+        if (Math.abs(u) < 1.7 + r && Math.abs(v + 0.6) < 0.2 + r) return true;
       }
     }
     return false;
@@ -267,7 +305,7 @@ export class Places {
     const rows = this.boards.geometry.getAttribute('aRow') as THREE.InstancedBufferAttribute;
     for (const p of near) {
       this.q.setFromAxisAngle(this.up, Math.PI - p.face);
-      this.m.compose(this.p.set(p.x, 0, p.z), this.q, this.one);
+      this.m.compose(this.p.set(p.x, 0, p.z), this.q, this.sc.setScalar(p.scale));
       if (p.kind === 'fuel' && c.fuel < 12) {
         this.fuel.setMatrixAt(c.fuel, this.m);
         this.fuelBoards.setMatrixAt(c.fuel++, this.m);

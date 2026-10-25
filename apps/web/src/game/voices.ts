@@ -7,6 +7,7 @@
 // words are spelt the way they sound for the speech engine ("Chale" is said "Cha-lay").
 // Later, real recorded Ghanaian voices (design brief 15.3) can replace any line: if a file
 // /voices/<line id>.mp3 is listed in /voices/index.json, it is played instead of the speech engine.
+// The line id is the line's words in small letters joined with dashes (see docs/VOICE_SCRIPT.md).
 
 export type Speaker = { body: 'male' | 'female' | 'child'; seed: number };
 
@@ -39,6 +40,21 @@ const SAY: [RegExp, string][] = [
   [/₵\s?(\d+)/g, '$1 cedis'],
 ];
 const spoken = (text: string) => SAY.reduce((t, [re, s]) => t.replace(re, s), text).replace(/[“”"]/g, '');
+
+/**
+ * The file name of a line's recording: "Chale, comot for road!" -> "chale-comot-for-road".
+ * Must match voiceId() in scripts/voice-script.mjs (which writes the voice script).
+ */
+export const voiceId = (text: string) =>
+  text
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/₵\s?(\d+)/g, '$1-cedis')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60)
+    .replace(/-+$/g, '');
 
 const hash = (n: number) => {
   let x = Math.imul(Math.floor(n * 100) ^ 0x9e3779b9, 0x85ebca6b);
@@ -108,9 +124,11 @@ export class Voices {
       if (this.muted || !this.synth || volume < 0.05) return resolve();
       if (this.speaking && this.speaking.priority >= priority) return resolve(); // don't talk over them
       if (this.speaking) this.stop();
-      const job: Job = { text, who, volume, priority, id, done: resolve };
+      // A real recording of this line, if the owner has added one (docs/VOICE_SCRIPT.md).
+      const file = id ?? voiceId(text);
+      const job: Job = { text, who, volume, priority, id: file, done: resolve };
       this.speaking = job;
-      if (id && this.recorded.has(id)) return this.playRecorded(job);
+      if (this.recorded.has(file)) return this.playRecorded(job);
       const u = new SpeechSynthesisUtterance(spoken(text));
       const list = who.body === 'female' || who.body === 'child' ? (this.female.length ? this.female : this.any) : this.male.length ? this.male : this.any;
       const voice = list.length ? list[Math.floor(hash(who.seed) * list.length)] : null;

@@ -6,7 +6,6 @@
 // People are drawn in big batches animated by the graphics card (crowd.ts).
 import type { Arm, Junction } from './signals';
 import * as THREE from 'three';
-import { addCutout } from './cutout';
 import { slidingAdMaterial, twoSidedFace } from './adScreens';
 import { box, merge, paint, shadowTexture } from './vehicles3d';
 import type { Roof, StreetLine } from './streetBuildings';
@@ -304,7 +303,6 @@ export class StreetLife {
     private opts: { radiusM: number; people: number; props: number; scenes: number; smoothCrowd?: boolean },
   ) {
     const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0.05 });
-    addCutout(mat);
     const make = (geometry: Part, tint: boolean) => {
       const mesh = new THREE.InstancedMesh(geometry, mat, opts.props);
       mesh.count = 0;
@@ -828,6 +826,59 @@ export class StreetLife {
     near(this.poles.all, 0.18);
     near(this.boards.all, 0.2); // only the legs matter; the posters are high up
     near(this.banners.all, 0.08);
+    // A grid of the solid things (4 m squares), so asking "is something here?" stays quick.
+    this.solidGrid.clear();
+    for (const o of this.solids) {
+      const reach = o.box ? o.r * 1.42 : o.r;
+      for (let gx = Math.floor((o.x - reach - 0.6) / 4); gx <= Math.floor((o.x + reach + 0.6) / 4); gx++)
+        for (let gz = Math.floor((o.z - reach - 0.6) / 4); gz <= Math.floor((o.z + reach + 0.6) / 4); gz++) {
+          const k = gx * 100003 + gz;
+          const cell = this.solidGrid.get(k);
+          if (cell) cell.push(o);
+          else this.solidGrid.set(k, [o]);
+        }
+    }
+    // What blocks the camera's view: kiosks, containers and umbrella tops (thin poles and trees do not).
+    this.viewGrid.clear();
+    const view = (list: Spot[], r: number, h: number, box: boolean) => {
+      for (const s of list) {
+        if (Math.abs(s.x - x) > 70 || Math.abs(s.z - z) > 70) continue;
+        const o = { x: s.x, z: s.z, r: r * s.scale, angle: s.angle, box, h: h * s.scale };
+        const k = Math.floor(s.x / 4) * 100003 + Math.floor(s.z / 4);
+        const cell = this.viewGrid.get(k);
+        if (cell) cell.push(o);
+        else this.viewGrid.set(k, [o]);
+      }
+    };
+    view(this.kiosks.all, 1.35, 2.9, true);
+    view(this.umbrellas.all, 1.2, 2.5, false);
+    view(this.phones.all, 0.6, 2.1, false);
+    view(this.tanks.all, 0.7, 2.2, false);
+  }
+  private solidGrid = new Map<number, { x: number; z: number; r: number; angle: number; box: boolean }[]>();
+  private viewGrid = new Map<number, { x: number; z: number; r: number; angle: number; box: boolean; h: number }[]>();
+
+  /** How tall the kiosk, container or umbrella at this point is (0: none), for the camera. */
+  viewHeight(x: number, z: number) {
+    let top = 0;
+    const gx = Math.floor(x / 4);
+    const gz = Math.floor(z / 4);
+    for (let i = -1; i <= 1; i++)
+      for (let j = -1; j <= 1; j++) {
+        const cell = this.viewGrid.get((gx + i) * 100003 + gz + j);
+        if (!cell) continue;
+        for (const o of cell) {
+          if (o.h <= top) continue;
+          const dx = x - o.x;
+          const dz = z - o.z;
+          if (o.box) {
+            const c = Math.cos(o.angle);
+            const sn = Math.sin(o.angle);
+            if (Math.abs(dx * c + dz * sn) < o.r && Math.abs(-dx * sn + dz * c) < o.r) top = o.h;
+          } else if (dx * dx + dz * dz < o.r * o.r) top = o.h;
+        }
+      }
+    return top;
   }
   private propShadows = 0;
   private solids: { x: number; z: number; r: number; angle: number; box: boolean }[] = [];
@@ -835,7 +886,11 @@ export class StreetLife {
 
   /** Is there a kiosk, tree, pole or tank at this point (with room around it)? */
   solid(x: number, z: number, room: number) {
-    for (const o of this.solids) {
+    const cell = this.solidGrid.get(Math.floor(x / 4) * 100003 + Math.floor(z / 4));
+    if (room > 0.6 || !cell) {
+      if (room <= 0.6 && this.solidGrid.size) return false;
+    }
+    for (const o of room <= 0.6 && this.solidGrid.size ? cell! : this.solids) {
       const dx = x - o.x;
       const dz = z - o.z;
       if (Math.abs(dx) > 3 || Math.abs(dz) > 3) continue;
@@ -932,17 +987,18 @@ export class StreetLife {
   }
 
   /** The direction (clockwise from north) from a point towards the nearest main road within reach, or null. */
-  roadDirNear(x: number, z: number, reach: number): number | null {
+  roadDirNear(x: number, z: number, reach: number, minHalf = 4.5): number | null {
     const cx = Math.floor(x / 25);
     const cz = Math.floor(z / 25);
     let best: [number, number] | null = null;
     let bestD = reach;
-    for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+    const n = Math.max(1, Math.ceil(reach / 25));
+    for (let i = -n; i <= n; i++) for (let j = -n; j <= n; j++) {
       const list = this.roadGrid.get(`${cx + i},${cz + j}`);
       if (!list) continue;
       for (let k = 0; k < list.length; k += 5) {
         const [ax, az, bx, bz, half] = [list[k], list[k + 1], list[k + 2], list[k + 3], list[k + 4]];
-        if (half < 4.5) continue; // main roads only
+        if (half < minHalf) continue; // main roads only (by default)
         const dx = bx - ax;
         const dz = bz - az;
         const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz || 1)));

@@ -5,7 +5,6 @@
 //
 // Work is spread over frames (a few milliseconds each) so loading new streets never makes the game stutter.
 import * as THREE from 'three';
-import { addCutout } from './cutout';
 import { VectorTile } from '@mapbox/vector-tile';
 import { PbfReader } from 'pbf';
 
@@ -65,7 +64,6 @@ function clip(ring: { x: number; y: number }[]) {
 // The wall material: lit like everything else, with windows, doors and shutters painted in by the shader.
 function wallMaterial() {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0 });
-  queueMicrotask(() => addCutout(m)); // after the facade shader below is set
   m.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader
       .replace('void main() {', 'attribute vec3 facade;\nvarying vec3 vFacade;\nvoid main() {\n  vFacade = facade;')

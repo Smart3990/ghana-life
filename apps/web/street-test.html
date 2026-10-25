@@ -223,19 +223,34 @@
       #fullmap .fm-chips button { flex: none; border: 0; border-radius: 999px; padding: 7px 11px; font: 600 12px system-ui, sans-serif; color: #121a14; background: rgba(255,255,255,.88); box-shadow: 0 1px 4px rgba(0,0,0,.25); }
       #fullmap .fm-chips button.on { background: #f2c21a; }
       #fullmap .fm-close { pointer-events: auto; flex: none; width: 40px; height: 40px; border-radius: 50%; border: 0; background: #fff; color: #121a14; font-size: 18px; box-shadow: 0 2px 6px rgba(0,0,0,.3); }
-      #fullmap .fm-here { position: absolute; right: 14px; bottom: calc(var(--safe-b, 14px) + 24px); border: 0; border-radius: 999px; padding: 10px 14px; background: #121a14; color: #fff; font: 700 13px system-ui, sans-serif; box-shadow: 0 2px 8px rgba(0,0,0,.35); }
-      #fullmap .fm-note { position: absolute; left: 14px; bottom: calc(var(--safe-b, 14px) + 28px); font: 600 12px system-ui, sans-serif; color: #121a14; background: rgba(255,255,255,.85); padding: 6px 10px; border-radius: 8px; }
-      .fm-pin { position: relative; width: 28px; height: 28px; border-radius: 50%; background: #fff; border: 2px solid #121a14; display: grid; place-items: center; font-size: 14px; line-height: 1; box-shadow: 0 2px 4px rgba(0,0,0,.3); cursor: pointer; margin-top: -16px; }
-      .fm-pin::after { content: ''; position: absolute; left: 50%; bottom: -8px; margin-left: -5px; border: 5px solid transparent; border-top: 6px solid #121a14; }
-      .fm-area { font: 800 11px system-ui, sans-serif; letter-spacing: .12em; text-transform: uppercase; color: #5a4a2a; text-shadow: 0 0 3px #fff, 0 0 3px #fff; pointer-events: none; white-space: nowrap; }
-      .fm-you { width: 0; height: 0; border-left: 10px solid transparent; border-right: 10px solid transparent; border-bottom: 24px solid #2563eb; filter: drop-shadow(0 0 0 #fff) drop-shadow(0 2px 3px rgba(0,0,0,.45)); position: relative; }
-      .fm-you::after { content: ''; position: absolute; left: -16px; top: 0; width: 32px; height: 32px; border-radius: 50%; background: rgba(37,99,235,.18); animation: fm-pulse 1.6s infinite; }
-      @keyframes fm-pulse { from { transform: scale(.6); opacity: 1; } to { transform: scale(1.8); opacity: 0; } }
-      .fm-goal { display: flex; flex-direction: column; align-items: center; gap: 2px; pointer-events: none; }
-      .fm-goal span { width: 30px; height: 30px; border-radius: 50%; background: #e3a92b; color: #121a14; display: grid; place-items: center; font-size: 17px; border: 3px solid #fff; box-shadow: 0 0 0 4px rgba(227,169,43,.4), 0 2px 6px rgba(0,0,0,.4); animation: fm-bob 1.2s ease-in-out infinite alternate; }
-      .fm-goal small { font: 700 11px system-ui, sans-serif; background: #121a14; color: #f2c21a; padding: 3px 7px; border-radius: 6px; max-width: 160px; text-align: center; }
-      @keyframes fm-bob { to { transform: translateY(-4px); } }
-      #fullmap .maplibregl-popup-content { font: 12px system-ui, sans-serif; padding: 6px 10px; border-radius: 8px; }
+      #fullmap .fm-here { position: absolute; right: 14px; bottom: calc(var(--safe-b, 14px) + 24px); border: 0; border-radius: 999px; padding: 10px 14px; background: #121a14; color: #f2c21a; font: 700 13px system-ui, sans-serif; box-shadow: 0 2px 8px rgba(0,0,0,.35); }
+      #fullmap .fm-card { position: absolute; left: 12px; bottom: calc(var(--safe-b, 12px) + 14px); width: min(250px, 44vw); background: rgba(18,26,20,.92); color: #f2efe6; border-radius: 16px; padding: 11px 13px; font: 12px system-ui, sans-serif; box-shadow: 0 6px 20px rgba(0,0,0,.35); border-top: 4px solid transparent;
+        border-image: repeating-linear-gradient(90deg, #e3a92b 0 12px, #121a14 12px 16px, #c8442e 16px 28px, #2f8f57 28px 40px, #1f5fa8 40px 48px) 4; animation: fm-card-in .5s .3s both cubic-bezier(.2,.9,.3,1.2); }
+      @keyframes fm-card-in { from { opacity: 0; transform: translateY(20px); } }
+      #fullmap .fm-card small { color: #e3a92b; font-size: 9.5px; letter-spacing: .16em; font-weight: 800; }
+      #fullmap .fm-card > b { display: block; font-size: 17px; margin: 1px 0 6px; }
+      #fullmap .fm-goalrow { color: #f2c21a; font-weight: 700; margin-bottom: 6px; }
+      #fullmap .fm-near { display: grid; gap: 3px; }
+      #fullmap .fm-near span { display: flex; justify-content: space-between; color: #c9d3cb; }
+      #fullmap .fm-near em { font-style: normal; color: #f2efe6; font-weight: 700; }
+      #fullmap .fm-more { margin-top: 7px; font-size: 10.5px; color: #8a968d; }
+      .fm-pin { --c: #121a14; position: relative; width: 30px; height: 30px; border-radius: 50% 50% 50% 4px; transform: rotate(-45deg); background: var(--c); border: 2px solid #fff; box-shadow: 0 3px 6px rgba(0,0,0,.35); cursor: pointer; margin-bottom: 4px;
+        animation: fm-drop .5s both cubic-bezier(.3,1.6,.5,1); }
+      .fm-pin span { display: grid; place-items: center; width: 100%; height: 100%; transform: rotate(45deg); font-size: 14px; line-height: 1; }
+      @keyframes fm-drop { from { opacity: 0; translate: 0 -40px; } 60% { opacity: 1; } }
+      .fm-area { font: 800 11px system-ui, sans-serif; letter-spacing: .14em; text-transform: uppercase; color: #5a3a12; text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 6px #fff; pointer-events: none; white-space: nowrap; animation: fm-fade 1s .8s both; }
+      @keyframes fm-fade { from { opacity: 0; } }
+      .fm-you { position: relative; width: 44px; height: 44px; }
+      .fm-you i { position: absolute; inset: 0; border-radius: 50%; background: rgba(31,95,168,.25); animation: fm-pulse 1.8s infinite; }
+      .fm-you b { position: absolute; left: 12px; top: 7px; width: 0; height: 0; border-left: 10px solid transparent; border-right: 10px solid transparent; border-bottom: 26px solid #1f5fa8; filter: drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1.5px #fff) drop-shadow(0 3px 3px rgba(0,0,0,.4)); }
+      @keyframes fm-pulse { from { transform: scale(.4); opacity: 1; } to { transform: scale(1.6); opacity: 0; } }
+      .fm-goal { display: flex; flex-direction: column; align-items: center; gap: 3px; pointer-events: none; }
+      .fm-goal span { width: 34px; height: 34px; border-radius: 50%; background: #e3a92b; color: #121a14; display: grid; place-items: center; font-size: 19px; border: 3px solid #fff; box-shadow: 0 0 0 6px rgba(227,169,43,.35), 0 0 22px rgba(227,169,43,.9); animation: fm-bob 1.1s ease-in-out infinite alternate; }
+      .fm-goal small { order: -1; font: 700 11px system-ui, sans-serif; background: #121a14; color: #f2c21a; padding: 3px 8px; border-radius: 6px; max-width: 170px; text-align: center; }
+      @keyframes fm-bob { to { transform: translateY(-5px); } }
+      .fm-pop .maplibregl-popup-content { font: 12px system-ui, sans-serif; padding: 7px 11px; border-radius: 10px; background: #121a14; color: #f2efe6; display: grid; gap: 2px; }
+      .fm-pop .maplibregl-popup-content span { color: #c9d3cb; font-size: 11px; }
+      .fm-pop .maplibregl-popup-tip { border-top-color: #121a14 !important; }
 
       /* The phone (tap the phone button) */
       #btn-phone { position: relative; }
