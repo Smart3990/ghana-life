@@ -120,7 +120,7 @@ The kente colours are for the interface, title cards and branding, never for tin
 | Calico white | `#F2EFE6` | Main text on dark |
 | Soft text | `#C9D3CB` | Secondary text on dark |
 
-**Signature motif:** a thin woven kente-style strip (alternating blocks of gold, night, red, green and blue) across the top of screens, as the loading bar, and as the energy bar under the minimap.
+**Signature motif:** a thin woven kente-style strip (alternating blocks of gold, night, red, green and blue) across the top of screens, as the loading bar, and as the energy ring round the minimap.
 
 **Fonts used in the pitch deck:** Oswald (titles) and Nunito Sans (text). Reuse unless a better free, licensed choice is found.
 
@@ -136,7 +136,14 @@ Players switch themes for their phone, menus and title cards in settings.
 
 ### 4.3 The on-screen display
 
-**Always on:** time and Sika (top right), phone button (top left), round minimap with a thin energy bar (bottom left).
+**Always on (owner's layout, 2026-10-25):**
+- Top left: the round minimap inside a thin energy ring; beside it a small energy number (tap it for the full "You" card: energy, Vibe, Sika, heat stars) and the current goal.
+- Top right: sound, phone button, time and Sika.
+- Bottom left: the movement joystick (it rests there, and comes to your thumb anywhere on the left half).
+- Bottom right: sprint and jump on foot, brake and horn on the okada.
+
+**The action button:** one gold button above sprint that changes with what is next to you: Ride, Get off, Greet, Chat (sellers), Sit (rest on a chop bar chair), Dance (where music plays), and later Enter, Buy and Work. It only shows when there is something to do. On computers it shows as a prompt with its key (E), and the round sprint, jump, brake and horn buttons are hidden because the keyboard does them.
+
 **Only when needed:** "Tap to enter" prompts, the mic button when someone is near, chat bubbles that fade, place names that fade in as you pass, the add-friend card, the caller card.
 **One tap hides everything** for photos.
 

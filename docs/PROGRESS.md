@@ -153,6 +153,16 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
   - Light tier shows flat buildings, which look poor at street level. If the cheap phone gets Light, street view will need low walls in Light (decide after the phone test).
 - **Done when:** on the cheapest Android, `/street-test.html?debug` shows 30 fps or more while walking and riding round Circle, and the controls feel right.
 
+- **Phone controls redesign (2026-10-25, owner's layout):**
+  - Minimap moved to the top left, inside an energy ring (gold, turns red when low). Beside it: a small energy number (tap for the "You" card: energy, Vibe, Sika, heat stars; Tab on a computer) and the goal line.
+  - Joystick rests bottom left, where the map was. Sound, phone, time and Sika are top right.
+  - One gold **action button** that changes with what is next to you: Ride, Get off, Greet, Chat (sellers answer), Sit (on empty chop bar chairs, the player really sits), Dance (at music kiosks), Stand / Stop. Keys: E or F; controllers: X / □ or Y / △. It replaces the separate okada and exit buttons.
+  - Real energy (brief 11.3): sprinting uses it; sitting brings it back fast, standing slowly; at zero you cannot sprint and walk a little slower. Vibe grows from greeting and dancing.
+  - First goals that teach the game: get on the okada, ride 300 m, greet someone, rest on a chair, dance where music plays (+2 Vibe each, "Goal done!" message).
+  - Computers and big screens: the round touch buttons are hidden (the keyboard does them), the action button shows as a prompt with its key, and the map, chips and text are larger on screens 1200 px and wider. Checked at 844×390 (phone sideways), 1366×768 and 1920×1080.
+  - Sika on this page is still the demo number; real money will come from the server.
+  - **Done when:** on the phone, the map is at the top, the joystick is bottom left, the gold button shows RIDE beside the okada, GET OFF while riding, and SIT / GREET / DANCE at chairs, people and music; on a computer, E does the same.
+
 ## Waiting on the owner
 
 - Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.

@@ -13,6 +13,7 @@ import { StreetTraffic } from '../game/vehicles3d';
 import { StreetBuildings } from '../game/streetBuildings';
 import { applyStreetStyle } from '../map/streetStyle';
 import { StreetLife } from '../game/streetLife';
+import type { Nearby } from '../game/streetScenes';
 import { SkyTraffic } from '../game/sky3d';
 import { StreetSound } from '../game/streetSound';
 import { createPerson, type Move, type Person } from '../game/person';
@@ -222,7 +223,7 @@ scene.add(okada.root);
 type Player = Person & { seat: THREE.Vector3; shadow: THREE.Object3D };
 
 // Blended moves: walking and running mix by speed, riding fades in on the okada.
-const BLENDED: Move[] = ['idle', 'walk', 'run', 'ride'];
+const BLENDED: Move[] = ['idle', 'walk', 'run', 'ride', 'sit', 'talk', 'dance'];
 
 async function loadPlayer(): Promise<Player> {
   // ?female plays as a woman.
@@ -305,12 +306,12 @@ const layer: maplibregl.CustomLayerInterface = {
 
 const input = { x: 0, y: 0, sprint: false, brake: false };
 const keys = new Set<string>();
-const tapped = new Set<'ride' | 'jump' | 'horn'>(); // one-off actions, used once per press
+const tapped = new Set<'act' | 'jump' | 'horn'>(); // one-off actions, used once per press
 
 window.addEventListener('keydown', (e) => {
   keys.add(e.code);
   if (e.repeat) return;
-  if (e.code === 'KeyF' || e.code === 'KeyE') tapped.add('ride');
+  if (e.code === 'KeyF' || e.code === 'KeyE') tapped.add('act');
   if (e.code === 'Space') tapped.add('jump');
   if (e.code === 'KeyH') tapped.add('horn');
 });
@@ -318,16 +319,32 @@ window.addEventListener('keyup', (e) => keys.delete(e.code));
 window.addEventListener('blur', () => keys.clear());
 
 const btn = (id: string) => document.getElementById(id) as HTMLButtonElement;
-const rideButton = btn('btn-ride');
+const actButton = btn('btn-act');
 const touch = new TouchControls(document.getElementById('stick-zone')!, document.getElementById('stick')!, document.getElementById('knob')!, {
   sprint: btn('btn-sprint'),
   jump: btn('btn-jump'),
-  ride: rideButton,
+  act: actButton,
   brake: btn('btn-brake'),
   horn: btn('btn-horn'),
-  exit: btn('btn-exit'),
 });
-btn('btn-phone').addEventListener('click', () => showHint('The phone is coming soon'));
+btn('btn-phone').addEventListener('click', () => toast('Your phone is coming soon', 'Missions, map, friends and the ride app'));
+// The energy chip opens the full "you" card (energy, vibe, money, heat); tap again or anywhere to close.
+const meCard = document.getElementById('me')!;
+const meButton = btn('btn-me');
+function toggleMe(open = meCard.classList.contains('hidden')) {
+  meCard.classList.toggle('hidden', !open);
+  meButton.setAttribute('aria-expanded', String(open));
+}
+meButton.addEventListener('click', () => toggleMe());
+window.addEventListener('pointerdown', (e) => {
+  if (!meCard.classList.contains('hidden') && !meCard.contains(e.target as Node) && !meButton.contains(e.target as Node)) toggleMe(false);
+});
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Tab') {
+    e.preventDefault();
+    toggleMe();
+  }
+});
 
 // Looking around: drag on the right side (touch) or anywhere (mouse); the right stick on a controller.
 // The view turns and tilts, then settles back behind the player a moment after you let go.
@@ -368,9 +385,9 @@ for (const zone of [lookZone, document.getElementById('stick-zone')!]) {
 window.addEventListener('wheel', (e) => (pinch.zoom = Math.max(-1.6, Math.min(0.8, pinch.zoom - e.deltaY * 0.0015))), { passive: true });
 
 // Controllers (standard mapping, Xbox / PlayStation): left stick moves, right trigger accelerates,
-// left trigger brakes, A / ✕ jumps, B / ○ sprints (hold), Y / △ gets on or off, left stick press sounds the horn.
+// left trigger brakes, A / ✕ jumps, B / ○ sprints (hold), X / □ or Y / △ is the action button (ride, get off, greet, sit, dance), left stick press sounds the horn.
 const padWas: Record<string, boolean> = {};
-function padTap(pad: Gamepad, index: number, name: 'ride' | 'jump' | 'horn') {
+function padTap(pad: Gamepad, index: number, name: 'act' | 'jump' | 'horn') {
   const down = !!pad.buttons[index]?.pressed;
   const key = `${pad.index}:${index}`;
   if (down && !padWas[key]) tapped.add(name);
@@ -386,8 +403,7 @@ function readInput() {
   let sprint = keys.has('ShiftLeft') || keys.has('ShiftRight') || touch.isHeld('sprint');
   let brake = keys.has('KeyS') || keys.has('ArrowDown') || touch.isHeld('brake');
   if (Math.hypot(touch.x, touch.y) > Math.hypot(x, y)) [x, y] = [touch.x, touch.y];
-  for (const name of ['ride', 'jump', 'horn'] as const) if (touch.took(name)) tapped.add(name);
-  if (touch.took('exit')) tapped.add('ride');
+  for (const name of ['act', 'jump', 'horn'] as const) if (touch.took(name)) tapped.add(name);
 
   for (const pad of navigator.getGamepads?.() ?? []) {
     if (!pad) continue;
@@ -407,7 +423,8 @@ function readInput() {
       look.idle = 0;
     }
     padTap(pad, 0, 'jump');
-    padTap(pad, 3, 'ride');
+    padTap(pad, 3, 'act');
+    padTap(pad, 2, 'act'); // X / □ too
     padTap(pad, 10, 'horn');
   }
   input.x = Math.max(-1, Math.min(1, x));
@@ -495,6 +512,8 @@ const state = {
 };
 
 let rideBlend = 0;
+let poseBlend = 0;
+let poseMove: 'sit' | 'talk' | 'dance' = 'talk';
 let airBlend = 0;
 let landing = 0; // fades from 1 to 0 after touching down
 const JUMP_SPEED = 3.4; // about half a metre high
@@ -507,26 +526,15 @@ const angleDiff = (a: number, b: number) => Math.atan2(Math.sin(a - b), Math.cos
 function step(player: Player, dt: number, t: number) {
   readInput();
 
-  // Getting on or off the okada.
+  // The action button: what it does depends on what is next to you.
   const nearOkada = !state.onOkada && Math.hypot(state.x - state.okadaX, state.z - state.okadaZ) < MOUNT_DISTANCE_M;
-  rideButton.classList.toggle('hidden', !nearOkada);
-  if (tapped.delete('ride')) {
-    if (state.onOkada) {
-      state.onOkada = false;
-      state.speed = 0;
-      // Step off to the left of the bike.
-      state.x = state.okadaX - Math.cos(state.okadaHeading) * 0.9;
-      state.z = state.okadaZ - Math.sin(state.okadaHeading) * 0.9;
-      state.heading = state.okadaHeading;
-    } else if (nearOkada && state.y === 0) {
-      state.onOkada = true;
-      state.speed = 0;
-      state.heading = state.okadaHeading;
-    } else if (!nearOkada) {
-      showHint('Walk up to the okada to get on');
-    }
-    document.body.classList.toggle('riding', state.onOkada);
-  }
+  const action = chooseAction(nearOkada, state.onOkada || me.doing !== 'none' ? null : life?.scenes?.nearest(state.x, state.z) ?? null);
+  showAction(action);
+  if (tapped.delete('act')) doAction(action, t);
+  // Moving the stick stands you up from a chair or stops the dance.
+  if ((me.doing === 'sit' || me.doing === 'dance') && Math.hypot(input.x, input.y) > 0.35) stopDoing();
+  if (me.doing === 'greet' && t > me.until) me.doing = 'none';
+  updateEnergy(dt);
   if (tapped.delete('horn') && state.onOkada) honk();
   if (tapped.delete('jump') && !state.onOkada && state.y === 0) {
     state.vy = JUMP_SPEED;
@@ -551,11 +559,14 @@ function step(player: Player, dt: number, t: number) {
     state.heading += input.x * OKADA_TURN * grip * dt;
     state.lean += (-input.x * 0.38 * Math.min(1, state.speed / 7) - state.lean) * Math.min(1, dt * 6);
   } else {
-    const top = input.sprint ? RUN_SPEED : WALK_SPEED;
+    const sprinting = input.sprint && me.energy > 0;
+    const top = sprinting ? RUN_SPEED : me.energy < 1 ? WALK_SPEED * 0.8 : WALK_SPEED;
     const target = input.y >= 0 ? Math.hypot(input.x, input.y) > 0.2 ? Math.max(input.y, Math.abs(input.x) * 0.4) * top : 0 : input.y * 1.0;
     state.speed += (target - state.speed) * Math.min(1, dt * 8);
     state.heading += input.x * WALK_TURN * dt;
     state.lean = 0;
+    if (me.doing === 'sit' || me.doing === 'dance') state.speed = 0;
+    if (me.doing === 'sit' && me.seat) [state.x, state.z, state.heading] = [me.seat.x, me.seat.z, me.seat.face];
   }
 
   // Move, but not into buildings: slide along the wall when walking into one at an angle.
@@ -574,7 +585,11 @@ function step(player: Player, dt: number, t: number) {
   } else {
     state.speed = state.onOkada ? 0 : state.speed * 0.5;
   }
-  if (state.onOkada) [state.okadaX, state.okadaZ, state.okadaHeading] = [state.x, state.z, state.heading];
+  if (state.onOkada) {
+    did.ride += Math.abs(state.speed) * dt;
+    [state.okadaX, state.okadaZ, state.okadaHeading] = [state.x, state.z, state.heading];
+  }
+  checkGoal();
 
   // Place the okada and the player in the scene.
   okada.root.position.set(state.okadaX, 0, state.okadaZ);
@@ -608,7 +623,11 @@ function step(player: Player, dt: number, t: number) {
   };
   airBlend += ((state.y > 0 ? 1 : 0) - airBlend) * Math.min(1, dt * 14);
   landing = Math.max(0, landing - dt * 3);
-  const ground = onFoot * (1 - airBlend) * (1 - landing);
+  // Sitting, dancing or greeting someone take over from walking.
+  if (me.doing !== 'none') poseMove = me.doing === 'greet' ? 'talk' : me.doing;
+  poseBlend += ((me.doing !== 'none' ? 1 : 0) - poseBlend) * Math.min(1, dt * 7);
+  for (const m of ['sit', 'talk', 'dance'] as const) player.actions[m].setEffectiveWeight(m === poseMove ? poseBlend * onFoot : 0);
+  const ground = onFoot * (1 - airBlend) * (1 - landing) * (1 - poseBlend);
   player.actions.idle.setEffectiveWeight(w.idle * ground);
   player.actions.walk.setEffectiveWeight(w.walk * ground);
   player.actions.run.setEffectiveWeight(w.run * ground);
@@ -674,6 +693,7 @@ function step(player: Player, dt: number, t: number) {
     };
   }
   streetTraffic?.update(here[0], here[1], Date.now() / 1000, TRAFFIC_LANE_M, state);
+  updateStats(dt);
   minimap?.update(state.x, state.z, state.camHeading + look.yaw, state.onOkada ? [] : [{ x: state.okadaX, z: state.okadaZ, color: '#c8442e', size: 5 }]);
   void t;
 }
@@ -689,6 +709,211 @@ function ridePose(player: Player, amount: number) {
   }
 }
 
+
+// ---------- The action button, energy, vibe and the first goals ----------
+// One gold button does the thing that makes sense where you stand, like a person would: get on the
+// okada, get off, greet someone, chat to a seller, sit on a chop bar chair to rest, dance where music
+// plays. It only shows when there is something to do, so the screen stays clean.
+
+const me = { energy: 100, vibe: 0, doing: 'none' as 'none' | 'sit' | 'dance' | 'greet', until: 0, seat: null as { x: number; z: number; face: number } | null, tiredSaid: false };
+type ActionId = 'ride' | 'off' | 'sit' | 'stand' | 'dance' | 'stop' | 'greet' | 'chat';
+type Action = { id: ActionId; target?: Nearby };
+const ACTIONS: Record<ActionId, { label: string; icon: string }> = {
+  ride: { label: 'RIDE', icon: '<circle cx="5.5" cy="16.5" r="3.5"/><circle cx="18.5" cy="16.5" r="3.5"/><path d="M5.5 16.5L9 10h6l3.5 6.5"/><path d="M15 10l-1.5-3H16"/><path d="M9 10l2.5 6.5h3"/>' },
+  off: { label: 'GET OFF', icon: '<path d="M14 4h4a2 2 0 012 2v12a2 2 0 01-2 2h-4"/><path d="M10 8l-4 4 4 4"/><path d="M6 12h10"/>' },
+  sit: { label: 'SIT', icon: '<path d="M7 3v9h10"/><path d="M7 12l-1 9"/><path d="M17 12l1 9"/><path d="M7 7h9"/>' },
+  stand: { label: 'STAND', icon: '<path d="M12 20V6"/><path d="M7 11l5-5 5 5"/>' },
+  dance: { label: 'DANCE', icon: '<path d="M9 18V5l11-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>' },
+  stop: { label: 'STOP', icon: '<rect x="7" y="7" width="10" height="10" rx="1.5"/>' },
+  greet: { label: 'GREET', icon: '<path d="M7 11V6.5a1.5 1.5 0 013 0V11"/><path d="M10 10V4.5a1.5 1.5 0 013 0V10"/><path d="M13 10V5.5a1.5 1.5 0 013 0V12"/><path d="M16 9.5a1.5 1.5 0 013 0V14a7 7 0 01-7 7h-1a6 6 0 01-5-2.7L3.6 14a1.5 1.5 0 012.5-1.7L7 13.5"/>' },
+  chat: { label: 'CHAT', icon: '<path d="M4 5h16v11H9l-5 4z"/><path d="M8 9.5h8"/><path d="M8 12.5h5"/>' },
+};
+const actSvg = actButton.querySelector('svg')!;
+const actLabel = actButton.querySelector('span')!;
+actSvg.setAttribute('fill', 'none');
+actSvg.setAttribute('stroke', 'currentColor');
+actSvg.setAttribute('stroke-width', '2.2');
+actSvg.setAttribute('stroke-linecap', 'round');
+actSvg.setAttribute('stroke-linejoin', 'round');
+
+function chooseAction(nearOkada: boolean, near: Nearby | null): Action | null {
+  if (state.onOkada) return { id: 'off' };
+  if (me.doing === 'sit') return { id: 'stand' };
+  if (me.doing === 'dance') return { id: 'stop' };
+  if (nearOkada && state.y === 0) return { id: 'ride' };
+  if (!near) return null;
+  const id = ({ seat: 'sit', music: 'dance', seller: 'chat', person: 'greet' } as const)[near.kind];
+  return { id, target: near };
+}
+
+let shown = '';
+function showAction(a: Action | null) {
+  const id = a?.id ?? '';
+  if (id === shown) return;
+  shown = id;
+  actButton.classList.toggle('hidden', !a);
+  if (!a) return;
+  actSvg.innerHTML = ACTIONS[a.id].icon;
+  actLabel.textContent = ACTIONS[a.id].label;
+  actButton.setAttribute('aria-label', ACTIONS[a.id].label.toLowerCase());
+  actButton.style.animation = 'none';
+  void actButton.offsetWidth; // restart the pop
+  actButton.style.animation = '';
+}
+
+function stopDoing() {
+  if (me.doing === 'sit' && me.seat) {
+    // Step forward off the chair.
+    state.x = me.seat.x + Math.sin(me.seat.face) * 0.6;
+    state.z = me.seat.z - Math.cos(me.seat.face) * 0.6;
+  }
+  me.doing = 'none';
+  me.seat = null;
+}
+
+function doAction(a: Action | null, t: number) {
+  if (!a) {
+    if (!state.onOkada) showHint('Walk up to the okada, a person, a chair or the music');
+    return;
+  }
+  switch (a.id) {
+    case 'ride':
+      state.onOkada = true;
+      state.speed = 0;
+      state.heading = state.okadaHeading;
+      break;
+    case 'off':
+      state.onOkada = false;
+      state.speed = 0;
+      // Step off to the left of the bike.
+      state.x = state.okadaX - Math.cos(state.okadaHeading) * 0.9;
+      state.z = state.okadaZ - Math.sin(state.okadaHeading) * 0.9;
+      state.heading = state.okadaHeading;
+      break;
+    case 'sit':
+      me.doing = 'sit';
+      me.seat = a.target ? { x: a.target.x, z: a.target.z, face: a.target.face } : null;
+      did.sit++;
+      break;
+    case 'dance':
+      me.doing = 'dance';
+      if (a.target) state.heading = Math.atan2(a.target.x - state.x, -(a.target.z - state.z));
+      did.dance++;
+      break;
+    case 'stand':
+    case 'stop':
+      stopDoing();
+      break;
+    case 'greet':
+    case 'chat': {
+      const target = a.target!;
+      state.heading = Math.atan2(target.x - state.x, -(target.z - state.z));
+      state.speed = 0;
+      me.doing = 'greet';
+      me.until = t + 1.6;
+      life?.scenes?.answer(target.who, performance.now() / 1000, a.id === 'chat');
+      // Saying hello lifts your vibe (not more than once every few seconds).
+      if (t - lastGreet > 4) me.vibe += 1;
+      lastGreet = t;
+      did.greet++;
+      break;
+    }
+  }
+  document.body.classList.toggle('riding', state.onOkada);
+}
+let lastGreet = -10;
+
+// Energy (design brief 11.3): running uses it up; resting on a chair brings it back fast, standing
+// still slowly. With none left you cannot sprint and you walk a little slower.
+function updateEnergy(dt: number) {
+  const moving = Math.abs(state.speed);
+  let change = 0;
+  if (state.onOkada) change = 0;
+  else if (me.doing === 'sit') change = 9;
+  else if (me.doing === 'dance') {
+    change = -0.5;
+    me.vibe += dt * 0.3;
+  } else if (input.sprint && moving > WALK_SPEED + 0.3) change = -1.8;
+  else change = moving < 0.2 ? 0.8 : 0.25;
+  me.energy = Math.max(0, Math.min(100, me.energy + change * dt));
+  if (me.energy === 0 && !me.tiredSaid) {
+    me.tiredSaid = true;
+    toast('You are tired', 'Sit on a plastic chair at a chop bar to rest');
+  }
+  if (me.energy > 30) me.tiredSaid = false;
+}
+
+const energyNum = document.getElementById('energy-num')!;
+const ring = document.getElementById('ring')!;
+const sprintButton = btn('btn-sprint');
+let statsTimer = 0;
+function updateStats(dt: number) {
+  statsTimer -= dt;
+  if (statsTimer > 0) return;
+  statsTimer = 0.2;
+  const e = Math.round(me.energy);
+  energyNum.textContent = String(e);
+  ring.style.setProperty('--e', (me.energy / 100).toFixed(3));
+  const low = me.energy < 25;
+  ring.classList.toggle('low', low);
+  meButton.classList.toggle('low', low);
+  sprintButton.classList.toggle('off', me.energy < 1);
+  if (!meCard.classList.contains('hidden')) {
+    document.getElementById('me-energy')!.textContent = `${e} / 100`;
+    (document.getElementById('me-energy-bar') as HTMLElement).style.width = `${e}%`;
+    document.getElementById('me-vibe')!.textContent = String(Math.floor(me.vibe));
+  }
+}
+
+// The first goals: they teach the game by playing it. Real missions come with the phone.
+const did = { ride: 0, greet: 0, sit: 0, dance: 0 };
+const GOALS: { text: () => string; done: (from: typeof did) => boolean }[] = [
+  { text: () => 'Get on the okada', done: () => state.onOkada },
+  { text: () => `Ride 300 m · ${Math.min(300, Math.round(did.ride - goalFrom.ride))} m`, done: (f) => did.ride - f.ride >= 300 },
+  { text: () => 'Get off and greet someone', done: (f) => did.greet > f.greet },
+  { text: () => 'Rest on a chop bar chair', done: (f) => did.sit > f.sit },
+  { text: () => 'Dance where the music plays', done: (f) => did.dance > f.dance },
+];
+let goalIndex = 0;
+let goalFrom = { ...did };
+let goalShown = '';
+const goalChip = document.getElementById('goal')!;
+const goalText = document.getElementById('goal-text')!;
+function checkGoal() {
+  const goal = GOALS[goalIndex];
+  if (!goal) return;
+  if (goal.done(goalFrom)) {
+    goalIndex++;
+    goalFrom = { ...did };
+    me.vibe += 2;
+    toast('Goal done!', '+2 Vibe');
+    goalChip.classList.add('done');
+    setTimeout(() => goalChip.classList.remove('done'), 1200);
+    if (!GOALS[goalIndex]) {
+      goalText.textContent = 'More goals come with your phone';
+      setTimeout(() => goalChip.classList.add('hidden'), 8000);
+      return;
+    }
+  }
+  const text = GOALS[goalIndex].text();
+  if (text !== goalShown) goalText.textContent = goalShown = text;
+}
+
+const toastEl = document.getElementById('toast')!;
+let toastTimer = 0;
+function toast(text: string, small = '') {
+  toastEl.innerHTML = '';
+  toastEl.append(text);
+  if (small) {
+    const s = document.createElement('small');
+    s.textContent = small;
+    toastEl.append(s);
+  }
+  toastEl.classList.add('on');
+  clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => toastEl.classList.remove('on'), 2200);
+}
+
 let hintTimer = 0;
 function showHint(text: string) {
   help.textContent = text;
@@ -702,14 +927,14 @@ function showHint(text: string) {
 async function runAutoTest() {
   state.x = state.okadaX + 1;
   state.z = state.okadaZ;
-  tapped.add('ride');
+  tapped.add('act');
   keys.add('KeyW');
   setTimeout(() => keys.add('KeyD'), 4000);
   setTimeout(() => keys.delete('KeyD'), 6000);
   await new Promise((r) => setTimeout(r, 3000));
   const riding = await measureFps(8);
   keys.clear();
-  tapped.add('ride');
+  tapped.add('act');
   await new Promise((r) => setTimeout(r, 1500));
   keys.add('KeyW');
   keys.add('ShiftLeft');

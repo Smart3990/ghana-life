@@ -21,7 +21,7 @@
         --safe-r: max(14px, env(safe-area-inset-right));
         --safe-b: max(12px, env(safe-area-inset-bottom));
         --safe-t: max(10px, env(safe-area-inset-top));
-        --map: clamp(104px, 30vh, 148px);
+        --map: clamp(78px, 23vh, 124px);
       }
       html, body { margin: 0; height: 100%; overflow: hidden; background: var(--night); font-family: system-ui, sans-serif; color: var(--text); touch-action: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
       #map { position: fixed; inset: 0; background: #f1d7b6; }
@@ -32,59 +32,101 @@
       .kente { background: repeating-linear-gradient(90deg, var(--gold) 0 18px, var(--night) 18px 22px, var(--red) 22px 34px, var(--night) 34px 38px, var(--green) 38px 50px, var(--night) 50px 54px, var(--blue) 54px 60px, var(--night) 60px 64px); }
       .strip { position: fixed; left: 0; right: 0; top: 0; height: 3px; z-index: 5; }
 
-      /* Phone, top left */
-      #btn-phone { position: fixed; left: var(--safe-l); top: var(--safe-t); width: 44px; height: 44px; border-radius: 14px; border: 1.5px solid var(--edge); background: var(--card); display: grid; place-items: center; z-index: 7; padding: 0; }
-      #btn-phone svg, #btn-sound svg { width: 22px; height: 22px; }
-      #btn-sound { position: fixed; left: calc(var(--safe-l) + 54px); top: var(--safe-t); width: 44px; height: 44px; border-radius: 14px; border: 1.5px solid var(--edge); background: var(--card); display: grid; place-items: center; z-index: 7; padding: 0; color: var(--text); }
+      /* Round icon buttons (phone, sound), top right */
+      .icon-btn { width: 40px; height: 40px; border-radius: 13px; border: 1.5px solid var(--edge); background: var(--card); display: grid; place-items: center; padding: 0; color: var(--text); }
+      .icon-btn svg { width: 21px; height: 21px; }
       #btn-sound.off .waves { display: none; }
       #btn-sound:not(.off) .cross { display: none; }
       /* Speech bubbles when people call out to you */
       .bubble { position: fixed; left: 0; top: 0; z-index: 4; pointer-events: none; transform: translate(-50%, -100%); background: #fbf7ee; color: #121a14; font-weight: 800; font-size: 13px; padding: 5px 10px; border-radius: 12px; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,.25); transition: opacity .3s; }
       .bubble::after { content: ''; position: absolute; left: 50%; bottom: -6px; margin-left: -6px; border: 6px solid transparent; border-top-color: #fbf7ee; border-bottom: 0; }
 
-      /* Time and money, top right */
-      #hud-top { position: fixed; right: var(--safe-r); top: var(--safe-t); text-align: right; font-variant-numeric: tabular-nums; z-index: 5; line-height: 1.15; }
-      #clock { font-size: 15px; font-weight: 700; }
-      #money { font-size: 19px; font-weight: 800; color: #9fe0b4; letter-spacing: .3px; }
-      #debug { font-size: 11px; color: var(--soft); margin-top: 4px; }
+      /* Top right: sound, phone, then time and money */
+      #hud-top { position: fixed; right: var(--safe-r); top: var(--safe-t); display: flex; gap: 8px; align-items: flex-start; z-index: 7; }
+      #cash { text-align: right; font-variant-numeric: tabular-nums; line-height: 1.15; min-width: 74px; }
+      #clock { font-size: 14px; font-weight: 700; }
+      #money { font-size: 18px; font-weight: 800; color: #9fe0b4; letter-spacing: .3px; }
+      #debug { position: fixed; right: var(--safe-r); top: calc(var(--safe-t) + 50px); font-size: 11px; color: var(--soft); z-index: 5; text-align: right; }
 
       /* Place name that fades in as you pass */
       #place { position: fixed; left: 50%; top: calc(var(--safe-t) + 6px); transform: translateX(-50%); font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; font-size: 14px; opacity: 0; transition: opacity .6s; z-index: 5; white-space: nowrap; }
       #place.on { opacity: 1; }
 
-      /* Minimap, bottom left, with the energy bar under it */
-      #radar { position: fixed; left: var(--safe-l); bottom: calc(var(--safe-b) + 10px); width: var(--map); z-index: 6; }
-      #minimap { display: block; width: var(--map); height: var(--map); border-radius: 50%; border: 2.5px solid rgba(18,26,20,.9); box-shadow: 0 0 0 1.5px var(--edge), 0 3px 10px rgba(0,0,0,.35); }
-      #energy { margin: 7px auto 0; width: 86%; height: 5px; border-radius: 3px; background: rgba(18,26,20,.7); overflow: hidden; box-shadow: 0 0 0 1px rgba(242,239,230,.3); }
-      #energy > div { height: 100%; width: 100%; transition: width .3s; }
+      /* Top left: the minimap inside an energy ring, then the goal and the energy number */
+      #radar { position: fixed; left: var(--safe-l); top: var(--safe-t); z-index: 6; display: flex; gap: 10px; align-items: flex-start; }
+      #ring { --e: 1; --ring: var(--gold); padding: 4px; border-radius: 50%; background: conic-gradient(var(--ring) calc(var(--e) * 1turn), rgba(18,26,20,.55) 0); box-shadow: 0 3px 10px rgba(0,0,0,.35); }
+      #ring.low { --ring: var(--red); }
+      #minimap { display: block; width: var(--map); height: var(--map); border-radius: 50%; border: 2px solid rgba(18,26,20,.9); }
+      #side { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; padding-top: 2px; }
+      .chip { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; border: 1.5px solid var(--edge); background: var(--card); color: var(--text); font: 800 13px system-ui, sans-serif; padding: 5px 11px 5px 8px; white-space: nowrap; }
+      .chip svg { width: 16px; height: 16px; flex: none; }
+      #btn-me { color: var(--gold); font-variant-numeric: tabular-nums; }
+      #btn-me.low { color: #ff8b6b; border-color: #ff8b6b; }
+      #btn-me .more { width: 12px; height: 12px; opacity: .8; }
+      #goal { max-width: 34vw; overflow: hidden; text-overflow: ellipsis; font-weight: 700; font-size: 12px; color: var(--text); padding-left: 10px; }
+      #goal b { color: var(--gold); margin-right: 4px; letter-spacing: 1px; font-size: 10px; }
+      #goal.done { border-color: var(--gold); background: rgba(227,169,43,.88); color: var(--night); }
+      #goal.done b { color: var(--night); }
 
-      /* Floating joystick: touch anywhere on the left side */
+      /* "Me" card: energy, vibe, money and heat in full (tap the energy chip) */
+      #me { position: fixed; left: var(--safe-l); top: calc(var(--safe-t) + var(--map) + 18px); width: min(300px, 46vw); max-height: calc(100% - var(--map) - var(--safe-t) - 30px); overflow: auto; background: rgba(18,26,20,.92); border: 1.5px solid var(--edge); border-radius: 16px; padding: 12px 14px; z-index: 9; font-size: 13px; color: var(--soft); box-shadow: 0 8px 24px rgba(0,0,0,.4); }
+      #me h3 { margin: 0 0 8px; font-size: 12px; letter-spacing: 2px; color: var(--gold); }
+      .stat { margin: 0 0 10px; }
+      .stat .row { display: flex; justify-content: space-between; color: var(--text); font-weight: 800; }
+      .stat .meter { height: 6px; border-radius: 3px; background: rgba(242,239,230,.15); margin: 4px 0 3px; overflow: hidden; }
+      .stat .meter div { height: 100%; background: var(--gold); border-radius: 3px; }
+      .stat small { font-size: 11.5px; line-height: 1.35; display: block; }
+      #heat { letter-spacing: 2px; color: var(--soft); }
+
+      /* Joystick: rests bottom left (where the map used to be); touch anywhere on the left half and it comes to your thumb */
       #stick-zone { position: fixed; left: 0; top: 0; bottom: 0; width: 50%; z-index: 4; touch-action: none; }
-      #stick { position: fixed; left: calc(var(--safe-l) + var(--map) + 92px); top: calc(100% - var(--safe-b) - 86px); width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; background: rgba(18,26,20,.22); border: 2px solid rgba(242,239,230,.28); z-index: 5; pointer-events: none; opacity: .55; transition: opacity .2s; }
+      #stick { position: fixed; left: calc(var(--safe-l) + 68px); top: calc(100% - var(--safe-b) - 72px); width: 124px; height: 124px; margin: -62px 0 0 -62px; border-radius: 50%; background: rgba(18,26,20,.22); border: 2px solid rgba(242,239,230,.32); z-index: 5; pointer-events: none; opacity: .6; transition: opacity .2s; }
       #stick.active { opacity: 1; background: rgba(18,26,20,.32); }
-      #knob { position: absolute; left: 35px; top: 35px; width: 50px; height: 50px; border-radius: 50%; background: rgba(242,239,230,.88); box-shadow: 0 2px 6px rgba(0,0,0,.35); }
+      #knob { position: absolute; left: 36px; top: 36px; width: 52px; height: 52px; border-radius: 50%; background: rgba(242,239,230,.9); box-shadow: 0 2px 6px rgba(0,0,0,.35); }
       html:not(.touch) #stick, html:not(.touch) #stick-zone { display: none; }
       /* Drag on the right side (or with the mouse on a computer) to look around */
       #look-zone { position: fixed; right: 0; top: 0; bottom: 0; width: 50%; z-index: 3; touch-action: none; cursor: grab; }
       html:not(.touch) #look-zone { width: 100%; }
 
-      /* Action buttons, bottom right: round, icon-only, the thumb's arc */
+      /* Bottom right, in the thumb's arc: sprint and jump (brake and horn on the okada), and above them
+         the gold ACTION button that changes with what is next to you: Ride, Get off, Greet, Sit, Dance... */
       .act { position: fixed; border-radius: 50%; border: 2px solid var(--edge); background: var(--card); color: var(--text); padding: 0; display: grid; place-items: center; z-index: 6; touch-action: none; transition: transform .12s, opacity .2s, background .12s; }
       .act svg { width: 52%; height: 52%; }
       .act.down { transform: scale(.92); background: rgba(227,169,43,.85); color: var(--night); border-color: var(--gold); }
-      .act.big { width: 78px; height: 78px; right: var(--safe-r); bottom: calc(var(--safe-b) + 22px); }
-      .act.mid { width: 60px; height: 60px; }
-      #btn-jump, #btn-horn { right: calc(var(--safe-r) + 92px); bottom: calc(var(--safe-b) + 14px); }
-      #btn-ride, #btn-exit { right: calc(var(--safe-r) + 16px); bottom: calc(var(--safe-b) + 116px); border-color: var(--gold); }
-      #btn-ride { animation: pop .35s ease-out; }
+      .act.big { width: 76px; height: 76px; right: var(--safe-r); bottom: calc(var(--safe-b) + 18px); }
+      .act.mid { width: 58px; height: 58px; }
+      .act.off { opacity: .35; }
+      #btn-jump, #btn-horn { right: calc(var(--safe-r) + 90px); bottom: calc(var(--safe-b) + 10px); }
+      #btn-act { width: 70px; height: 70px; right: calc(var(--safe-r) + 64px); bottom: calc(var(--safe-b) + 104px); border: 2.5px solid var(--gold); background: rgba(227,169,43,.9); color: var(--night); animation: pop .3s ease-out; }
+      #btn-act svg { width: 46%; height: 46%; margin-top: -10px; }
+      #btn-act span { position: absolute; bottom: 9px; left: 0; right: 0; text-align: center; font: 900 10px system-ui, sans-serif; letter-spacing: .8px; }
+      #btn-act kbd { display: none; position: absolute; top: -8px; right: -8px; width: 24px; height: 24px; line-height: 22px; border-radius: 7px; background: var(--night); color: var(--gold); border: 1.5px solid var(--gold); font: 900 12px system-ui, sans-serif; }
       @keyframes pop { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
       .hidden { display: none !important; }
       body:not(.riding) .ride-only, body.riding .walk-only { display: none !important; }
+      /* Computers: the keyboard does sprint, jump, brake and horn, so those buttons go; the action
+         button stays as a prompt above the key help, with its key (E) on it. Bigger map on big screens. */
+      html:not(.touch) .act:not(#btn-act) { display: none !important; }
+      html:not(.touch) #btn-act { right: auto; left: 50%; margin-left: -35px; bottom: calc(var(--safe-b) + 64px); cursor: pointer; }
+      html:not(.touch) #btn-act kbd { display: block; }
+      @media (min-width: 1200px) and (min-height: 680px) {
+        :root { --map: clamp(124px, 19vh, 190px); }
+        .chip { font-size: 14px; padding: 6px 13px 6px 9px; }
+        #goal { font-size: 13px; max-width: 30vw; }
+        .icon-btn { width: 44px; height: 44px; }
+        #clock { font-size: 16px; }
+        #money { font-size: 21px; }
+        #place { font-size: 17px; }
+      }
+      /* Short message in the middle ("Goal done!", "You are tired") */
+      #toast { position: fixed; left: 50%; top: 32%; transform: translate(-50%, -50%) scale(.9); background: rgba(18,26,20,.85); border: 1.5px solid var(--gold); border-radius: 14px; padding: 9px 18px; font-weight: 800; font-size: 15px; color: var(--text); opacity: 0; transition: opacity .3s, transform .3s; z-index: 8; pointer-events: none; text-align: center; white-space: nowrap; }
+      #toast.on { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+      #toast small { display: block; color: var(--gold); font-size: 12px; }
 
       /* Keyboard help (computers only), fades after a few seconds */
       #help { position: fixed; left: 50%; bottom: calc(var(--safe-b) + 10px); transform: translateX(-50%); background: var(--card); border-radius: 12px; padding: 7px 14px; font-size: 13px; color: var(--soft); text-align: center; transition: opacity .8s; z-index: 5; max-width: 60vw; }
       #help b { color: var(--gold); }
-      html.touch #help { bottom: auto; top: calc(var(--safe-t) + 34px); }
+      html.touch #help { max-width: 38vw; font-size: 12px; }
       html.touch #help .keys { display: none; }
       html:not(.touch) #help .touchtip { display: none; }
 
@@ -107,23 +149,36 @@
     <div id="map"></div>
     <div class="strip kente" aria-hidden="true"></div>
 
-    <button id="btn-phone" class="shadow" type="button" aria-label="Phone">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M10.5 18.5h3"/></svg>
-    </button>
-    <button id="btn-sound" class="shadow" type="button" aria-label="Sound on or off">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v4h3l5 4V6L7 10z" fill="currentColor" fill-opacity=".25"/><g class="waves"><path d="M15.5 9.5a3.5 3.5 0 010 5"/><path d="M18 7a7 7 0 010 10"/></g><g class="cross"><path d="M16 9l5 6"/><path d="M21 9l-5 6"/></g></svg>
-    </button>
-    <div id="hud-top" class="shadow"><div id="clock">18:42</div><div id="money">₵ 1,280</div><div id="debug" hidden></div></div>
-    <div id="place" class="shadow" aria-live="polite"></div>
-
     <div id="radar">
-      <canvas id="minimap" aria-label="Map of the streets around you"></canvas>
-      <div id="energy" aria-label="Energy"><div class="kente"></div></div>
+      <div id="ring"><canvas id="minimap" aria-label="Map of the streets around you"></canvas></div>
+      <div id="side">
+        <button id="btn-me" class="chip shadow" type="button" aria-label="Energy. Tap for all your details" aria-expanded="false"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L4 14h6l-1 8 9-12h-6z"/></svg><span id="energy-num">100</span><svg class="more" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg></button>
+        <div id="goal" class="chip shadow" aria-live="polite"><b>GOAL</b><span id="goal-text"></span></div>
+      </div>
     </div>
+    <div id="me" class="hidden" role="dialog" aria-label="Your details">
+      <h3>YOU</h3>
+      <div class="stat"><div class="row"><span>Energy</span><span id="me-energy">100</span></div><div class="meter"><div id="me-energy-bar" style="width:100%"></div></div><small>Goes down when you run. Sit on a plastic chair at a chop bar to rest.</small></div>
+      <div class="stat"><div class="row"><span>Vibe</span><span id="me-vibe">0</span></div><small>Grows when you greet people and dance where music plays.</small></div>
+      <div class="stat"><div class="row"><span>Sika</span><span id="me-sika">₵ 1,280</span></div><small>Your money. Jobs and the shop come later; the server keeps the real count.</small></div>
+      <div class="stat"><div class="row"><span>Heat</span><span id="heat">☆☆☆☆☆</span></div><small>No trouble with the police.</small></div>
+    </div>
+
+    <div id="hud-top">
+      <button id="btn-sound" class="icon-btn shadow" type="button" aria-label="Sound on or off"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v4h3l5 4V6L7 10z" fill="currentColor" fill-opacity=".25"/><g class="waves"><path d="M15.5 9.5a3.5 3.5 0 010 5"/><path d="M18 7a7 7 0 010 10"/></g><g class="cross"><path d="M16 9l5 6"/><path d="M21 9l-5 6"/></g></svg></button>
+      <button id="btn-phone" class="icon-btn shadow" type="button" aria-label="Phone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M10.5 18.5h3"/></svg></button>
+      <div id="cash" class="shadow"><div id="clock">18:42</div><div id="money">₵ 1,280</div></div>
+    </div>
+    <div id="debug" class="shadow" hidden></div>
+    <div id="place" class="shadow" aria-live="polite"></div>
+    <div id="toast" aria-live="polite"></div>
 
     <div id="look-zone" aria-hidden="true"></div>
     <div id="stick-zone" aria-hidden="true"></div>
     <div id="stick" aria-hidden="true"><div id="knob"></div></div>
+
+    <!-- The action button: its picture and word change with what is next to you -->
+    <button id="btn-act" class="act hidden" type="button" aria-label="Action"><svg viewBox="0 0 24 24"></svg><span></span><kbd>E</kbd></button>
 
     <!-- On foot -->
     <button id="btn-sprint" class="act big walk-only" type="button" aria-label="Sprint (hold)">
@@ -131,9 +186,6 @@
     </button>
     <button id="btn-jump" class="act mid walk-only" type="button" aria-label="Jump">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4"/><path d="M7 9l5-5 5 5"/><path d="M5 20h14"/></svg>
-    </button>
-    <button id="btn-ride" class="act mid walk-only hidden" type="button" aria-label="Get on the okada">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="16.5" r="3.5"/><circle cx="18.5" cy="16.5" r="3.5"/><path d="M5.5 16.5L9 10h6l3.5 6.5"/><path d="M15 10l-1.5-3H16"/><path d="M9 10l2.5 6.5h3"/></svg>
     </button>
 
     <!-- On the okada -->
@@ -143,11 +195,8 @@
     <button id="btn-horn" class="act mid ride-only" type="button" aria-label="Horn">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v4h3l6 4V6L7 10z" fill="currentColor" fill-opacity=".25"/><path d="M16.5 9.5a3.5 3.5 0 010 5"/><path d="M19 7a7 7 0 010 10"/></svg>
     </button>
-    <button id="btn-exit" class="act mid ride-only" type="button" aria-label="Get off the okada">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h4a2 2 0 012 2v12a2 2 0 01-2 2h-4"/><path d="M10 8l-4 4 4 4"/><path d="M6 12h10"/></svg>
-    </button>
 
-    <p id="help"><span class="keys"><b>W A S D</b> move · <b>Shift</b> sprint · <b>Space</b> jump · <b>F</b> okada · <b>H</b> horn · drag to look around · controllers work too</span><span class="touchtip">Left side: move · right side: look around</span></p>
+    <p id="help"><span class="keys"><b>W A S D</b> move · <b>Shift</b> sprint · <b>Space</b> jump · <b>E</b> action (ride, greet, sit, dance) · <b>H</b> horn · <b>Tab</b> your details · drag to look around · controllers work too</span><span class="touchtip">Left side: move · right side: look around</span></p>
 
     <div id="gate">
       <div>

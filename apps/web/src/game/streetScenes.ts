@@ -38,6 +38,9 @@ const hash = (a: number, b: number) => {
 
 // Things people say when you pass (shown in a speech bubble).
 export const GREETINGS = ['Chale!', 'Ei, my friend!', 'How far?', 'Akwaaba!', 'Boss, come and buy!', 'Charley, how be?', 'Bra, you dey?', 'Sister, come!', 'Ete sen?', 'Wo ho te sen?'];
+const REPLIES = ['I dey, how about you?', 'Fine, fine!', 'Chale, I dey kraa!', 'Akwaaba!', 'We dey here oo!', 'Medaase!', 'God dey!'];
+const SELLER_REPLIES = ['Welcome! What do you want?', 'My customer!', 'Everything dey, come!', 'Special price for you!'];
+export type Nearby = { kind: 'seat' | 'music' | 'seller' | 'person'; x: number; z: number; face: number; d: number; who: number };
 const SELLER_CALLS = ['Come and buy!', 'Pure water! Pure water!', 'Fresh bread!', 'Ice cold!', 'Credit dey!', 'Kenkey hot!', 'Waakye dey!'];
 
 function plasticChair(): THREE.BufferGeometry {
@@ -69,6 +72,8 @@ export class StreetScenes {
   private c = new THREE.Color();
   /** Where music is playing (for the sound of the street). */
   musicSpots: { x: number; z: number }[] = [];
+  /** Empty plastic chairs the player can sit on to rest. */
+  seats: { x: number; z: number; face: number }[] = [];
   /** Called when someone calls out to the player: position and words. */
   onSpeak: ((x: number, z: number, height: number, text: string) => void) | null = null;
   private lastSpoke = 0;
@@ -114,6 +119,7 @@ export class StreetScenes {
     }
     this.members = [];
     this.musicSpots = [];
+    this.seats = [];
     let chairs = 0;
 
     for (const k of kiosks) {
@@ -163,7 +169,8 @@ export class StreetScenes {
         this.chairs.setMatrixAt(chairs, this.m);
         this.chairs.setColorAt(chairs, this.c.set(CHAIR_COLOURS[Math.floor(hash(seed, 7 + c) * CHAIR_COLOURS.length)]));
         chairs++;
-        if (hash(seed, 9 + c) < 0.8) {
+        if (hash(seed, 9 + c) >= 0.72) this.seats.push({ x: cx - Math.sin(face) * 0.05, z: cz + Math.cos(face) * 0.05, face });
+        else {
           const kinds: Kind[] = ['man', 'woman', 'muslimMan', 'church', 'woman'];
           // The chair seat is set a little back, so the person sits on it.
           this.add(kinds[Math.floor(hash(seed, 12 + c) * kinds.length)], seed + 17 * c, cx - Math.sin(face) * 0.05, cz + Math.cos(face) * 0.05, face, 'sit', ['sit', 'sitTalk', 'sitTalk', 'sit'], t);
@@ -193,6 +200,34 @@ export class StreetScenes {
       }
     }
     this.place(t, Infinity, Infinity);
+  }
+
+  /** The nearest thing within reach that the player can do something with (the action button). */
+  nearest(px: number, pz: number): Nearby | null {
+    let best: Nearby | null = null;
+    const consider = (n: Nearby, reach: number) => {
+      if (n.d < reach && (!best || n.d < best.d)) best = n;
+    };
+    for (const s of this.seats) consider({ kind: 'seat', x: s.x, z: s.z, face: s.face, d: Math.hypot(s.x - px, s.z - pz), who: -1 }, 1.6);
+    for (const m of this.musicSpots) consider({ kind: 'music', x: m.x, z: m.z, face: 0, d: Math.hypot(m.x - px, m.z - pz) * 0.6, who: -1 }, 3);
+    for (const [i, m] of this.members.entries()) {
+      if (m.orbit || m.clip === 'dance') continue;
+      const kind = m.cycle?.includes('sell') ? 'seller' : 'person';
+      consider({ kind, x: m.x, z: m.z, face: m.face, d: Math.hypot(m.x - px, m.z - pz), who: i }, 2.6);
+    }
+    return best;
+  }
+
+  /** The player greets someone: they answer with a word and a nod or a wave. */
+  answer(who: number, t: number, seller: boolean) {
+    const m = this.members[who];
+    if (!m) return;
+    m.greeted = t;
+    this.lastSpoke = t;
+    this.switchTo(m, seller ? 'hand' : Math.random() < 0.5 ? 'yes' : 'call', t);
+    m.nextChange = t + 2.5;
+    const words = seller ? SELLER_REPLIES : REPLIES;
+    this.onSpeak?.(m.x, m.z, 1.95 * m.look.scale, words[Math.floor(Math.random() * words.length)]);
   }
 
   /** Call every frame. */
