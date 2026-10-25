@@ -239,6 +239,13 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
   - **The kelewele seller is now Auntie Dede** (added to the brief's cast), so she is not confused with Auntie Akos the news presenter.
   - Triangles: Light about 300,000 with everything near (was about 222,000). The automatic busy % thins the walkers on phones that struggle; this must be checked on the cheap Android.
 
+- **Real voices and conversations (2026-10-25, owner's request):**
+  - **Voices** (`src/game/voices.ts`): people now speak out loud, using the phone's own text-to-speech (nothing downloaded, no data used). It picks the closest accent the phone has (Ghanaian English, then Nigerian or other African English, then British); each person has their own pitch and speed; Ghanaian words are spelt the way they sound ("Chale" is said "Cha-lay", "Akwaaba", "Kaneshie", "trotro", cedis). Quieter further away. The sound button mutes voices too.
+  - **The street talks:** mates of passing trotros shout their routes ("Circle! Circle! Circle!", "Accra! Accra!", "Kaneshie, one more, come!", "Madina! Straight!"), the station's bus mates call their destinations, sellers and Circle boys call out as you pass, and people walking by chat ("Chale, the traffic today!", "I am coming, I am coming!"), each with a bubble.
+  - **Conversations with questions** (`src/game/talks.ts`): GREET or CHAT starts a real exchange. You say hello, they answer and usually ask you something ("You look new here. Where are you from?"); you pick an answer from 2 or 3 buttons (or 1, 2, 3 on a keyboard); they reply, and some go on to a second question. Each kind of person has their own talks: Muslims, church people, school children, kayayei, hawkers, sellers, phone sellers ("My phone was stolen. How much is a new one?"), bus mates ("How much to Kaneshie?"). Your hometown and day name come into it ("Ada! Akwaaba to Accra."). Walking away ends it.
+  - **The film's lines are spoken too:** Grandma, the bus mate, Auntie Dede, Uncle Kwame and you.
+  - **Recorded voices later:** any line can be replaced by a real recording (brief 15.3) by putting `/voices/<line id>.mp3` in `public/voices` and listing it in `public/voices/index.json`. ImagineArt's voice generator needs a paid plan, and its voices are American or British only, so it was not used.
+
 ## Waiting on the owner
 
 - Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.

@@ -995,14 +995,14 @@ export class StreetLife {
 
   /** The nearest person walking or standing on the pavement, within reach (for greeting them). */
   nearestWalker(px: number, pz: number, reach: number) {
-    let best: { i: number; x: number; z: number; kind: PersonKind; height: number } | null = null;
+    let best: { i: number; x: number; z: number; kind: PersonKind; height: number; body: 'male' | 'female' | 'child' } | null = null;
     let bestD = reach;
     for (const [i, a] of this.agents.entries()) {
       if (a.lastX === undefined || a.spot) continue;
       const batch = this.crowds[a.batch];
       if (!batch || a.slot >= batch.mesh.count) continue;
       const d = Math.hypot(a.lastX - px, a.lastZ! - pz);
-      if (d < bestD) [best, bestD] = [{ i, x: a.lastX, z: a.lastZ!, kind: a.kind, height: (a.look.body === 'female' ? 1.85 : 1.95) * a.look.scale }, d];
+      if (d < bestD) [best, bestD] = [{ i, x: a.lastX, z: a.lastZ!, kind: a.kind, height: (a.look.body === 'female' ? 1.85 : 1.95) * a.look.scale, body: a.look.scale < 0.85 ? 'child' : a.look.body }, d];
     }
     return best;
   }

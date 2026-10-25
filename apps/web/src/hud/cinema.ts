@@ -182,9 +182,13 @@ export class Cinema {
     await this.wait(0.6);
   }
 
+  /** Called with each spoken line (to say it out loud). */
+  onLine: ((who: string, line: string) => void) | null = null;
+
   /** A subtitle line, with who is speaking. */
   async say(who: string, line: string, seconds = 0) {
     if (this.skipping) return;
+    this.onLine?.(who, line);
     this.sub.innerHTML = '';
     if (who) {
       const name = el('b');

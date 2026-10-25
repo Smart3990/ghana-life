@@ -80,7 +80,7 @@ export class StreetScenes {
   /** Empty plastic chairs the player can sit on to rest. */
   seats: { x: number; z: number; face: number }[] = [];
   /** Called when someone calls out to the player: position and words. */
-  onSpeak: ((x: number, z: number, height: number, text: string) => void) | null = null;
+  onSpeak: ((x: number, z: number, height: number, text: string, body?: 'male' | 'female' | 'child', seed?: number) => void) | null = null;
   private lastSpoke = 0;
 
   constructor(
@@ -263,7 +263,7 @@ export class StreetScenes {
     this.lastSpoke = t;
     this.switchTo(m, 'talk', t);
     m.nextChange = t + seconds;
-    return { x: m.x, z: m.z, height: 1.95 * m.look.scale, seller: !!m.cycle?.includes('sell'), kind: m.kind };
+    return { x: m.x, z: m.z, height: 1.95 * m.look.scale, seller: !!m.cycle?.includes('sell'), kind: m.kind, body: (m.look.scale < 0.85 ? 'child' : m.body) as 'male' | 'female' | 'child', seed: m.slot + (m.body === 'female' ? 5000 : 0), words: m.words };
   }
 
   /** The player greets someone: they answer with a word and a nod or a wave. */
@@ -275,7 +275,7 @@ export class StreetScenes {
     this.switchTo(m, seller ? 'hand' : Math.random() < 0.5 ? 'yes' : 'call', t);
     m.nextChange = t + 2.5;
     const words = seller ? SELLER_REPLIES : REPLIES;
-    this.onSpeak?.(m.x, m.z, 1.95 * m.look.scale, words[Math.floor(Math.random() * words.length)]);
+    this.onSpeak?.(m.x, m.z, 1.95 * m.look.scale, words[Math.floor(Math.random() * words.length)], m.look.scale < 0.85 ? 'child' : m.body, m.slot + (m.body === 'female' ? 5000 : 0));
   }
 
   /** Call every frame. */
@@ -306,7 +306,7 @@ export class StreetScenes {
           this.switchTo(m, 'call', t);
           m.nextChange = t + 2.5;
           const words = m.words ?? (seller ? SELLER_CALLS : GREETINGS);
-          this.onSpeak?.(x, z, 1.95 * m.look.scale, words[Math.floor(hash(i, t) * words.length)]);
+          this.onSpeak?.(x, z, 1.95 * m.look.scale, words[Math.floor(hash(i, t) * words.length)], m.look.scale < 0.85 ? 'child' : m.body, m.slot + (m.body === 'female' ? 5000 : 0));
         }
       }
       // Change what they are doing every few seconds.

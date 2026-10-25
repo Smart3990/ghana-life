@@ -20,6 +20,8 @@ import { Flyovers } from '../game/flyovers';
 import { BigScreen } from '../game/bigScreen';
 import { RoadSigns } from '../game/roadSigns';
 import { planStation } from '../game/trotroStation';
+import { Voices, mateCall } from '../game/voices';
+import { TALKS, asNode, type TalkNode } from '../game/talks';
 import { box, merge, paint } from '../game/vehicles3d';
 import { SkyTraffic } from '../game/sky3d';
 import { StreetSound } from '../game/streetSound';
@@ -562,7 +564,8 @@ function step(player: Player, dt: number, t: number) {
   if (tapped.delete('act')) doAction(action, t);
   // Moving the stick stands you up from a chair or stops the dance.
   if ((me.doing === 'sit' || me.doing === 'dance') && Math.hypot(input.x, input.y) > 0.35) stopDoing();
-  if (me.doing === 'greet' && t > me.until) me.doing = 'none';
+  if (me.doing === 'greet' && (t > me.until || (chatting && Math.hypot(input.x, input.y) > 0.5))) me.doing = 'none';
+  checkTalkAway();
   updateEnergy(dt);
   if (tapped.delete('horn') && state.onOkada) honk();
   if (tapped.delete('jump') && !state.onOkada && state.y === 0) {
@@ -740,12 +743,13 @@ function step(player: Player, dt: number, t: number) {
     music: life?.scenes?.musicSpots ?? [],
   });
   if (life?.scenes && !life.scenes.onSpeak) {
-    life.scenes.onSpeak = (x, z, height, text) => {
-      const el = document.createElement('div');
-      el.className = 'bubble';
-      el.textContent = text;
-      document.body.appendChild(el);
-      bubbles.push({ el, at: new THREE.Vector3(x, height + 0.25, z), until: performance.now() / 1000 + 2.6 });
+    life.scenes.onSpeak = (x, z, height, text, body, seed) => {
+      showBubble(x, z, height, text);
+      // Someone calling out near you: you hear them (quieter further away).
+      if (body && !chatting) {
+        const d = Math.hypot(x - state.x, z - state.z);
+        void voices.say(text, { body, seed: seed ?? Math.round(x * 7 + z) }, 1 / (1 + d / 7), 1);
+      }
     };
   }
   if (life) signals.junctions = life.junctions;
@@ -778,6 +782,7 @@ function step(player: Player, dt: number, t: number) {
   updateStats(dt);
   updateButtons();
   updateThief(dt);
+  streetVoices(performance.now() / 1000);
   story.onFrame?.();
   if (auntie.group.visible) auntie.person?.mixer.update(dt);
   updateMarker(t);
@@ -852,52 +857,82 @@ function bump() {
 }
 
 
-// ---------- Talking with people ----------
-// Anyone you meet can talk with you: tap GREET (or CHAT with a seller) and you have a short
-// conversation, in bubbles over your heads. What they say depends on who they are. Moving the
-// stick walks away and ends it.
-type Line = [who: 'me' | 'them', text: string];
-const TALKS: Record<string, Line[][]> = {
-  any: [
-    [['me', 'Good afternoon!'], ['them', 'Afternoon oo! You are new here?'], ['me', 'Yes, I just came to Accra.'], ['them', 'Akwaaba! Accra is sweet, but hold your pocket well.']],
-    [['me', 'Hello, how are you?'], ['them', 'I dey, by His grace. And you?'], ['me', 'I’m fine. Is Circle always this busy?'], ['them', 'Ha! This one is small. Come back at closing time.']],
-    [['me', 'Chale, how far?'], ['them', 'Charley, I dey kraa! You?'], ['me', 'I’m trying to find my way.'], ['them', 'Ask anybody. Accra people go help you.']],
-    [['me', 'Please, is this the way to the station?'], ['them', 'Yes, go straight, then cross at the zebra.'], ['me', 'Thank you!'], ['them', 'You’re welcome. Safe journey!']],
-  ],
-  muslimMan: [[['me', 'Salaam alaikum.'], ['them', 'Alaikum salaam, my brother. Welcome.'], ['me', 'Thank you. Accra is very big.'], ['them', 'Take your time. You will know it small small.']]],
-  muslimWoman: [[['me', 'Salaam alaikum.'], ['them', 'Alaikum salaam. How is your day?'], ['me', 'Long! I just arrived.'], ['them', 'Ah, welcome. Rest a little, eh.']]],
-  church: [[['me', 'Good afternoon.'], ['them', 'God bless you, my dear!'], ['me', 'Amen. Are you going to church?'], ['them', 'Yes, choir practice. Come and visit on Sunday!']]],
-  child: [[['me', 'Hello!'], ['them', 'Good afternoon, please!'], ['me', 'What is your name?'], ['them', 'Kofi! I’m going home to eat.']]],
-  pupil: [
-    [['me', 'Hello! School is over?'], ['them', 'Yes, please! We are going home.'], ['me', 'Did you learn well?'], ['them', 'We did maths. It was hard!']],
-    [['me', 'Good afternoon.'], ['them', 'Good afternoon, please!'], ['me', 'Which school?'], ['them', 'The one behind the market!']],
-  ],
-  kayayo: [[['me', 'Hello, auntie.'], ['them', 'You want somebody to carry your load?'], ['me', 'No load today. They took my bag.'], ['them', 'Ei, sorry! Be careful at the station.']]],
-  hawker: [[['me', 'What are you selling?'], ['them', 'Pure water, ice cold! Gari biscuit too!'], ['me', 'Not today, thank you.'], ['them', 'No problem. Next time, my customer!']]],
-  seller: [
-    [['me', 'Good afternoon, auntie.'], ['them', 'My customer! What do you want?'], ['me', 'Just looking for now.'], ['them', 'Look well. Everything is fresh!']],
-    [['me', 'How much for this?'], ['them', 'For you, special price!'], ['me', 'I have no money now.'], ['them', 'Ah. Come back when you have, eh.']],
-  ],
-};
+// ---------- Talking with people, with real voices ----------
+// Anyone you meet can talk with you: tap GREET (or CHAT with a seller). They speak first, often
+// with a question; you pick an answer on the screen (or press 1, 2, 3) and they reply, out loud and
+// in a bubble. Walking away ends it.
+const voices = new Voices();
+const talkEl = document.getElementById('talk')!;
 let chatting = false;
-async function chat(who: { x: number; z: number; height: number; kind: string; seller: boolean }, t: number) {
-  const sets = TALKS[who.seller ? 'seller' : who.kind] ?? TALKS.any;
-  const pick = Math.random() < 0.35 && TALKS[who.kind] && !who.seller ? TALKS.any : sets;
-  const lines = pick[Math.floor(Math.random() * pick.length)];
+let talkEnd: (() => void) | null = null;
+let homeTown = 'Ada';
+let dayName = 'Kwame';
+const fill = (t: string) => t.replace(/\{home\}/g, homeTown).replace(/\{name\}/g, dayName);
+type Who = { x: number; z: number; height: number; kind: string; seller: boolean; body: 'male' | 'female' | 'child'; seed: number; words?: string[] };
+const playerVoice = () => ({ body: (playerBody === 'female' ? 'female' : 'male') as 'male' | 'female', seed: 4242 });
+let playerBody: 'male' | 'female' = 'male';
+
+function showChoices(node: TalkNode, pick: (i: number) => void) {
+  talkEl.innerHTML = '';
+  (node.choices ?? []).forEach((c, i) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.innerHTML = `<kbd>${i + 1}</kbd>`;
+    b.append(fill(c.you));
+    b.addEventListener('click', () => pick(i));
+    talkEl.append(b);
+  });
+  talkEl.classList.toggle('hidden', !node.choices?.length);
+}
+window.addEventListener('keydown', (e) => {
+  if (!chatting || talkEl.classList.contains('hidden')) return;
+  const n = Number(e.key);
+  const btns = talkEl.querySelectorAll('button');
+  if (n >= 1 && n <= btns.length) (btns[n - 1] as HTMLButtonElement).click();
+});
+
+async function chat(who: Who, t: number) {
+  const kind = who.words?.some((w) => /!.*!/.test(w) && /Kaneshie|Madina|Circle|Accra|Lapaz|Kasoa|Tema/.test(w)) ? 'mate' : who.words?.some((w) => /Phone|Charger/i.test(w)) ? 'phones' : who.seller ? 'seller' : who.kind;
+  const options = TALKS[kind] ?? TALKS.any;
+  const pool = Math.random() < 0.3 && kind !== 'mate' && kind !== 'phones' && kind !== 'seller' ? TALKS.any : options;
+  let node: TalkNode | null = pool[Math.floor(Math.random() * pool.length)];
   chatting = true;
   me.doing = 'greet';
-  me.until = t + 30;
+  me.until = t + 120;
   const start = { x: state.x, z: state.z };
-  for (const [speaker, text] of lines) {
-    // Walking away ends the conversation.
-    if (Math.hypot(state.x - start.x, state.z - start.z) > 1.2 || me.doing !== 'greet') break;
-    if (speaker === 'me') life?.scenes?.onSpeak?.(state.x, state.z, 1.95, text);
-    else life?.scenes?.onSpeak?.(who.x, who.z, who.height, text);
-    await new Promise((r) => setTimeout(r, Math.max(1700, 900 + text.length * 45)));
+  const away = () => Math.hypot(state.x - start.x, state.z - start.z) > 2.5 || me.doing !== 'greet';
+  const speak = async (text: string, mine: boolean) => {
+    const line = fill(text);
+    if (mine) life?.scenes?.onSpeak?.(state.x, state.z, 1.95, line);
+    else showBubble(who.x, who.z, who.height, line, 3 + line.length * 0.05);
+    const wait = new Promise((r) => setTimeout(r, Math.max(1600, 700 + line.length * 55)));
+    await Promise.all([voices.say(line, mine ? playerVoice() : { body: who.body, seed: who.seed }, mine ? 0.8 : 1, 2), wait]);
+  };
+  // You say hello first.
+  await speak(who.kind === 'muslimMan' || who.kind === 'muslimWoman' ? 'Salaam alaikum.' : ['Good afternoon!', 'Hello!', 'Chale, how far?'][Math.floor(Math.random() * 3)], true);
+  while (node && !away()) {
+    await speak(node.them, false);
+    if (!node.choices?.length || away()) break;
+    const choice = await new Promise<number>((resolve) => {
+      talkEnd = () => resolve(-1);
+      showChoices(node!, resolve);
+    });
+    talkEl.classList.add('hidden');
+    if (choice < 0 || away()) break;
+    const c: { you: string; next?: TalkNode | string } = node.choices[choice];
+    await speak(c.you, true);
+    node = asNode(c.next);
   }
+  talkEl.classList.add('hidden');
+  talkEnd = null;
   if (me.doing === 'greet') me.doing = 'none';
   chatting = false;
 }
+// Walking away closes the answer buttons.
+function checkTalkAway() {
+  if (chatting && talkEnd && me.doing !== 'greet') talkEnd();
+}
+
 // ---------- The action button, energy, vibe and the first goals ----------
 // One gold button does the thing that makes sense where you stand, like a person would: get on the
 // okada, get off, greet someone, chat to a seller, sit on a chop bar chair to rest, dance where music
@@ -905,7 +940,7 @@ async function chat(who: { x: number; z: number; height: number; kind: string; s
 
 const me = { energy: 100, vibe: 0, doing: 'none' as 'none' | 'sit' | 'dance' | 'greet', until: 0, seat: null as { x: number; z: number; face: number } | null, tiredSaid: false };
 type ActionId = 'ride' | 'off' | 'sit' | 'stand' | 'dance' | 'stop' | 'greet' | 'chat' | 'talk';
-type Action = { id: ActionId; target?: Nearby; walker?: { i: number; x: number; z: number; kind: string; height: number } };
+type Action = { id: ActionId; target?: Nearby; walker?: { i: number; x: number; z: number; kind: string; height: number; body: 'male' | 'female' | 'child' } };
 const ACTIONS: Record<ActionId, { label: string; icon: string }> = {
   ride: { label: 'RIDE', icon: '<circle cx="5.5" cy="16.5" r="3.5"/><circle cx="18.5" cy="16.5" r="3.5"/><path d="M5.5 16.5L9 10h6l3.5 6.5"/><path d="M15 10l-1.5-3H16"/><path d="M9 10l2.5 6.5h3"/>' },
   off: { label: 'GET OFF', icon: '<path d="M14 4h4a2 2 0 012 2v12a2 2 0 01-2 2h-4"/><path d="M10 8l-4 4 4 4"/><path d="M6 12h10"/>' },
@@ -1010,12 +1045,12 @@ function doAction(a: Action | null, t: number) {
       state.heading = Math.atan2(target.x - state.x, -(target.z - state.z));
       state.speed = 0;
       // A short conversation: they stop, turn to you and talk.
-      let who: { x: number; z: number; height: number; kind: string; seller: boolean } | null = null;
+      let who: Who | null = null;
       if (a.walker) {
-        life?.holdWalker(a.walker.i, 11, state.x, state.z);
-        who = { x: a.walker.x, z: a.walker.z, height: a.walker.height, kind: a.walker.kind, seller: a.walker.kind === 'hawker' };
+        life?.holdWalker(a.walker.i, 40, state.x, state.z);
+        who = { x: a.walker.x, z: a.walker.z, height: a.walker.height, kind: a.walker.kind, seller: a.walker.kind === 'hawker', body: a.walker.body, seed: a.walker.i * 13 };
       } else {
-        const c = life?.scenes?.converse(target.who, performance.now() / 1000, 11);
+        const c = life?.scenes?.converse(target.who, performance.now() / 1000, 40);
         if (c) who = c;
       }
       if (who) void chat(who, t);
@@ -1139,6 +1174,17 @@ function toast(text: string, small = '') {
 // auntie calls your uncle. Then the city is yours to explore. ?nostory skips it (for tests).
 
 const cine = new Cinema();
+// The film's lines are spoken too (Grandma, the bus mate, Auntie Dede, Uncle Kwame, you).
+const FILM_VOICES: Record<string, { body: 'male' | 'female' | 'child'; seed: number }> = {
+  GRANDMA: { body: 'female', seed: 11 },
+  'BUS MATE': { body: 'male', seed: 23 },
+  'AUNTIE DEDE': { body: 'female', seed: 37 },
+  'UNCLE KWAME': { body: 'male', seed: 41 },
+};
+cine.onLine = (who, line) => {
+  const v = who === 'YOU' ? playerVoice() : FILM_VOICES[who];
+  if (v) void voices.say(line, v, 1, 2);
+};
 // The film clip plays on Standard and Ultra phones with a good connection; others see the moving pictures.
 const connection = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
 const useFilmClip = tier !== 'light' && !connection?.saveData && !['slow-2g', '2g', '3g'].includes(connection?.effectiveType ?? '4g');
@@ -1413,6 +1459,7 @@ const placeCard = (name: string) => {
 
 async function playOpening(start: StartChoice) {
   const home = start.hometown;
+  homeTown = home;
   cine.preload(useFilmClip ? ['/film/circle.webp'] : ['/film/village.webp', '/film/hands.webp', '/film/bus.webp', '/film/circle.webp']);
   story.busy = story.frozen = true;
   goalChip.classList.add('hidden');
@@ -1610,8 +1657,64 @@ const streetSound = new StreetSound();
 const soundButton = document.getElementById('btn-sound')!;
 soundButton.addEventListener('click', () => {
   streetSound.setMuted(!streetSound.muted);
+  voices.muted = streetSound.muted;
+  if (voices.muted) voices.stop();
   soundButton.classList.toggle('off', streetSound.muted);
 });
+
+function showBubble(x: number, z: number, height: number, text: string, seconds = 2.6) {
+  const el = document.createElement('div');
+  el.className = 'bubble';
+  el.textContent = text;
+  document.body.appendChild(el);
+  bubbles.push({ el, at: new THREE.Vector3(x, height + 0.25, z), until: performance.now() / 1000 + seconds });
+}
+
+// The street's voices: bus mates hanging out of passing trotros shout their routes, the station's
+// mates call, and now and then someone nearby calls out.
+let nextShout = 0;
+function streetVoices(t: number) {
+  if (t < nextShout || chatting || story.frozen || voices.busy) return;
+  nextShout = t + 2.5 + Math.random() * 3.5;
+  // A trotro passing close by: its mate shouts where it is going.
+  let best: { x: number; z: number; id: number } | null = null;
+  let bestD = 40;
+  for (const p of streetTraffic?.placed ?? []) {
+    if (p.v.kind !== 'trotro' || p.bridge) continue;
+    const [x, z] = [(p.lon - START[0]) * M_LON, (START[1] - p.lat) * M_LAT];
+    const d = Math.hypot(x - state.x, z - state.z);
+    if (d < bestD) [best, bestD] = [{ x, z, id: p.v.id }, d];
+  }
+  if (best) {
+    const line = mateCall(best.id * 31 + Math.floor(Math.random() * 1000));
+    showBubble(best.x, best.z, 2.6, line);
+    void voices.say(line, { body: 'male', seed: best.id }, 1 / (1 + bestD / 9), 1);
+    return;
+  }
+  // Near the station: one of its mates.
+  if (station && Math.hypot(station.x - state.x, station.z - state.z) < 45) {
+    const mates = station.people.filter((q) => q.words);
+    const m = mates[Math.floor(Math.random() * mates.length)];
+    if (m?.words) {
+      const line = m.words[Math.floor(Math.random() * m.words.length)];
+      showBubble(m.x, m.z, 1.95, line);
+      void voices.say(line, { body: 'male', seed: Math.round(m.x * 3) }, 1 / (1 + Math.hypot(m.x - state.x, m.z - state.z) / 9), 1);
+      return;
+    }
+  }
+  // Otherwise: people chatting as they pass.
+  const w = life?.nearestWalker(state.x, state.z, 14);
+  if (w) {
+    const line = CHATTER[Math.floor(Math.random() * CHATTER.length)];
+    showBubble(w.x, w.z, w.height, line);
+    void voices.say(line, { body: w.body, seed: w.i * 13 }, 0.55 / (1 + Math.hypot(w.x - state.x, w.z - state.z) / 8), 0);
+  }
+}
+const CHATTER = [
+  'Chale, the traffic today!', 'I am coming, I am coming!', 'Did you watch the match yesterday?', 'Charley, how be?', 'Mummy, wait for me!',
+  'Ei, the sun is hot oo!', 'Where are you? I am at Circle.', 'Let us go and buy waakye.', 'This trotro is too slow!', 'Hello? I can’t hear you!',
+  'Ei, look at that one!', 'Tomorrow we go to Kaneshie market.', 'My brother, how far?', 'I will call you back.', 'Ah, see this price!',
+];
 
 // Speech bubbles: people at places call out to you as you pass.
 const bubbles: { el: HTMLElement; at: THREE.Vector3; until: number }[] = [];
@@ -1704,6 +1807,10 @@ async function start() {
     })(),
     new Promise<void>((r) => map.once('load', () => r())),
   ]);
+  playerBody = choice.body;
+  homeTown = choice.hometown;
+  // Day name from the day you arrive (brief 5.3).
+  dayName = (choice.body === 'female' ? ['Akosua', 'Adwoa', 'Abenaa', 'Akua', 'Yaa', 'Afua', 'Ama'] : ['Kwasi', 'Kwadwo', 'Kwabena', 'Kwaku', 'Yaw', 'Kofi', 'Kwame'])[new Date().getDay()];
   const [player] = await Promise.all([loadPlayer(choice.body), skipStory ? null : loadThief(), skipStory ? null : auntie.load()]);
   for (const move of ['jumpLoop', 'jumpLand'] as const) {
     player.actions[move].play();

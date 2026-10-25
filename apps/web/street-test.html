@@ -106,6 +106,13 @@
       @keyframes pop { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
       .hidden { display: none !important; }
       body:not(.riding) .ride-only, body.riding .walk-only { display: none !important; }
+      /* Your answers in a conversation: buttons in the middle at the bottom (1, 2, 3 on a keyboard) */
+      #talk { position: fixed; left: 50%; bottom: calc(var(--safe-b) + 14px); transform: translateX(-50%); width: min(460px, 52vw); display: flex; flex-direction: column; gap: 6px; z-index: 9; }
+      #talk button { text-align: left; background: rgba(18,26,20,.9); color: var(--text); border: 1.5px solid var(--gold); border-radius: 14px; padding: 8px 12px; font: 700 13.5px system-ui, sans-serif; cursor: pointer; display: flex; gap: 8px; align-items: center; }
+      #talk button:active { background: rgba(227,169,43,.85); color: var(--night); }
+      #talk kbd { flex: none; width: 20px; height: 20px; border-radius: 6px; background: var(--gold); color: var(--night); display: grid; place-items: center; font: 900 11px system-ui, sans-serif; }
+      body.cine #talk { display: none; }
+
       /* Mission card and the AYEKOO! banner */
       #mission { position: fixed; left: 50%; top: 18%; transform: translate(-50%, -10px); min-width: min(420px, 70vw); text-align: center; background: rgba(18,26,20,.9); border-radius: 16px; padding: 14px 22px 12px; z-index: 9; opacity: 0; pointer-events: none; transition: opacity .4s, transform .4s; box-shadow: 0 10px 30px rgba(0,0,0,.45); }
       #mission::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 4px; border-radius: 16px 16px 0 0; background: repeating-linear-gradient(90deg, var(--gold) 0 18px, var(--night) 18px 22px, var(--red) 22px 34px, var(--night) 34px 38px, var(--green) 38px 50px, var(--night) 50px 54px, var(--blue) 54px 60px, var(--night) 60px 64px); }
@@ -232,6 +239,7 @@
     <div id="place" class="shadow" aria-live="polite"></div>
     <div id="toast" aria-live="polite"></div>
     <div id="mission" aria-live="polite"></div>
+    <div id="talk" class="hidden" role="group" aria-label="Your answer"></div>
 
     <div id="look-zone" aria-hidden="true"></div>
     <div id="stick-zone" aria-hidden="true"></div>
