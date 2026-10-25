@@ -217,6 +217,8 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
   - **Simpler zebras:** traffic lights only where two main roads meet (one set per 60 m), and zebra crossings only across the main road.
   - **Check (Light, 120 frames):** 0 vehicles off the road, 3 vehicles vanishing within 60 m (route ends at the tile edge), no doubled vehicles; about 11 vehicles on the flyovers at 4 to 7 m.
 
+- **Our own Accra trotro and taxi models (2026-10-25):** `scripts/vehicles/build_ghana.py` builds, from code, a Hiace-type trotro (cab over the front wheels, high roof, row of side windows with pillars, sliding door line, roof rack with a load, big bumpers) and a Corolla-type four-door saloon (used for most cars and every Accra taxi), shaped after the owner's Circle photos, with no badges or brand names. About 750 to 880 triangles and 11 to 13 KB each. Paint jobs as before: trotros white on top with a yellow stripe and a blue or white lower body; taxis with orange-yellow corners and a yellow roof sign. The pack's van and sedan files are removed. Internet photos were used only as a reference to look at.
+
 ## Waiting on the owner
 
 - Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.

@@ -16,7 +16,8 @@ The plastic chairs and football (`src/game/streetScenes.ts`) are built in code. 
 ## Vehicles (public/models/vehicles)
 
 - **Free Low Poly Vehicles Pack** by Raphael Gonçalves (Rgsdev), from https://opengameart.org/content/free-low-poly-vehicles-pack. Licence: **CC0** (public domain; credited here anyway).
-  - Used: Sedan (cars and Accra taxis), Hatchback, SUV, Pickup, Van (trotro), Bus, Truck.
+  - Used: Hatchback, SUV, Pickup, Bus.
+- **Our own models** (made in code by `scripts/vehicles/build_ghana.py`, no outside source): `saloon.glb` (the Corolla-type saloon used for cars and Accra taxis) and `trotro.glb` (the Hiace-type trotro with roof rack), shaped after photos of real vehicles at Circle, with no badges or brand names.
   - Changes: resized to the real size of the cars they stand for, split into a paint part and a fixed part with colours baked in, and compressed, by `scripts/vehicles/build_modern.py` and `scripts/vehicles/optimise-vehicles.mjs`. The Accra taxi's yellow corners are drawn by the game.
 - Pragya tricycles and okadas are still built in code (`src/game/vehicles3d.ts`).
 

@@ -16,12 +16,14 @@ import type { Kind, Placed, Traffic } from './traffic';
 // Batches: each kind, plus a second car model so the streets mix sedans and hatchbacks.
 type BatchKey = Kind | 'hatch' | 'motorking';
 const MODERN: Partial<Record<BatchKey, string>> = {
-  car: 'sedan',
+  // Our own models shaped after the real ones at Circle (scripts/vehicles/build_ghana.py): the
+  // Corolla-type saloon (most cars and every taxi) and the Hiace-type trotro.
+  car: 'saloon',
   hatch: 'hatch',
-  taxi: 'sedan',
+  taxi: 'saloon',
   suv: 'suv',
   pickup: 'pickup',
-  trotro: 'van',
+  trotro: 'trotro',
   bus: 'bus',
   // truck: the pack's truck is a tractor unit, not an Accra cargo truck; the one built in code stays.
 };
@@ -52,8 +54,8 @@ function toFloat(g: THREE.BufferGeometry, m: THREE.Matrix4) {
 function livery(base: THREE.MeshStandardMaterial, kind: 'taxi' | 'trotro' | 'bus') {
   const m = base.clone();
   const rule = {
-    taxi: 'if (abs(vLocal.z) > 1.3 && vLocal.y < 0.93) diffuseColor.rgb = vec3(0.9, 0.55, 0.07);',
-    trotro: 'if (vLocal.y > 0.8) diffuseColor.rgb = vec3(0.93, 0.92, 0.88); else if (vLocal.y > 0.66) diffuseColor.rgb = vec3(0.9, 0.68, 0.1);',
+    taxi: 'if (abs(vLocal.z) > 1.35 && vLocal.y < 0.88) diffuseColor.rgb = vec3(0.9, 0.55, 0.07);',
+    trotro: 'if (vLocal.y > 1.0) diffuseColor.rgb = vec3(0.93, 0.92, 0.88); else if (vLocal.y > 0.86) diffuseColor.rgb = vec3(0.9, 0.68, 0.1);',
     bus: 'if (vLocal.y > 0.86 && vLocal.y < 0.98) diffuseColor.rgb = vec3(0.12, 0.33, 0.66); else if (vLocal.y >= 0.98 && vLocal.y < 1.06) diffuseColor.rgb = vec3(0.75, 0.15, 0.12);',
   }[kind];
   m.onBeforeCompile = (shader) => {
