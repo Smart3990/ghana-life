@@ -23,7 +23,7 @@ const MODERN: Partial<Record<BatchKey, string>> = {
   pickup: 'pickup',
   trotro: 'van',
   bus: 'bus',
-  truck: 'truck',
+  // truck: the pack's truck is a tractor unit, not an Accra cargo truck; the one built in code stays.
 };
 
 // Quantized model files store small whole numbers; turn them into ordinary metres.
@@ -32,9 +32,10 @@ function toFloat(g: THREE.BufferGeometry, m: THREE.Matrix4) {
   for (const name of ['position', 'normal', 'color']) {
     const a = g.getAttribute(name) as THREE.BufferAttribute | undefined;
     if (!a) continue;
-    const f = new Float32Array(a.count * a.itemSize);
-    for (let i = 0; i < a.count; i++) for (let c = 0; c < a.itemSize; c++) f[i * a.itemSize + c] = a.getComponent(i, c);
-    out.setAttribute(name, new THREE.BufferAttribute(f, a.itemSize));
+    const size = name === 'color' ? 3 : a.itemSize; // colours: red, green, blue (no alpha)
+    const f = new Float32Array(a.count * size);
+    for (let i = 0; i < a.count; i++) for (let c = 0; c < size; c++) f[i * size + c] = a.getComponent(i, c);
+    out.setAttribute(name, new THREE.BufferAttribute(f, size));
   }
   if (g.index) out.setIndex(Array.from(g.index.array as ArrayLike<number>));
   out.applyMatrix4(m);
@@ -44,19 +45,48 @@ function toFloat(g: THREE.BufferGeometry, m: THREE.Matrix4) {
   return out;
 }
 
-// Accra taxis: the body colour with yellow front and back corners, drawn by the paint itself.
-function taxiPaint(base: THREE.MeshStandardMaterial) {
+// Accra paint jobs, drawn by the paint itself from the height and length of each point:
+//  - taxis: the body colour with orange-yellow front and back corners (below the bonnet line);
+//  - trotros: white on top, a yellow stripe, and the lower body in the vehicle's colour (white or blue);
+//  - buses: the body colour (mostly Metro yellow) with a blue and red stripe along the side.
+function livery(base: THREE.MeshStandardMaterial, kind: 'taxi' | 'trotro' | 'bus') {
   const m = base.clone();
+  const rule = {
+    taxi: 'if (abs(vLocal.z) > 1.3 && vLocal.y < 0.93) diffuseColor.rgb = vec3(0.9, 0.55, 0.07);',
+    trotro: 'if (vLocal.y > 0.8) diffuseColor.rgb = vec3(0.93, 0.92, 0.88); else if (vLocal.y > 0.66) diffuseColor.rgb = vec3(0.9, 0.68, 0.1);',
+    bus: 'if (vLocal.y > 0.86 && vLocal.y < 0.98) diffuseColor.rgb = vec3(0.12, 0.33, 0.66); else if (vLocal.y >= 0.98 && vLocal.y < 1.06) diffuseColor.rgb = vec3(0.75, 0.15, 0.12);',
+  }[kind];
   m.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying float vAlong;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvAlong = position.z;');
+      .replace('#include <common>', '#include <common>\nvarying vec3 vLocal;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvLocal = position;');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying float vAlong;')
-      .replace('#include <color_fragment>', '#include <color_fragment>\nif (abs(vAlong) > 1.45) diffuseColor.rgb = vec3(0.86, 0.62, 0.08);');
+      .replace('#include <common>', '#include <common>\nvarying vec3 vLocal;')
+      .replace('#include <color_fragment>', '#include <color_fragment>\n' + rule);
   };
+  m.customProgramCacheKey = () => 'livery-' + kind;
   return m;
 }
+
+// Extras on top of some vehicles: the taxi's yellow roof sign, and a pickup loaded high with crates.
+function extras(key: BatchKey, paint: THREE.BufferGeometry): THREE.BufferGeometry[] {
+  paint.computeBoundingBox();
+  const top = paint.boundingBox!.max.y;
+  if (key === 'taxi') return [paintPart(box(0.55, 0.16, 0.26, 0, top + 0.06, -0.15), '#f2c21a')];
+  if (key === 'pickup') {
+    const crates: THREE.BufferGeometry[] = [];
+    for (let layer = 0; layer < 3; layer++)
+      for (let row = 0; row < 3; row++)
+        for (const x of [-0.42, 0.42]) {
+          if (layer === 2 && row === 0) continue;
+          const shade = ['#8a6238', '#7a5531', '#94693c'][(layer + row) % 3];
+          crates.push(paintPart(box(0.8, 0.5, 0.62, x, 1.15 + layer * 0.52, -0.75 - row * 0.64), shade));
+        }
+    return crates;
+  }
+  return [];
+}
+const paintPart = (g: THREE.BufferGeometry, colour: string) => paint(g, colour);
 
 type Part = THREE.BufferGeometry;
 
@@ -378,7 +408,8 @@ export class StreetTraffic {
     const models: Record<BatchKey, Model> = { car: car(false), hatch: car(false), taxi: car(true), trotro: trotro(), tricycle: pragya(), okada: okada(), bus: bus(), truck: truck(), pickup: pickup(), suv: suv() };
     this.batches = {} as typeof this.batches;
     for (const [kind, model] of Object.entries(models) as [BatchKey, Model][]) {
-      const body = new THREE.InstancedMesh(model.body, kind === 'taxi' ? taxiPaint(paintMat) : paintMat, limit);
+      const look = kind === 'taxi' || kind === 'trotro' || kind === 'bus' ? livery(paintMat, kind) : paintMat;
+      const body = new THREE.InstancedMesh(model.body, look, limit);
       const fixed = new THREE.InstancedMesh(model.fixed, fixedMat, limit);
       for (const mesh of [body, fixed]) {
         mesh.count = 0;
@@ -425,7 +456,8 @@ export class StreetTraffic {
       if (!parts) continue; // not downloaded: keep the shape built in code
       const b = this.batches[key];
       b.body.geometry = parts.paint;
-      b.fixed.geometry = parts.fixed;
+      const more = extras(key, parts.paint);
+      b.fixed.geometry = more.length ? merge([parts.fixed, ...more]) : parts.fixed;
     }
   }
 

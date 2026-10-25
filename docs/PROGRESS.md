@@ -198,6 +198,10 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
   - **Talk with anyone:** GREET works on everyone on the pavement as well as people at places. They stop, turn to you and talk (the walk turns into a talking pose), and you have a short conversation in bubbles over your heads. What they say depends on who they are: Muslims ("Salaam alaikum" / "Alaikum salaam"), church people ("God bless you"), school children, kayayei, hawkers, sellers, and everyday Accra chat ("Chale, how far?", directions, "hold your pocket well"). Walking away ends it.
   - The player is never moved for them once they have started moving (the start-on-the-pavement check stops then).
 
+- **The owner's film clip and Accra paint jobs (2026-10-25):**
+  - **Film clip in the opening:** the owner's 10-second ImagineArt clip (waking up, Grandma, the ₵50 and her letter, the bus leaving) now plays in the film with subtitles, in place of the first three pictures. Shrunk from 4 MB to 640 KB (854×480), in MP4 and WebM so every phone can play it; it starts downloading on the START tap and is unlocked by that tap so it plays with its sound. Light phones, Data Saver and 2G/3G connections keep the moving pictures (330 KB). If the clip is not ready within 4 s, the pictures are used.
+  - **Vehicles painted like Circle** (from the owner's Circle photos): taxis in dark body colours with orange-yellow front and back corners and a yellow roof sign; trotros white on top with a yellow stripe and a white or blue lower body; buses in Metro yellow with a blue and red stripe; pickups loaded high with wooden crates. The pack's truck (a tractor unit) is dropped; the cargo truck built in code stays.
+
 ## Waiting on the owner
 
 - Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.

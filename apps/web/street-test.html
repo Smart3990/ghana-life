@@ -166,6 +166,7 @@
       /* Film pictures: full screen, with a slow camera move */
       .cine-pic { position: fixed; inset: 0; z-index: 12; background: #000; overflow: hidden; opacity: 0; transition: opacity .9s; pointer-events: none; }
       .cine-pic.on { opacity: 1; }
+      .cine-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #000; }
       .cine-img { position: absolute; inset: 0; background-size: cover; background-position: center; transition: transform 12s ease-out; }
       .cine-img.in { transform: scale(1.02); } .cine-img.in.go { transform: scale(1.16); }
       .cine-img.out { transform: scale(1.18); } .cine-img.out.go { transform: scale(1.03); }

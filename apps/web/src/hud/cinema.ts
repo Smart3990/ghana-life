@@ -25,6 +25,77 @@ export class Cinema {
     document.body.append(this.root, this.pic, this.card, this.sub, this.caller, this.skipButton);
   }
 
+  private videoEl: HTMLVideoElement | null = null;
+
+  /**
+   * Get a film clip ready: starts downloading it, and (called from a tap) unlocks it so it can
+   * play with sound later, which phones only allow after a tap.
+   */
+  prepareVideo(url: string, poster: string) {
+    const v = document.createElement('video');
+    // The phone picks the format it plays best: MP4 (H.264) or WebM (VP9), the same clip.
+    const webm = url.replace(/\.mp4$/, '.webm');
+    v.src = v.canPlayType('video/mp4; codecs="avc1.4D401E"') ? url : v.canPlayType('video/webm; codecs="vp9"') ? webm : url;
+    v.poster = poster;
+    v.preload = 'auto';
+    v.playsInline = true;
+    v.setAttribute('playsinline', '');
+    v.className = 'cine-video';
+    this.videoEl = v;
+    // Unlock: start and pause straight away inside the tap.
+    v.muted = true;
+    v.play().then(() => v.pause(), () => undefined).finally(() => {
+      v.currentTime = 0;
+      v.muted = false;
+    });
+  }
+
+  /** Is the clip downloaded enough to play smoothly? */
+  videoReady() {
+    return !!this.videoEl && this.videoEl.readyState >= 3 && !this.videoEl.error;
+  }
+
+  /** Play the prepared clip full screen, with subtitles at set times (seconds). */
+  async video(cues: [at: number, who: string, line: string][]) {
+    const v = this.videoEl;
+    if (this.skipping || !v) return false;
+    this.pic.innerHTML = '';
+    this.pic.append(v);
+    this.pic.classList.add('on');
+    this.card.style.transitionDuration = '0.6s';
+    this.card.classList.remove('on', 'black');
+    try {
+      await v.play();
+    } catch {
+      // Not allowed with sound here: play it silently.
+      v.muted = true;
+      try {
+        await v.play();
+      } catch {
+        this.pic.classList.remove('on');
+        return false;
+      }
+    }
+    const shown = new Set<number>();
+    await new Promise<void>((resolve) => {
+      const tick = () => {
+        if (this.skipping || v.ended || v.error) return resolve();
+        cues.forEach(([at, who, line], i) => {
+          if (!shown.has(i) && v.currentTime >= at) {
+            shown.add(i);
+            void this.say(who, line, 2.4);
+          }
+        });
+        requestAnimationFrame(tick);
+      };
+      tick();
+    });
+    v.pause();
+    this.pic.classList.remove('on');
+    await this.wait(0.8);
+    return true;
+  }
+
   /** Start downloading the film's pictures early, so they are ready when the film starts. */
   preload(urls: string[]) {
     for (const u of urls) new Image().src = u;
@@ -147,7 +218,7 @@ export type StartChoice = { body: 'male' | 'female'; hometown: string };
 const HOMETOWNS = ['Ada', 'Ho', 'Kumasi', 'Tamale', 'Cape Coast', 'Koforidua'];
 
 /** Two taps and Start: who you are and where you come from. The title updates as you choose. */
-export function startScreen(preset: Partial<StartChoice> = {}): Promise<StartChoice> {
+export function startScreen(preset: Partial<StartChoice> = {}, onStart?: () => void): Promise<StartChoice> {
   let saved: Partial<StartChoice> = {};
   try {
     saved = JSON.parse(localStorage.getItem('gv.start') ?? '{}');
@@ -192,6 +263,7 @@ export function startScreen(preset: Partial<StartChoice> = {}): Promise<StartCho
   draw();
   return new Promise((resolve) => {
     screen.querySelector('.start-go')!.addEventListener('click', () => {
+      onStart?.(); // inside the tap: lets the film clip play with sound
       try {
         localStorage.setItem('gv.start', JSON.stringify(choice));
       } catch {

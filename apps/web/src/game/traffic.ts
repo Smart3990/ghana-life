@@ -28,11 +28,11 @@ export type Kind = 'car' | 'taxi' | 'trotro' | 'tricycle' | 'okada' | 'bus' | 't
 // Sizes in metres, speeds in metres per second, and Accra-looking colours.
 export const KINDS: Record<Kind, { length: number; width: number; height: number; speed: number; colours: string[]; cabin?: string }> = {
   car: { length: 4.4, width: 1.8, height: 1.45, speed: 10, colours: ['#f4f4f2', '#c0c4c8', '#2b2f36', '#8e1b1b', '#1f4f8a'], cabin: '#33404d' },
-  taxi: { length: 4.4, width: 1.8, height: 1.45, speed: 9, colours: ['#8e1b1b', '#1f4f8a', '#2f6b3f', '#f2f2ee', '#3a3d42', '#c0c4c8'], cabin: '#33404d' }, // Accra taxis: any body colour, yellow corners
-  trotro: { length: 6.2, width: 2.1, height: 2.4, speed: 7.5, colours: ['#f1ece0', '#e9e4d6', '#d9dde0'] },
+  taxi: { length: 4.4, width: 1.8, height: 1.45, speed: 9, colours: ['#6e1a24', '#1d2f5c', '#2a2c33', '#5a1a3a', '#1f4f8a', '#2f4a3a'], cabin: '#33404d' }, // Accra taxis (dark body colours, as at Circle): any body colour, yellow corners
+  trotro: { length: 6.2, width: 2.1, height: 2.4, speed: 7.5, colours: ['#f1ece0', '#e9e4d6', '#3d7cc0', '#3d7cc0', '#d9dde0'] }, // lower body: white or blue
   tricycle: { length: 2.6, width: 1.3, height: 1.7, speed: 6, colours: ['#1f8a5b', '#2f6fd0', '#c8102e'] },
   okada: { length: 2.0, width: 0.8, height: 1.6, speed: 9, colours: ['#c8442e', '#1f5fa8', '#e3a92b', '#2f7d55', '#151515', '#f2efe6'] },
-  bus: { length: 11, width: 2.5, height: 3.1, speed: 7, colours: ['#f2efe6', '#e3a92b', '#1f5fa8'] },
+  bus: { length: 11, width: 2.5, height: 3.1, speed: 7, colours: ['#e8b820', '#e8b820', '#e8b820', '#f2efe6'] }, // mostly Metro yellow
   truck: { length: 8, width: 2.4, height: 3.0, speed: 6.5, colours: ['#c8442e', '#1f5fa8', '#2f7d55', '#e3a92b'] },
   pickup: { length: 5.2, width: 1.85, height: 1.8, speed: 9, colours: ['#f4f4f2', '#c0c4c8', '#2b2f36', '#7a1f2b'], cabin: '#33404d' },
   suv: { length: 4.8, width: 1.9, height: 1.8, speed: 10, colours: ['#151515', '#f4f4f2', '#2b2f36', '#c0c4c8', '#5a1f1f'], cabin: '#33404d' },

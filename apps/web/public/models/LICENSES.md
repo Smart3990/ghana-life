@@ -24,3 +24,7 @@ The plastic chairs and football (`src/game/streetScenes.ts`) are built in code. 
 
 - `village.webp`, `hands.webp`, `bus.webp`, `circle.webp`: made for Ghanaverse on 2026-10-25 with the owner's ImagineArt account (model Seedream v5 lite), from our own written descriptions. All people are invented (not real people), with no logos or brand names.
 - Before launch, check that the ImagineArt plan used allows commercial use of these pictures (some free plans do not); if not, make them again on a plan that does.
+
+## Opening film clip (public/film)
+
+- `journey-480.mp4`, `journey-480.webm`, `journey-poster.jpg`: the owner's 10-second clip "Young man traveling to Accra" (made with ImagineArt, 2026-10-25), shrunk for phones (854×480, about 640 KB each format). Same commercial-use check as the pictures above before launch.

@@ -1103,6 +1103,9 @@ function toast(text: string, small = '') {
 // auntie calls your uncle. Then the city is yours to explore. ?nostory skips it (for tests).
 
 const cine = new Cinema();
+// The film clip plays on Standard and Ultra phones with a good connection; others see the moving pictures.
+const connection = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
+const useFilmClip = tier !== 'light' && !connection?.saveData && !['slow-2g', '2g', '3g'].includes(connection?.effectiveType ?? '4g');
 const story = {
   busy: false, // the story is running (the first goals wait)
   frozen: false, // a film scene is playing: no control
@@ -1374,7 +1377,7 @@ const placeCard = (name: string) => {
 
 async function playOpening(start: StartChoice) {
   const home = start.hometown;
-  cine.preload(['/film/village.webp', '/film/hands.webp', '/film/bus.webp', '/film/circle.webp']);
+  cine.preload(useFilmClip ? ['/film/circle.webp'] : ['/film/village.webp', '/film/hands.webp', '/film/bus.webp', '/film/circle.webp']);
   story.busy = story.frozen = true;
   goalChip.classList.add('hidden');
   setMoney(50);
@@ -1384,9 +1387,23 @@ async function playOpening(start: StartChoice) {
   // Film pictures (made with ImagineArt, public/film): home at dawn, Grandma's goodbye, the bus,
   // arriving in Accra. Each one moves slowly while the lines are spoken.
   await cine.title(home, 'Dawn. The cockerels are crowing.', 2.4);
-  await cine.picture('/film/village.webp', 'in', [['', `${home}. Grandma has been up since before the cockerels.`]], 0.6);
-  await cine.picture('/film/hands.webp', 'in', [['', 'She folds ₵50 into your hand.'], ['GRANDMA', 'Go and make us proud.']], 0.4);
-  await cine.picture('/film/bus.webp', 'left', [['BUS MATE', 'Accra! Accra! Accra! Last seat, come, come!']], 0.3);
+  // Give the clip a few more seconds to download if it needs them; if it is still not ready, use the pictures.
+  for (let i = 0; useFilmClip && i < 40 && !cine.videoReady() && !cine.skipped; i++) await cine.wait(0.1);
+  if (useFilmClip && cine.videoReady()) {
+    // The film clip (made with ImagineArt, public/film/journey-480.mp4, 640 KB): waking up,
+    // Grandma, the ₵50 and her letter, the bus leaving for Accra.
+    await cine.video([
+      [0.4, '', `${home}. The big morning.`],
+      [3.0, 'GRANDMA', 'My child, go and make us proud.'],
+      [5.4, '', 'She folds ₵50 and her letter into your hand.'],
+      [7.9, '', 'The bus leaves for Accra.'],
+    ]);
+  } else {
+    // Cheap phones, saved data or a slow connection: the moving pictures instead (330 KB).
+    await cine.picture('/film/village.webp', 'in', [['', `${home}. Grandma has been up since before the cockerels.`]], 0.6);
+    await cine.picture('/film/hands.webp', 'in', [['', 'She folds ₵50 into your hand.'], ['GRANDMA', 'Go and make us proud.']], 0.4);
+    await cine.picture('/film/bus.webp', 'left', [['BUS MATE', 'Accra! Accra! Accra! Last seat, come, come!']], 0.3);
+  }
   await cine.picture('/film/circle.webp', 'out', [['', 'Hours later. Accra. Kwame Nkrumah Circle.']], 0.3);
   // 2. The camera comes down over the city to Circle.
   if (!cine.skipped) {
@@ -1586,7 +1603,7 @@ async function start() {
     (async (): Promise<StartChoice> => {
       await landscapeGate(document.getElementById('gate')!, autoTest);
       const female = params.has('female') ? 'female' : undefined;
-      return skipStory ? { body: female ?? 'male', hometown: 'Ada' } : startScreen({ body: female });
+      return skipStory ? { body: female ?? 'male', hometown: 'Ada' } : startScreen({ body: female }, () => useFilmClip && cine.prepareVideo('/film/journey-480.mp4', '/film/journey-poster.jpg'));
     })(),
     new Promise<void>((r) => map.once('load', () => r())),
   ]);
