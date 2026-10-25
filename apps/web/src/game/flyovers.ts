@@ -9,7 +9,7 @@ const HIGH = 7; // deck height, metres
 const SLOPE = 0.11; // how steeply the ends come down
 const PILLAR_EVERY = 24;
 
-type Line = { pts: Float32Array; half: number };
+type Line = { pts: Float32Array; half: number; heights?: Float32Array };
 
 export class Flyovers {
   readonly group = new THREE.Group();
@@ -28,6 +28,11 @@ export class Flyovers {
       this.lines.push(l);
       this.dirty = true;
     }
+  }
+
+  /** The deck's height at a point on a flyover (0 if there is none there). */
+  heightAt(x: number, z: number) {
+    return deckHeightAt(this.lines, x, z);
   }
 
   /** Rebuild the flyovers if new ones arrived (cheap: a few dozen pieces). */
@@ -58,6 +63,7 @@ export class Flyovers {
         return h;
       };
       const half = l.half + 0.6;
+      l.heights = Float32Array.from(cum, (c) => height(c));
       for (let i = 0; i + 1 < n; i++) {
         const [x1, z1, x2, z2] = [l.pts[i * 2], l.pts[i * 2 + 1], l.pts[i * 2 + 2], l.pts[i * 2 + 3]];
         const len = Math.hypot(x2 - x1, z2 - z1);
@@ -83,6 +89,25 @@ export class Flyovers {
     this.mesh.receiveShadow = true;
     this.group.add(this.mesh);
   }
+}
+
+export function deckHeightAt(lines: Line[], x: number, z: number) {
+  let best = 0;
+  let bestD = Infinity;
+  for (const l of lines) {
+    if (!l.heights) continue;
+    const n = l.pts.length / 2;
+    for (let i = 0; i + 1 < n; i++) {
+      const [x1, z1, x2, z2] = [l.pts[i * 2], l.pts[i * 2 + 1], l.pts[i * 2 + 2], l.pts[i * 2 + 3]];
+      if (Math.min(x1, x2) - 12 > x || Math.max(x1, x2) + 12 < x || Math.min(z1, z2) - 12 > z || Math.max(z1, z2) + 12 < z) continue;
+      const dx = x2 - x1;
+      const dz = z2 - z1;
+      const k = Math.max(0, Math.min(1, ((x - x1) * dx + (z - z1) * dz) / (dx * dx + dz * dz || 1)));
+      const d = Math.hypot(x1 + dx * k - x, z1 + dz * k - z);
+      if (d < bestD) [bestD, best] = [d, l.heights[i] + (l.heights[i + 1] - l.heights[i]) * k];
+    }
+  }
+  return bestD < 12 ? best : 0;
 }
 
 // One straight piece of deck from (x1, z1) at height h1 to (x2, z2) at h2: the slab (1 m thick,

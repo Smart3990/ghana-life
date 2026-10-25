@@ -8,7 +8,8 @@ import * as maplibregl from 'maplibre-gl';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
 import { createMap } from '../map/createMap';
 import { detectTier, measureFps } from '../map/tier';
-import { loadTraffic, type Traffic } from '../game/traffic';
+import type { Traffic } from '../game/traffic';
+import { createStreetNetwork } from '../game/streetNetwork';
 import { StreetTraffic } from '../game/vehicles3d';
 import { StreetBuildings } from '../game/streetBuildings';
 import { applyStreetStyle } from '../map/streetStyle';
@@ -1536,7 +1537,7 @@ let minimap: Minimap | null = null;
 // Trees, lights, kiosks, umbrellas, polytanks and people, placed along the same streets.
 let life: StreetLife | null = null;
 let trafficModel: Traffic | null = null;
-const pendingRoads: { pts: [number, number][]; lanes: 1 | 2 }[] = [];
+const pendingBatches: { pts: [number, number][]; lanes: 1 | 2; half: number; bridge: boolean }[][] = [];
 const buildings = new StreetBuildings(
   (lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT],
   { light: 220, standard: 320, ultra: 450 }[tier],
@@ -1547,13 +1548,18 @@ const buildings = new StreetBuildings(
     flyovers.add(roads.filter((r) => r.bridge).map((r) => ({ pts: r.pts, half: ROAD_HALF[r.kind] ?? 4 })));
     // Every street the map loads gets traffic too: two lanes each way on main roads, one on others.
     const toLngLat = (x: number, z: number): [number, number] => [START[0] + x / M_LON, START[1] - z / M_LAT];
-    pendingRoads.push(
-      ...roads.filter((r) => !r.edge).map((r) => ({
+    // Traffic drives on exactly these streets (one tile at a time), flyovers included; not on lanes
+    // and service roads.
+    const batch = roads
+      .filter((r) => r.kind !== 'other')
+      .map((r) => ({
         pts: Array.from({ length: r.pts.length / 2 }, (_, i) => toLngLat(r.pts[i * 2], r.pts[i * 2 + 1])),
         lanes: (r.kind === 'minor_road' ? 1 : 2) as 1 | 2,
-      })),
-    );
-    if (trafficModel) trafficModel.addRoads(pendingRoads.splice(0));
+        half: ROAD_HALF[r.kind] ?? 4,
+        bridge: !!r.bridge,
+      }));
+    if (trafficModel) trafficModel.addRoads(batch);
+    else pendingBatches.push(batch);
   },
 );
 scene.add(buildings.group);
@@ -1642,20 +1648,22 @@ async function start() {
   });
   map.setLight({ anchor: 'map', color: '#ffe2bd', intensity: 0.45, position: [1.4, 265, 35] });
   // Real 3D vehicles at street level (the overview map's blocks are not used here).
-  loadTraffic().then((traffic) => {
-    if (!traffic) return;
+  {
+    // Spacing and drawing distance are set so the vehicles near you stay well under the limit:
+    // nothing pops in or out close by (it only happens far away, out of sight).
+    const traffic = createStreetNetwork({ light: 6, standard: 4, ultra: 3 }[tier]);
     trafficModel = traffic;
-    traffic.addRoads(pendingRoads.splice(0));
+    for (const b of pendingBatches.splice(0)) traffic.addRoads(b);
     // Busy roads (raised from the first budget of 15 / 40 / 100: they are drawn in batches, so they cost little).
-    const limit = { light: 30, standard: 65, ultra: 110 }[tier];
-    streetTraffic = new StreetTraffic(traffic, (lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT], limit, { light: 150, standard: 190, ultra: 240 }[tier]);
+    const limit = { light: 60, standard: 110, ultra: 180 }[tier];
+    streetTraffic = new StreetTraffic(traffic, (lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT], limit, { light: 90, standard: 130, ultra: 170 }[tier]);
     scene.add(streetTraffic.group);
-    streetTraffic.onStreet = (x, z) => !life || life.roadAt(x, z, 0.5);
+    streetTraffic.deckHeight = (x, z) => flyovers.heightAt(x, z);
     streetTraffic.signals = signals;
     if (life) life.vehicleAt = vehicleAt;
     streetTraffic.onHoot = (x, z) => honk(Math.hypot(x - state.x, z - state.z), true);
     if (debug) Object.assign(window, { __street: { state, sky, look, life, story, thief, signals, lightFor, flyovers, pinch, traffic: streetTraffic, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
-  });
+  }
 
   document.getElementById('loading')!.remove();
   startedAt = performance.now();
@@ -1684,13 +1692,14 @@ async function start() {
   if (debug) debugLine.hidden = false;
   if (!params.has('full')) {
     let density = 1;
-    const baseLimit = { light: 30, standard: 65, ultra: 110 }[tier];
+    const baseLimit = { light: 60, standard: 110, ultra: 180 }[tier];
     for (;;) {
       const fps = await measureFps(2);
       if (fps < 26 && density > 0.25) density *= 0.75;
       else if (fps > 48 && density < 1) density = Math.min(1, density * 1.15);
       life?.setDensity(density);
-      if (streetTraffic) streetTraffic.limit = Math.max(12, Math.round(baseLimit * density));
+      if (streetTraffic) streetTraffic.density = density;
+      void baseLimit;
       if (debug) debugLine.textContent = `${tier} (${reason}) · ${Math.round(fps)} fps · ${renderer.info.render.triangles} tris · busy ${Math.round(density * 100)}%`;
     }
   } else if (debug) {

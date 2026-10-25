@@ -209,6 +209,14 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
   - **Motor kings:** half of the tricycles are now cargo tricycles (mostly orange) loaded with sacks and a crate.
   - Real photos from the internet are used only to look at, never put into the game, unless their licence allows it (CLAUDE.md rule); the owner's own photos and paid, licensed photos can be used and recorded in LICENSES.md.
 
+- **Traffic rebuilt: on the streets, joined up, no flicker, and on the flyovers (2026-10-25):**
+  - **New street network** (`src/game/streetNetwork.ts`): traffic now drives only on the streets the map draws, tile by tile. Streets are cut at junctions, and at every junction each way in is matched with a different way out (straight on where possible, round the corner otherwise, never a U-turn). Following those gives closed loops round the blocks and a few open routes; every street, each way, belongs to exactly one route, so routes never overlap. The old long routes (from a separate road file that didn't match the drawn streets) are no longer used at street level, and nothing U-turns at the end of a street any more.
+  - **No flicker or jumping:** a vehicle that has to wait (red light, the player in the lane, something ahead) now simply stops where it is; it never jumps backwards and catches up gently. Each tile's streets are added once (no doubled vehicles). When the phone struggles, the same vehicles always go (by their number) instead of the far ones flickering.
+  - **Vehicles on the flyovers:** the bridges are part of the network; vehicles on them drive at the deck's height (about 7 m), faster and further apart, and ignore the lights and people below.
+  - **Fewer, steadier vehicles:** spacing set so the vehicles near you stay under the drawing limit (Light about 32 within 90 m, Standard about 90 within 130 m), so nothing appears or vanishes close by.
+  - **Simpler zebras:** traffic lights only where two main roads meet (one set per 60 m), and zebra crossings only across the main road.
+  - **Check (Light, 120 frames):** 0 vehicles off the road, 3 vehicles vanishing within 60 m (route ends at the tile edge), no doubled vehicles; about 11 vehicles on the flyovers at 4 to 7 m.
+
 ## Waiting on the owner
 
 - Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.

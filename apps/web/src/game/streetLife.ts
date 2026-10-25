@@ -735,9 +735,9 @@ export class StreetLife {
     }
     const found: Junction[] = [];
     for (const e of this.ends.values()) {
-      if (!e.major || e.arms.length < 3) continue;
-      // Circle and other big junctions have many points close together: keep one per 30 m.
-      if (found.some((j) => Math.hypot(j.x - e.x, j.z - e.z) < 30)) continue;
+      // Traffic lights only where two main roads meet (as in Accra), one set per 60 m.
+      if (!e.major || e.arms.length < 3 || e.arms.filter((a) => a.half >= 5).length < 2) continue;
+      if (found.some((j) => Math.hypot(j.x - e.x, j.z - e.z) < 60)) continue;
       const half = Math.max(...e.arms.map((a) => a.half));
       // The main axis: the widest arm's direction.
       const axis = e.arms.reduce((a, b) => (b.half > a.half ? b : a)).angle;

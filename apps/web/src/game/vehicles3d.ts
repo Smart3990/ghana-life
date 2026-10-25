@@ -504,137 +504,118 @@ export class StreetTraffic {
   // the player and keeps its distance from the vehicle in front, then slowly catches up again.
   private held = new Map<number, number>();
   private blockedFor = new Map<number, number>();
-  private lastS = new Map<number, number>();
   private lastT = 0;
   /** Traffic lights: vehicles stop at the line on red (set by the street test). */
   signals: { shouldStop: (x: number, z: number, heading: number, half: number, t: number) => boolean } | null = null;
-  /** Is this point on a street drawn at ground level? (Set by the street test.) */
-  onStreet: ((x: number, z: number) => boolean) | null = null;
+  /** Share of vehicles shown (1 = all), lowered when the phone struggles. */
+  density = 1;
+  /** The flyover deck's height at a point (set by the street test). */
+  deckHeight: ((x: number, z: number) => number) | null = null;
   /** Called when a driver hoots at the player (x, z in metres). */
   onHoot: ((x: number, z: number) => void) | null = null;
 
   update(lon: number, lat: number, t: number, lane: number, player?: { x: number; z: number }) {
     const dt = this.lastT ? Math.min(0.1, Math.max(0, t - this.lastT)) : 0;
     this.lastT = t;
-    // Only vehicles on streets we draw: the route data also has flyovers and slip roads, which at
-    // street level would look like cars floating across open ground.
-    const placed: Placed[] = this.traffic.near(lon, lat, t, this.radiusM, this.limit, lane).filter((p) => {
-      if (!this.onStreet) return true;
-      const [x, z] = this.toLocal(p.lon, p.lat);
-      return this.onStreet(x, z);
-    });
+    // Every vehicle has a timetable position (the shared clock) and is "held back" behind it when it
+    // has to wait. Waiting only ever stops a vehicle where it is: it never jumps backwards, and it
+    // never moves faster than a little catch-up speed, so there is no flicker or teleporting.
+    // When the phone struggles, fewer vehicles are shown: always the same ones go (by their number),
+    // so nothing flickers in and out.
+    const placed: Placed[] = this.traffic
+      .near(lon, lat, t, this.radiusM, this.limit * 2, lane)
+      .filter((p) => this.density >= 1 || ((p.v.id * 2654435761) >>> 0) / 4294967296 < this.density)
+      .slice(0, this.limit);
     this.placed = placed;
-    // Front of each route first, so the ones behind can keep their distance.
-    const byRoute = new Map<number, Placed[]>();
-    for (const p of placed) {
-      // Each lane of each route queues on its own.
-      const key = p.v.route * 2 + p.v.lane;
-      const list = byRoute.get(key) ?? [];
-      list.push(p);
-      byRoute.set(key, list);
-    }
-    for (const list of byRoute.values()) {
-      list.sort((a, b) => b.s - a.s);
-      let frontS = Infinity;
-      let frontHalf = 0;
-      for (const p of list) {
-        const half = KIND_LENGTH[p.v.kind] / 2;
-        let held = this.held.get(p.v.id) ?? 0;
-        let s = p.s - held;
-        let pos = held ? this.traffic.at(p.v, s, lane) : p;
-        let stopped = false;
-        let byPlayer = false;
-        if (player) {
-          // Is the player standing in this vehicle's lane, just ahead?
-          const [x, z] = this.toLocal(pos.lon, pos.lat);
-          const fx = Math.sin(pos.heading);
-          const fz = -Math.cos(pos.heading);
-          const ahead = (player.x - x) * fx + (player.z - z) * fz;
-          const side = Math.abs((player.x - x) * -fz + (player.z - z) * fx);
-          if (ahead > -half && ahead < half + 9 && side < 1.7) stopped = byPlayer = true;
-        }
-        // A red light ahead: wait at the line.
-        if (!stopped && this.signals) {
-          const [x, z] = this.toLocal(pos.lon, pos.lat);
-          if (this.signals.shouldStop(x, z, pos.heading, half, t)) stopped = true;
-        }
-        // Stopped: stay exactly where it was last frame, however long the frame took.
-        if (stopped) held = Math.max(held, p.s - (this.lastS.get(p.v.id) ?? p.s - held));
-        else held = Math.max(0, held - p.v.speed * 0.35 * dt); // then catch up gently
-        // Keep a gap to the vehicle in front.
-        const gap = frontHalf + half + 1.6; // nose to tail, Accra style
-        if (p.s - held > frontS - gap) held = p.s - (frontS - gap);
-        s = p.s - held;
-        if (held > 0.01) {
-          pos = this.traffic.at(p.v, s, lane);
-          p.lon = pos.lon;
-          p.lat = pos.lat;
-          p.heading = pos.heading;
-          this.held.set(p.v.id, held);
-        } else this.held.delete(p.v.id);
-        // Hoot after waiting a moment.
-        const waited = stopped && byPlayer ? (this.blockedFor.get(p.v.id) ?? 0) + dt : 0;
-        if (waited > 1.2 && this.onHoot) {
-          const [x, z] = this.toLocal(p.lon, p.lat);
-          this.onHoot(x, z);
-          this.blockedFor.set(p.v.id, -2.5); // hoot again in a few seconds if still blocked
-        } else this.blockedFor.set(p.v.id, waited);
-        this.lastS.set(p.v.id, s);
-        frontS = s;
-        frontHalf = half;
+    const before = new Map<number, number>(); // held at the start of this frame
+    const waiting = new Set<number>();
+    const wait = (p: Placed) => {
+      if (waiting.has(p.v.id)) return;
+      waiting.add(p.v.id);
+      // Hold back by exactly the distance the timetable moved on: the vehicle stays put.
+      this.held.set(p.v.id, (before.get(p.v.id) ?? 0) + p.v.speed * dt);
+    };
+    const place = (p: Placed) => {
+      const held = this.held.get(p.v.id) ?? 0;
+      if (held > 0.01) {
+        const pos = this.traffic.at(p.v, p.s - held, lane);
+        p.lon = pos.lon;
+        p.lat = pos.lat;
+        p.heading = pos.heading;
+        p.bridge = pos.bridge;
       }
+    };
+    for (const p of placed) {
+      const was = this.held.get(p.v.id) ?? 0;
+      before.set(p.v.id, was);
+      this.held.set(p.v.id, Math.max(0, was - p.v.speed * 0.35 * dt)); // catch up gently when free
+      place(p);
     }
-    // Many routes share the same roads: every vehicle also keeps its distance from whatever is ahead
-    // of it in its lane, whichever route that one is on (two passes settle short queues).
+    // 1. Waiting for the player standing in the lane, and for red lights (vehicles on flyovers ignore both).
+    for (const p of placed) {
+      if (p.bridge) continue;
+      const half = KIND_LENGTH[p.v.kind] / 2;
+      const [x, z] = this.toLocal(p.lon, p.lat);
+      let byPlayer = false;
+      if (player) {
+        const fx = Math.sin(p.heading);
+        const fz = -Math.cos(p.heading);
+        const ahead = (player.x - x) * fx + (player.z - z) * fz;
+        const side = Math.abs((player.x - x) * -fz + (player.z - z) * fx);
+        byPlayer = ahead > -half && ahead < half + 9 && side < 1.7;
+      }
+      if (byPlayer || this.signals?.shouldStop(x, z, p.heading, half, t)) wait(p);
+      // Hoot after waiting a moment for the player.
+      const waited = byPlayer ? (this.blockedFor.get(p.v.id) ?? 0) + dt : 0;
+      if (waited > 1.2 && this.onHoot) {
+        this.onHoot(x, z);
+        this.blockedFor.set(p.v.id, -2.5);
+      } else this.blockedFor.set(p.v.id, waited);
+    }
+    for (const p of placed) place(p);
+    // 2. Keeping a gap to whatever is ahead in the lane (any route, any angle, so queues, merges and
+    //    crossings all work): if something is too close in front, wait. Vehicles on a flyover and on
+    //    the street below never see each other.
     const local = placed.map((p) => {
       const [x, z] = this.toLocal(p.lon, p.lat);
-      return { p, x, z, fx: Math.sin(p.heading), fz: -Math.cos(p.heading), half: KIND_LENGTH[p.v.kind] / 2, halfW: KIND_WIDTH[p.v.kind] / 2 };
+      return { p, x, z, fx: Math.sin(p.heading), fz: -Math.cos(p.heading), half: KIND_LENGTH[p.v.kind] / 2, halfW: KIND_WIDTH[p.v.kind] / 2, up: !!p.bridge };
     });
     type L = (typeof local)[number];
-    // Is b in the way of a, just in front of it? (Works for any angle, so crossings are handled too.)
     const inPath = (a: L, b: L) => {
       const dx = b.x - a.x;
       const dz = b.z - a.z;
       const ahead = dx * a.fx + dz * a.fz;
-      if (ahead <= 0) return 0;
+      if (ahead <= 0) return false;
       const side = Math.abs(dx * -a.fz + dz * a.fx);
       const dot = Math.abs(a.fx * b.fx + a.fz * b.fz);
       const cross = Math.sqrt(Math.max(0, 1 - dot * dot));
-      const across = b.half * cross + b.halfW * dot; // how far b reaches sideways from a's point of view
-      const along = b.half * dot + b.halfW * cross; // and along a's direction
-      if (side > a.halfW + across + 0.25) return 0;
-      const need = a.half + along + 1.5;
-      return ahead < need ? need - ahead : 0;
+      const across = b.half * cross + b.halfW * dot;
+      const along = b.half * dot + b.halfW * cross;
+      if (side > a.halfW + across + 0.2) return false;
+      return ahead < a.half + along + 1.6;
     };
     for (let pass = 0; pass < 2; pass++) {
       for (const a of local) {
-        let push = 0;
+        if (waiting.has(a.p.v.id)) continue;
         for (const b of local) {
-          if (a === b || Math.abs(b.x - a.x) > 16 || Math.abs(b.z - a.z) > 16) continue;
+          if (a === b || a.up !== b.up || Math.abs(b.x - a.x) > 16 || Math.abs(b.z - a.z) > 16) continue;
           const dot = a.fx * b.fx + a.fz * b.fz;
           if (dot < -0.7) continue; // oncoming traffic is in the other lanes
-          const need = inPath(a, b);
-          if (!need) continue;
-          // Same direction: the one behind waits. At a crossing, whoever has the other in front of
-          // them waits; if both do, the lower number goes first, so nobody is stuck for ever.
+          if (!inPath(a, b)) continue;
+          // At a crossing where each is in the other's way, the lower number goes first.
           if (dot < 0.7 && inPath(b, a) && a.p.v.id < b.p.v.id) continue;
-          push = Math.max(push, need);
-        }
-        if (push > 0.05) {
-          const held = (this.held.get(a.p.v.id) ?? 0) + push;
-          this.held.set(a.p.v.id, held);
-          const pos = this.traffic.at(a.p.v, a.p.s - held, lane);
-          a.p.lon = pos.lon;
-          a.p.lat = pos.lat;
-          a.p.heading = pos.heading;
-          [a.x, a.z] = this.toLocal(pos.lon, pos.lat);
-          a.fx = Math.sin(pos.heading);
-          a.fz = -Math.cos(pos.heading);
-          this.lastS.set(a.p.v.id, a.p.s - held);
+          wait(a.p);
+          place(a.p);
+          [a.x, a.z] = this.toLocal(a.p.lon, a.p.lat);
+          a.fx = Math.sin(a.p.heading);
+          a.fz = -Math.cos(a.p.heading);
+          break;
         }
       }
     }
-    this.boxes = local.map((a) => ({ x: a.x, z: a.z, fx: a.fx, fz: a.fz, half: a.half, halfW: a.halfW }));
+    // Forget vehicles that have gone.
+    if (this.held.size > 4000) for (const id of [...this.held.keys()]) if (!before.has(id)) this.held.delete(id);
+    this.boxes = local.filter((a) => !a.up).map((a) => ({ x: a.x, z: a.z, fx: a.fx, fz: a.fz, half: a.half, halfW: a.halfW }));
     const counts: Record<BatchKey, number> = { car: 0, hatch: 0, motorking: 0, taxi: 0, trotro: 0, tricycle: 0, okada: 0, bus: 0, truck: 0, pickup: 0, suv: 0 };
     let shadowCount = 0;
     for (const p of placed) {
@@ -644,15 +625,16 @@ export class StreetTraffic {
       const b = this.batches[key];
       const i = counts[key]++;
       const [x, z] = this.toLocal(p.lon, p.lat);
-      // A gentle bounce, different for each vehicle, so they don't glide like toys.
-      this.v.set(x, Math.sin(t * 9 + p.v.id) * 0.012, z);
+      // On a flyover: at the deck's height. A gentle bounce, different for each vehicle.
+      const ground = p.bridge && this.deckHeight ? this.deckHeight(x, z) : 0;
+      this.v.set(x, ground + Math.sin(t * 9 + p.v.id) * 0.012, z);
       this.q.setFromAxisAngle(this.up, Math.PI - p.heading);
       this.m.compose(this.v, this.q, this.s);
       b.body.setMatrixAt(i, this.m);
       b.fixed.setMatrixAt(i, this.m);
       b.body.setColorAt(i, this.c.set(p.v.colour));
       this.q.setFromAxisAngle(this.up, Math.PI - p.heading);
-      this.v.y = 0.03;
+      this.v.y = ground + 0.03;
       this.m.compose(this.v, this.q, this.shadowScale.set(b.shadow[0], 1, b.shadow[1]));
       this.shadows.setMatrixAt(shadowCount++, this.m);
     }

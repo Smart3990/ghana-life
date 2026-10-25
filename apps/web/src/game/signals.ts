@@ -133,10 +133,11 @@ export class Signals {
           this.m.compose(this.p.set(lx, h, lz), this.q, this.s.set(1, 1, 1));
           this.lamps[k].setMatrixAt(arms, this.m);
         }
-        // Zebra: white bars along the road, side by side across its width.
+        // Zebra: only across the main road (its two arms), white bars side by side across its width.
         const zc = zebraAt(j);
+        const onMain = Math.abs(Math.cos(arm.angle - j.axis)) > 0.7;
         const n = Math.min(16, Math.floor((arm.half * 2) / 1.0));
-        for (let b = 0; b < n && stripes < this.stripes.instanceMatrix.count; b++) {
+        for (let b = 0; onMain && b < n && stripes < this.stripes.instanceMatrix.count; b++) {
           const across = -arm.half + 0.5 + b * ((arm.half * 2 - 1) / Math.max(1, n - 1));
           this.m.compose(this.p.set(j.x + ox * zc + rx * across, 0.025, j.z + oz * zc + rz * across), this.q, this.s.set(1, 1, 1));
           this.stripes.setMatrixAt(stripes++, this.m);
@@ -159,6 +160,7 @@ export class Signals {
     let bestD = within;
     for (const j of this.junctions) {
       for (const arm of j.arms) {
+        if (Math.abs(Math.cos(arm.angle - j.axis)) <= 0.7) continue; // zebras are on the main road only
         const zc = zebraAt(j);
         const zx = j.x + Math.sin(arm.angle) * zc;
         const zz = j.z - Math.cos(arm.angle) * zc;

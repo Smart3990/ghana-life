@@ -40,7 +40,7 @@ export const KINDS: Record<Kind, { length: number; width: number; height: number
 // Roughly how Accra's streets mix (out of 100).
 const MIX_WEIGHTS: [Kind, number][] = [['car', 28], ['taxi', 17], ['trotro', 14], ['okada', 15], ['tricycle', 6], ['bus', 3], ['truck', 5], ['pickup', 6], ['suv', 6]];
 const MIX_TOTAL = MIX_WEIGHTS.reduce((n, [, w]) => n + w, 0);
-const kindFor = (r: number): Kind => {
+export const kindFor = (r: number): Kind => {
   let left = r * MIX_TOTAL;
   for (const [k, w] of MIX_WEIGHTS) if ((left -= w) < 0) return k;
   return 'car';
@@ -110,14 +110,14 @@ function box(lon: number, lat: number, heading: number, length: number, width: n
   return [[corner(l, -w), corner(l, w), corner(-l, w), corner(-l, -w), corner(l, -w)]];
 }
 
-export type Placed = { v: Vehicle; d: number; lon: number; lat: number; heading: number; s: number };
+export type Placed = { v: Vehicle; d: number; lon: number; lat: number; heading: number; s: number; bridge?: boolean };
 export type Traffic = {
   /** The nearest vehicles to a point at a moment (seconds of shared time), nearest first. */
   near: (lon: number, lat: number, t: number, radiusM: number, limit: number, lane?: number) => Placed[];
   /** Where a vehicle is at a distance s along its route (for vehicles held back near the player). */
-  at: (v: Vehicle, s: number, lane?: number) => { lon: number; lat: number; heading: number };
+  at: (v: Vehicle, s: number, lane?: number) => { lon: number; lat: number; heading: number; bridge?: boolean };
   /** More roads to fill with traffic (each driven both ways): [longitude, latitude] points, and how many lanes each way. */
-  addRoads: (roads: { pts: [number, number][]; lanes: 1 | 2 }[]) => void;
+  addRoads: (roads: { pts: [number, number][]; lanes: 1 | 2; half?: number; bridge?: boolean }[]) => void;
 };
 
 // Loads the routes and sets up every vehicle. The same on every phone: positions come from the shared clock.
