@@ -91,6 +91,112 @@ function extras(key: BatchKey, paint: THREE.BufferGeometry): THREE.BufferGeometr
 }
 const paintPart = (g: THREE.BufferGeometry, colour: string) => paint(g, colour);
 
+// ---------- Adverts on vehicles (design brief 18.1: moving ads on trotros, buses and trucks) ----------
+// One picture holds all the adverts, one per row; each vehicle shows the row its number picks.
+// Placeholder brands only (the game's own), until real advertisers buy the space.
+export const AD_ROWS = 6;
+function adAtlas() {
+  const c = document.createElement('canvas');
+  c.width = 1024;
+  c.height = 256 * AD_ROWS;
+  const g = c.getContext('2d')!;
+  const ads = [
+    { bg: ['#0f6b3a', '#1c9b57'], big: 'SIKA MOBILE MONEY', small: 'Send money home in seconds · dial *123#', accent: '#f2c21a', ink: '#ffffff' },
+    { bg: ['#4a1d6e', '#7a3fb0'], big: 'GHANAVERSE FM 98.5', small: 'The sound of the city, all day', accent: '#ffd25a', ink: '#ffffff' },
+    { bg: ['#f2efe6', '#e3dccb'], big: 'YOUR AD HERE', small: 'Ride the whole city · ₵250 a week', accent: '#c8442e', ink: '#121a14' },
+    { bg: ['#c2410c', '#f08a24'], big: 'KELEWELE AT CIRCLE', small: 'Hot and spicy every evening', accent: '#fff3c4', ink: '#ffffff' },
+    { bg: ['#0b4f8a', '#2a86d1'], big: 'COOL SACHET WATER', small: 'Clean, cold, everywhere', accent: '#ffffff', ink: '#ffffff' },
+    { bg: ['#8e1b1b', '#c8442e'], big: 'GHANAVERSE NEWS', small: 'Tonight at 8 on every big screen', accent: '#ffffff', ink: '#ffffff' },
+  ];
+  const kente = ['#e3a92b', '#121a14', '#c8442e', '#121a14', '#2f8f57', '#121a14', '#1f5fa8', '#121a14'];
+  ads.forEach((a, r) => {
+    const y = (AD_ROWS - 1 - r) * 256;
+    const grad = g.createLinearGradient(0, y, 1024, y + 256);
+    grad.addColorStop(0, a.bg[0]);
+    grad.addColorStop(1, a.bg[1]);
+    g.fillStyle = grad;
+    g.fillRect(0, y, 1024, 256);
+    for (let x = 0, i = 0; x < 1024; x += 24, i++) {
+      g.fillStyle = kente[i % kente.length];
+      g.fillRect(x, y + 232, 24, 24);
+    }
+    g.fillStyle = a.accent;
+    g.beginPath();
+    g.arc(930, y + 110, 70, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = a.ink;
+    g.font = '900 86px system-ui, sans-serif';
+    g.fillText(a.big, 34, y + 118, 820);
+    g.fillStyle = a.ink === '#121a14' ? '#c8442e' : a.accent;
+    g.font = '700 44px system-ui, sans-serif';
+    g.fillText(a.small, 38, y + 190, 820);
+  });
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
+}
+
+// Where the advert panels go on each commercial vehicle, in the vehicle's own metres (front is +z):
+// [half width, bottom, top, back end, front end].
+const AD_PANELS: Partial<Record<BatchKey, [number, number, number, number, number]>> = {
+  trotro: [0.885, 0.7, 1.04, -2.3, 1.45], // above the wheels, below the windows
+  sprinter: [0.985, 0.76, 1.16, -2.8, 1.6],
+  bus: [1.26, 0.45, 1.25, -2.3, 2.6], // between the wheels
+  truck: [1.165, 1.1, 2.12, -3.65, 1.85],
+};
+function adPanels([hw, y0, y1, z0, z1]: [number, number, number, number, number]) {
+  // Two flat panels, one on each side, each reading the right way round from outside.
+  const pos: number[] = [];
+  const uv: number[] = [];
+  const nor: number[] = [];
+  for (const side of [1, -1]) {
+    const x = side * (hw + 0.012);
+    // Corners: back-bottom, front-bottom, front-top, back-top.
+    const quad = [[x, y0, z0], [x, y0, z1], [x, y1, z1], [x, y1, z0]];
+    // From the right side (+x) the front is on the right of the picture; from the left, on its left.
+    const u = side > 0 ? [0, 1, 1, 0] : [1, 0, 0, 1];
+    const order = side > 0 ? [0, 2, 1, 0, 3, 2] : [0, 1, 2, 0, 2, 3];
+    for (const k of order) {
+      pos.push(...quad[k]);
+      uv.push(u[k], k >= 2 ? 1 : 0);
+      nor.push(side, 0, 0);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  return g;
+}
+function adMaterial(map: THREE.Texture) {
+  const m = new THREE.MeshStandardMaterial({ map, roughness: 0.55, polygonOffset: true, polygonOffsetFactor: -2 });
+  m.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float aAd;')
+      .replace('#include <uv_vertex>', '#include <uv_vertex>\nvMapUv.y = (vMapUv.y + aAd) / ' + AD_ROWS.toFixed(1) + ';');
+  };
+  m.customProgramCacheKey = () => 'vehicle-ad';
+  return m;
+}
+
+// The taxi's roof sign: "TAXI" on its front and back.
+function taxiSignTexture() {
+  const c = document.createElement('canvas');
+  c.width = 256;
+  c.height = 72;
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#f2c21a';
+  g.fillRect(0, 0, 256, 72);
+  g.fillStyle = '#121a14';
+  g.font = '900 56px system-ui, sans-serif';
+  g.textAlign = 'center';
+  g.fillText('TAXI', 128, 56);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
 type Part = THREE.BufferGeometry;
 
 // ---------- Shape helpers (length runs along +z = forward, y is up, x is across) ----------
@@ -443,6 +549,29 @@ export class StreetTraffic {
     const fixedMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, metalness: 0.1 });
     const models: Record<BatchKey, Model> = { car: car(false), hatch: car(false), sprinter: trotro(), motorking: motorKing(), taxi: car(true), trotro: trotro(), tricycle: pragya(), okada: okada(), bus: bus(), truck: truck(), pickup: pickup(), suv: suv() };
     this.batches = {} as typeof this.batches;
+    const adMat = adMaterial(adAtlas());
+    // "TAXI" on the front and back of the roof sign.
+    const signGeo = new THREE.BufferGeometry();
+    {
+      const pos: number[] = [];
+      const uv: number[] = [];
+      for (const side of [1, -1]) {
+        const z = -0.15 + side * 0.135;
+        const q = [[-0.26, 1.43, z], [0.26, 1.43, z], [0.26, 1.57, z], [-0.26, 1.57, z]];
+        const u = side > 0 ? [0, 1, 1, 0] : [1, 0, 0, 1];
+        const order = side > 0 ? [0, 1, 2, 0, 2, 3] : [0, 2, 1, 0, 3, 2];
+        for (const k of order) {
+          pos.push(...q[k]);
+          uv.push(u[k], k >= 2 ? 1 : 0);
+        }
+      }
+      signGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      signGeo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    }
+    this.taxiSigns = new THREE.InstancedMesh(signGeo, new THREE.MeshBasicMaterial({ map: taxiSignTexture() }), limit);
+    this.taxiSigns.count = 0;
+    this.taxiSigns.frustumCulled = false;
+    this.group.add(this.taxiSigns);
     for (const [kind, model] of Object.entries(models) as [BatchKey, Model][]) {
       const look = kind === 'taxi' || kind === 'trotro' || kind === 'sprinter' || kind === 'bus' ? livery(paintMat, kind) : paintMat;
       const body = new THREE.InstancedMesh(model.body, look, limit);
@@ -456,6 +585,17 @@ export class StreetTraffic {
       }
       body.setColorAt(0, this.c.set('#ffffff'));
       this.batches[kind] = { body, fixed, shadow: model.shadow };
+      const panel = AD_PANELS[kind];
+      if (panel) {
+        const geo = adPanels(panel);
+        geo.setAttribute('aAd', new THREE.InstancedBufferAttribute(new Float32Array(limit), 1));
+        const ads = new THREE.InstancedMesh(geo, adMat, limit);
+        ads.count = 0;
+        ads.frustumCulled = false;
+        ads.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        this.group.add(ads);
+        this.ads[kind] = ads;
+      }
     }
     const plane = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
     this.shadows = new THREE.InstancedMesh(
@@ -510,6 +650,8 @@ export class StreetTraffic {
   private lastT = 0;
   /** Traffic lights: vehicles stop at the line on red (set by the street test). */
   signals: { shouldStop: (x: number, z: number, heading: number, half: number, t: number) => boolean } | null = null;
+  private ads: Partial<Record<BatchKey, THREE.InstancedMesh>> = {};
+  private taxiSigns!: THREE.InstancedMesh;
   /** Share of vehicles shown (1 = all), lowered when the phone struggles. */
   density = 1;
   /** The flyover deck's height at a point (set by the street test). */
@@ -619,6 +761,8 @@ export class StreetTraffic {
     // Forget vehicles that have gone.
     if (this.held.size > 4000) for (const id of [...this.held.keys()]) if (!before.has(id)) this.held.delete(id);
     this.boxes = local.filter((a) => !a.up).map((a) => ({ x: a.x, z: a.z, fx: a.fx, fz: a.fz, half: a.half, halfW: a.halfW }));
+    const adCount: Partial<Record<BatchKey, number>> = {};
+    let signs = 0;
     const counts: Record<BatchKey, number> = { car: 0, hatch: 0, sprinter: 0, motorking: 0, taxi: 0, trotro: 0, tricycle: 0, okada: 0, bus: 0, truck: 0, pickup: 0, suv: 0 };
     let shadowCount = 0;
     for (const p of placed) {
@@ -640,6 +784,16 @@ export class StreetTraffic {
       b.body.setMatrixAt(i, this.m);
       b.fixed.setMatrixAt(i, this.m);
       b.body.setColorAt(i, this.c.set(p.v.colour));
+      // Most commercial vehicles carry an advert along both sides; taxis have the roof sign.
+      const ads = this.ads[key];
+      const r = ((p.v.id * 2246822519) >>> 0) / 4294967296;
+      if (ads && r < 0.8) {
+        const n = adCount[key] ?? 0;
+        adCount[key] = n + 1;
+        ads.setMatrixAt(n, this.m);
+        (ads.geometry.getAttribute('aAd') as THREE.InstancedBufferAttribute).setX(n, Math.floor(r * 1.25 * AD_ROWS) % AD_ROWS);
+      }
+      if (key === 'taxi') this.taxiSigns.setMatrixAt(signs++, this.m);
       this.q.setFromAxisAngle(this.up, Math.PI - p.heading);
       this.v.y = ground + 0.03;
       this.m.compose(this.v, this.q, this.shadowScale.set(b.shadow[0], 1, b.shadow[1]));
@@ -652,5 +806,12 @@ export class StreetTraffic {
     }
     this.shadows.count = shadowCount;
     this.shadows.instanceMatrix.needsUpdate = true;
+    for (const [key, ads] of Object.entries(this.ads) as [BatchKey, THREE.InstancedMesh][]) {
+      ads.count = adCount[key] ?? 0;
+      ads.instanceMatrix.needsUpdate = true;
+      ads.geometry.getAttribute('aAd').needsUpdate = true;
+    }
+    this.taxiSigns.count = signs;
+    this.taxiSigns.instanceMatrix.needsUpdate = true;
   }
 }

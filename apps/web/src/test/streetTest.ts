@@ -1664,12 +1664,12 @@ async function start() {
   {
     // Spacing and drawing distance are set so the vehicles near you stay well under the limit:
     // nothing pops in or out close by (it only happens far away, out of sight).
-    const traffic = createStreetNetwork({ light: 6, standard: 4, ultra: 3 }[tier]);
+    const traffic = createStreetNetwork({ light: 4.2, standard: 3, ultra: 2.3 }[tier]);
     trafficModel = traffic;
     for (const b of pendingBatches.splice(0)) traffic.addRoads(b);
     // Busy roads (raised from the first budget of 15 / 40 / 100: they are drawn in batches, so they cost little).
-    const limit = { light: 60, standard: 110, ultra: 180 }[tier];
-    streetTraffic = new StreetTraffic(traffic, (lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT], limit, { light: 90, standard: 130, ultra: 170 }[tier]);
+    const limit = { light: 100, standard: 170, ultra: 260 }[tier];
+    streetTraffic = new StreetTraffic(traffic, (lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT], limit, { light: 140, standard: 180, ultra: 230 }[tier]);
     scene.add(streetTraffic.group);
     streetTraffic.deckHeight = (x, z) => flyovers.heightAt(x, z);
     streetTraffic.signals = signals;
@@ -1705,7 +1705,7 @@ async function start() {
   if (debug) debugLine.hidden = false;
   if (!params.has('full')) {
     let density = 1;
-    const baseLimit = { light: 60, standard: 110, ultra: 180 }[tier];
+    const baseLimit = { light: 100, standard: 170, ultra: 260 }[tier];
     for (;;) {
       const fps = await measureFps(2);
       if (fps < 26 && density > 0.25) density *= 0.75;

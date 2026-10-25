@@ -90,7 +90,11 @@ function buildRoutes(roads: In[]): Omit<Route, 'speed' | 'slots' | 'gap'>[] {
   const id = (d: Dir) => d.e * 2 + (d.fwd ? 0 : 1);
   const next = new Map<number, Dir>();
   for (const { ins, outs } of at.values()) {
-    if (ins.length < 2) continue; // a dead end: the route ends here
+    // A dead end (or the edge of the loaded streets): turn round, so no vehicle ever vanishes.
+    if (ins.length < 2) {
+      if (ins.length === 1 && outs.length === 1) next.set(id(ins[0]), outs[0]);
+      continue;
+    }
     const inAngle = ins.map((d) => {
       const p = pts(d);
       return angleOf(p[p.length - 2], p[p.length - 1]);
@@ -99,7 +103,8 @@ function buildRoutes(roads: In[]): Omit<Route, 'speed' | 'slots' | 'gap'>[] {
       const p = pts(d);
       return angleOf(p[0], p[1]);
     });
-    const cost = (i: number, o: number) => (ins[i].e === outs[o].e ? Infinity : turn(inAngle[i], outAngle[o]) ** 2);
+    // Turning round (back the same street) only when nothing else is left.
+    const cost = (i: number, o: number) => (ins[i].e === outs[o].e ? 1000 : turn(inAngle[i], outAngle[o]) ** 2);
     const n = ins.length;
     let best: number[] | null = null;
     let bestCost = Infinity;
@@ -114,13 +119,13 @@ function buildRoutes(roads: In[]): Omit<Route, 'speed' | 'slots' | 'gap'>[] {
       const free = new Set(outs.map((_, o) => o));
       best = ins.map((_, i) => {
         let pick = -1;
-        for (const o of free) if (cost(i, o) < Infinity && (pick < 0 || cost(i, o) < cost(i, pick))) pick = o;
+        for (const o of free) if (pick < 0 || cost(i, o) < cost(i, pick)) pick = o;
         if (pick >= 0) free.delete(pick);
         return pick;
       });
     }
     if (!best) continue;
-    best.forEach((o, i) => o >= 0 && cost(i, o) < Infinity && next.set(id(ins[i]), outs[o]));
+    best.forEach((o, i) => o >= 0 && next.set(id(ins[i]), outs[o]));
   }
   // 3. Follow the matches into routes.
   const hasPrev = new Set<number>();
@@ -147,22 +152,52 @@ function buildRoutes(roads: In[]): Omit<Route, 'speed' | 'slots' | 'gap'>[] {
     const bridge: number[] = [];
     let twoLane = 0;
     let length = 0;
+    const step: number[] = []; // a set distance for the step to this point (NaN: the real distance)
+    let prevDir: Dir | null = null;
+    const uturn = (e: Edge) => {
+      const n = lon.length;
+      const h = Math.atan2((lon[n - 1] - lon[n - 2]) * M_LON, (lat[n - 1] - lat[n - 2]) * M_LAT);
+      const F = [Math.sin(h), Math.cos(h)];
+      const Lft = [-Math.cos(h), Math.sin(h)];
+      const d = 0.05;
+      const P = [lon[n - 1], lat[n - 1]];
+      for (let k = 1; k <= 8; k++) {
+        const phi = (k / 8) * Math.PI;
+        const ex = Lft[0] * d - Lft[0] * d * Math.cos(phi) + F[0] * d * Math.sin(phi);
+        const ny = Lft[1] * d - Lft[1] * d * Math.cos(phi) + F[1] * d * Math.sin(phi);
+        lon.push(P[0] + ex / M_LON);
+        lat.push(P[1] + ny / M_LAT);
+        half.push(e.half);
+        bridge.push(e.bridge ? 1 : 0);
+        step.push(0.75);
+      }
+    };
     for (const c of chain) {
       const p = pts(c);
       const e = edges[c.e];
-      for (let i = lon.length ? 1 : 0; i < p.length; i++) {
+      let from = lon.length ? 1 : 0;
+      if (prevDir && prevDir.e === c.e && lon.length >= 2) {
+        uturn(e);
+        from = 1; // the street back starts where we are
+      }
+      for (let i = from; i < p.length; i++) {
         lon.push(p[i][0]);
         lat.push(p[i][1]);
         half.push(e.half);
         bridge.push(e.bridge ? 1 : 0);
+        step.push(NaN);
       }
+      prevDir = c;
       const len = p.reduce((n, q, i) => (i ? n + Math.hypot((q[0] - p[i - 1][0]) * M_LON, (q[1] - p[i - 1][1]) * M_LAT) : 0), 0);
       length += len;
       if (e.lanes === 2) twoLane += len;
     }
+    // A loop whose end turns round into its start (a street with dead ends at both ends).
+    if (closed && prevDir && prevDir.e === chain[0].e && lon.length >= 2) uturn(edges[prevDir.e]);
     if (lon.length < 2) continue;
     const atArr = new Float64Array(lon.length);
-    for (let i = 1; i < lon.length; i++) atArr[i] = atArr[i - 1] + Math.hypot((lon[i] - lon[i - 1]) * M_LON, (lat[i] - lat[i - 1]) * M_LAT);
+    // A loop closes back on its start: turn round there too if needed.
+    for (let i = 1; i < lon.length; i++) atArr[i] = atArr[i - 1] + (Number.isNaN(step[i] ?? NaN) ? Math.hypot((lon[i] - lon[i - 1]) * M_LON, (lat[i] - lat[i - 1]) * M_LAT) : step[i]);
     const total = atArr[lon.length - 1];
     if (total < (closed ? 20 : 2 * END_HIDE_M + 10)) continue;
     routes.push({
