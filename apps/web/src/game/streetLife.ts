@@ -4,6 +4,7 @@
 //
 // Cost: each kind of thing is one batched draw, refreshed only when the player has moved a fair way.
 // People are drawn in big batches animated by the graphics card (crowd.ts).
+import type { Arm, Junction } from './signals';
 import * as THREE from 'three';
 import { box, merge, paint, shadowTexture } from './vehicles3d';
 import type { Roof, StreetLine } from './streetBuildings';
@@ -315,6 +316,16 @@ export class StreetLife {
       if (!size) continue;
       for (let i = 0; i + 3 < road.pts.length; i += 2) this.addToGrid(road.pts[i], road.pts[i + 1], road.pts[i + 2], road.pts[i + 3], size.half + GUTTER);
     }
+    // Roads arrive tile by tile: anything placed earlier that is on one of these new roads goes,
+    // so sellers, kiosks and trees always stand beside the road, never on it.
+    const clear = (list: Spot[], margin: number) => list.filter((p) => !this.onRoad(p.x, p.z, margin));
+    this.kiosks.all = clear(this.kiosks.all, 1.3);
+    this.umbrellas.all = clear(this.umbrellas.all, 0.9);
+    this.trees.all = clear(this.trees.all, 0.5);
+    this.palms.all = clear(this.palms.all, 0.5);
+    this.gatherings = this.gatherings.filter((g) => !this.onRoad(g.x, g.z, 0.9));
+    this.footballSpots = this.footballSpots.filter((g) => !this.onRoad(g.x, g.z, 2));
+    this.findJunctions(roads);
     for (const road of roads) {
       const size = HALF[road.kind];
       if (!size) continue;
@@ -538,6 +549,43 @@ export class StreetLife {
     return null;
   }
 
+  /** Junctions where a main road meets another road: they get traffic lights and zebra crossings. */
+  junctions: Junction[] = [];
+  private ends = new Map<string, { x: number; z: number; arms: Arm[]; major: boolean }>();
+  private findJunctions(roads: StreetLine[]) {
+    // Every point where roads meet: collect the directions leaving it. Three or more directions is a junction.
+    for (const road of roads) {
+      const size = HALF[road.kind];
+      if (!size) continue;
+      const pts = road.pts;
+      const n = pts.length / 2;
+      for (let i = 0; i < n; i++) {
+        const x = pts[i * 2];
+        const z = pts[i * 2 + 1];
+        const key = `${Math.round(x * 2)},${Math.round(z * 2)}`;
+        const e = this.ends.get(key) ?? { x, z, arms: [], major: false };
+        for (const k of [i - 1, i + 1]) {
+          if (k < 0 || k >= n) continue;
+          const angle = Math.atan2(pts[k * 2] - x, -(pts[k * 2 + 1] - z));
+          if (!e.arms.some((a) => Math.abs(Math.atan2(Math.sin(a.angle - angle), Math.cos(a.angle - angle))) < 0.35)) e.arms.push({ angle, half: size.half });
+        }
+        if (road.kind !== 'minor_road') e.major = true;
+        this.ends.set(key, e);
+      }
+    }
+    const found: Junction[] = [];
+    for (const e of this.ends.values()) {
+      if (!e.major || e.arms.length < 3) continue;
+      // Circle and other big junctions have many points close together: keep one per 30 m.
+      if (found.some((j) => Math.hypot(j.x - e.x, j.z - e.z) < 30)) continue;
+      const half = Math.max(...e.arms.map((a) => a.half));
+      // The main axis: the widest arm's direction.
+      const axis = e.arms.reduce((a, b) => (b.half > a.half ? b : a)).angle;
+      found.push({ x: e.x, z: e.z, axis, arms: e.arms.slice(0, 4), half, phase: hash(e.x, e.z) * 36 });
+    }
+    this.junctions = found;
+  }
+
   /** Is this point on a road? */
   roadAt(x: number, z: number, margin = 0) {
     return this.onRoad(x, z, margin);
@@ -585,7 +633,8 @@ export class StreetLife {
         a.s0 = leader.s0;
       } else if (!a.run || this.tooFar(a, x, z, t, far)) {
         // Hawkers (and some kayayei) work the traffic, walking between the lanes.
-        const inTraffic = (a.kind === 'hawker' || (a.kind === 'kayayo' && hash(i, 14) < 0.35)) && this.nearCentre.length;
+        // Everyone, hawkers too, keeps to the pavements (owner, 2026-10-25: sellers by the road, not on it).
+        const inTraffic = false;
         a.run = inTraffic ? this.nearCentre[Math.floor(hash(i, t) * this.nearCentre.length)] : this.pickWalkway(hash(i, Math.floor(t)));
         a.spot = a.still && this.nearSpots.length && hash(i, 9) < 0.7 ? this.nearSpots[Math.floor(hash(i, t) * this.nearSpots.length)] : null;
       }

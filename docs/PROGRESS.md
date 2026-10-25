@@ -182,6 +182,16 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
 
 - **Opening film with real-looking people (2026-10-25):** the opening's text cards are replaced by four film pictures made with ImagineArt (Grandma at dawn in the village, her hands folding the ₵50, the bus mate shouting "Accra!", arriving at Circle), each with a slow camera move, black bars and subtitles, then the 3D fly-down to Circle. 330 KB in all, downloaded only for the film. ImagineArt video clips need a paid plan, so the movement is made in the page.
 
+- **Traffic lights, zebra crossings, modern cars and Mission 1 (2026-10-25, owner's playtest):**
+  - **No okada in the story:** you arrive with nothing, so the okada is gone (it stays for tests with `?okada` and `?auto`). The first free-roam goals are now: greet someone, rest on a chair, dance.
+  - **Traffic lights and zebra crossings** (`src/game/signals.ts`): every junction where a main road meets another road (found from the map's roads, 119 around Circle) gets a zebra on each arm and a light on a pole at the kerb. The lights run on the shared clock (36 s cycle: 14 s green, 3 s amber, then red while the other road goes). Vehicles drive up to the stop line and wait on red and amber.
+  - **You start on the pavement beside a zebra and its traffic light**, so the first thing you see is the traffic stopping at the lights.
+  - **Mission 1, "Find the kelewele auntie":** mission card, then Auntie Akos's own stall (umbrella, table, coal pot of kelewele, two plastic chairs) is placed across the road from the nearest zebra. When you're near the zebra and the cars have a red light: "The light is red: the cars have stopped. Cross now on the zebra." She calls "Hey! My son! Come, come here!" (or "my daughter") as you approach. TALK sits you on her chair and plays the film script's conversation, including "Eat small" and "Accra will not swallow you". Then the AYEKOO! banner: Mission 1 complete (+5 Vibe), and the chapter card.
+  - **Modern cars:** sedans, hatchbacks, SUVs, pickups, trotros (van), buses and trucks are now modern models from the free Low Poly Vehicles Pack by Rgsdev (CC0), sized to Corolla, Vitz, RAV4, Hilux and Hiace dimensions, about 1,400 to 1,800 triangles each, 150 KB for all seven. Accra taxis: any body colour with yellow front and back corners. The older PSX cars are removed.
+  - **Fewer vehicles:** 30 / 65 / 110 (was 40 / 90 / 150).
+  - **Sellers beside the road, never on it:** hawkers no longer walk down the middle of the road, and kiosks, stalls and trees placed before a road had loaded are removed when that road arrives.
+  - **Done when:** after the film you stand beside a zebra; the light turns red and the cars stop; after the chase the mission card appears; you cross at the zebra, the auntie calls you, TALK plays the conversation, and AYEKOO! shows Mission 1 complete.
+
 ## Waiting on the owner
 
 - Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.

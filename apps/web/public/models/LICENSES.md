@@ -15,10 +15,10 @@ The plastic chairs and football (`src/game/streetScenes.ts`) are built in code. 
 
 ## Vehicles (public/models/vehicles)
 
-- **PSX Style Cars** by GGBotNet, from https://opengameart.org/content/psx-style-cars. Licence: **CC0** (public domain, free for any use, no credit required; credited here anyway).
-  - Used: Car 01 (wagon), Car 02 (sedan, also the Accra taxi), Car 03 (hatchback), Car 04 (van, used as the trotro), Car 08 (box truck).
-  - Changes: resized to real metres and repainted in more colours, including the Accra taxi's yellow front and back corners, by `scripts/vehicles/paint.py` and `scripts/vehicles/build_vehicles.py`.
-- Pickups, buses, tricycles (pragya) and okadas are still built in code (`src/game/vehicles3d.ts`).
+- **Free Low Poly Vehicles Pack** by Raphael Gonçalves (Rgsdev), from https://opengameart.org/content/free-low-poly-vehicles-pack. Licence: **CC0** (public domain; credited here anyway).
+  - Used: Sedan (cars and Accra taxis), Hatchback, SUV, Pickup, Van (trotro), Bus, Truck.
+  - Changes: resized to the real size of the cars they stand for, split into a paint part and a fixed part with colours baked in, and compressed, by `scripts/vehicles/build_modern.py` and `scripts/vehicles/optimise-vehicles.mjs`. The Accra taxi's yellow corners are drawn by the game.
+- Pragya tricycles and okadas are still built in code (`src/game/vehicles3d.ts`).
 
 ## Opening film pictures (public/film)
 

@@ -106,6 +106,17 @@
       @keyframes pop { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
       .hidden { display: none !important; }
       body:not(.riding) .ride-only, body.riding .walk-only { display: none !important; }
+      /* Mission card and the AYEKOO! banner */
+      #mission { position: fixed; left: 50%; top: 18%; transform: translate(-50%, -10px); min-width: min(420px, 70vw); text-align: center; background: rgba(18,26,20,.9); border-radius: 16px; padding: 14px 22px 12px; z-index: 9; opacity: 0; pointer-events: none; transition: opacity .4s, transform .4s; box-shadow: 0 10px 30px rgba(0,0,0,.45); }
+      #mission::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 4px; border-radius: 16px 16px 0 0; background: repeating-linear-gradient(90deg, var(--gold) 0 18px, var(--night) 18px 22px, var(--red) 22px 34px, var(--night) 34px 38px, var(--green) 38px 50px, var(--night) 50px 54px, var(--blue) 54px 60px, var(--night) 60px 64px); }
+      #mission.on { opacity: 1; transform: translate(-50%, 0); }
+      #mission .m-label { color: var(--gold); font-weight: 900; letter-spacing: 3px; font-size: 12px; }
+      #mission .m-title { color: var(--text); font-weight: 900; font-size: clamp(19px, 5vh, 28px); margin: 4px 0; }
+      #mission .m-goal { color: var(--soft); font-size: 13px; }
+      #mission.ayekoo .m-label { font-size: clamp(22px, 6vh, 34px); letter-spacing: 4px; }
+      #mission.ayekoo { border: 2px solid var(--gold); }
+      body.cine #mission { opacity: 0; }
+
       /* Computers: the keyboard does run, jump and brake, so those buttons go; the action
          button stays as a prompt above the key help, with its key (E) on it. Bigger map on big screens. */
       html:not(.touch) .act:not(#btn-act) { display: none !important; }
@@ -219,6 +230,7 @@
     <div id="debug" class="shadow" hidden></div>
     <div id="place" class="shadow" aria-live="polite"></div>
     <div id="toast" aria-live="polite"></div>
+    <div id="mission" aria-live="polite"></div>
 
     <div id="look-zone" aria-hidden="true"></div>
     <div id="stick-zone" aria-hidden="true"></div>

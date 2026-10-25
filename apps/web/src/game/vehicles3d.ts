@@ -5,25 +5,58 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import type { Kind, Placed, Traffic } from './traffic';
 
-// Real-looking vehicles (public/models/vehicles): small textured models, about 300 to 480 triangles
-// each, from the free PSX Style Cars pack, repainted in Accra colours (see scripts/vehicles). Each
-// model and paint is one batch. Kinds not listed here keep the shapes built in code below.
-const SKINS = (name: string, n: number) => Array.from({ length: n }, (_, i) => `${name}-${i}`);
-const REAL: Partial<Record<Kind, { model: string; skins: string[] }[]>> = {
-  car: [
-    { model: 'wagon', skins: SKINS('wagon', 6) },
-    { model: 'sedan', skins: SKINS('sedan', 6) },
-    { model: 'hatch', skins: SKINS('hatch', 5) },
-  ],
-  taxi: [{ model: 'sedan', skins: SKINS('taxi', 5) }], // Accra taxi: yellow front and back corners
-  suv: [{ model: 'wagon', skins: ['wagon-1', 'wagon-3', 'wagon-4'] }],
-  trotro: [{ model: 'van', skins: ['van-0'] }],
-  truck: [{ model: 'boxtruck', skins: ['boxtruck-0'] }],
+// Modern vehicles (public/models/vehicles): small models of today's Accra traffic (Corolla-size
+// sedans, Vitz-size hatchbacks, RAV4-size SUVs, Hilux-size pickups, Hiace-size trotros, buses and
+// trucks) from the free Low Poly Vehicles Pack by Rgsdev (CC0), sized to real cars by
+// scripts/vehicles. Each file has a "paint" part (repainted per vehicle) and a "fixed" part (glass,
+// lights, tyres). Until they have downloaded, the shapes built in code below are shown.
+// Batches: each kind, plus a second car model so the streets mix sedans and hatchbacks.
+type BatchKey = Kind | 'hatch';
+const MODERN: Partial<Record<BatchKey, string>> = {
+  car: 'sedan',
+  hatch: 'hatch',
+  taxi: 'sedan',
+  suv: 'suv',
+  pickup: 'pickup',
+  trotro: 'van',
+  bus: 'bus',
+  truck: 'truck',
 };
-// The models face the same way as the shapes built in code (checked with a parked test car).
-const REAL_TURN = 0;
+
+// Quantized model files store small whole numbers; turn them into ordinary metres.
+function toFloat(g: THREE.BufferGeometry, m: THREE.Matrix4) {
+  const out = new THREE.BufferGeometry();
+  for (const name of ['position', 'normal', 'color']) {
+    const a = g.getAttribute(name) as THREE.BufferAttribute | undefined;
+    if (!a) continue;
+    const f = new Float32Array(a.count * a.itemSize);
+    for (let i = 0; i < a.count; i++) for (let c = 0; c < a.itemSize; c++) f[i * a.itemSize + c] = a.getComponent(i, c);
+    out.setAttribute(name, new THREE.BufferAttribute(f, a.itemSize));
+  }
+  if (g.index) out.setIndex(Array.from(g.index.array as ArrayLike<number>));
+  out.applyMatrix4(m);
+  if (out.getAttribute('normal')) out.normalizeNormals();
+  if (!out.getAttribute('color')) paint(out, '#ffffff');
+  out.computeBoundingSphere();
+  return out;
+}
+
+// Accra taxis: the body colour with yellow front and back corners, drawn by the paint itself.
+function taxiPaint(base: THREE.MeshStandardMaterial) {
+  const m = base.clone();
+  m.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying float vAlong;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvAlong = position.z;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vAlong;')
+      .replace('#include <color_fragment>', '#include <color_fragment>\nif (abs(vAlong) > 1.45) diffuseColor.rgb = vec3(0.86, 0.62, 0.08);');
+  };
+  return m;
+}
 
 type Part = THREE.BufferGeometry;
 
@@ -324,7 +357,7 @@ export function shadowTexture() {
 
 export class StreetTraffic {
   readonly group = new THREE.Group();
-  private batches: Record<Kind, { body: THREE.InstancedMesh; fixed: THREE.InstancedMesh; shadow: [number, number] }>;
+  private batches: Record<BatchKey, { body: THREE.InstancedMesh; fixed: THREE.InstancedMesh; shadow: [number, number] }>;
   private shadows: THREE.InstancedMesh;
   private m = new THREE.Matrix4();
   private q = new THREE.Quaternion();
@@ -333,9 +366,6 @@ export class StreetTraffic {
   private shadowScale = new THREE.Vector3();
   private up = new THREE.Vector3(0, 1, 0);
   private c = new THREE.Color();
-  // Real models, once downloaded: for each kind, a list of batches (one per model and paint).
-  private real: Partial<Record<Kind, THREE.InstancedMesh[]>> = {};
-  private realCount = new Map<THREE.InstancedMesh, number>();
 
   constructor(
     private traffic: Traffic,
@@ -345,10 +375,10 @@ export class StreetTraffic {
   ) {
     const paintMat = new THREE.MeshStandardMaterial({ roughness: 0.38, metalness: 0.25 });
     const fixedMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, metalness: 0.1 });
-    const models: Record<Kind, Model> = { car: car(false), taxi: car(true), trotro: trotro(), tricycle: pragya(), okada: okada(), bus: bus(), truck: truck(), pickup: pickup(), suv: suv() };
+    const models: Record<BatchKey, Model> = { car: car(false), hatch: car(false), taxi: car(true), trotro: trotro(), tricycle: pragya(), okada: okada(), bus: bus(), truck: truck(), pickup: pickup(), suv: suv() };
     this.batches = {} as typeof this.batches;
-    for (const [kind, model] of Object.entries(models) as [Kind, Model][]) {
-      const body = new THREE.InstancedMesh(model.body, paintMat, limit);
+    for (const [kind, model] of Object.entries(models) as [BatchKey, Model][]) {
+      const body = new THREE.InstancedMesh(model.body, kind === 'taxi' ? taxiPaint(paintMat) : paintMat, limit);
       const fixed = new THREE.InstancedMesh(model.fixed, fixedMat, limit);
       for (const mesh of [body, fixed]) {
         mesh.count = 0;
@@ -370,50 +400,32 @@ export class StreetTraffic {
     this.shadows.frustumCulled = false;
     this.shadows.renderOrder = -1;
     this.group.add(this.shadows);
-    void this.loadReal(limit);
+    void this.loadModern();
   }
 
-  private async loadReal(limit: number) {
-    try {
-      const loader = new GLTFLoader();
-      const textures = new THREE.TextureLoader();
-      const geometry = new Map<string, Promise<THREE.BufferGeometry>>();
-      const geo = (name: string) => {
-        if (!geometry.has(name))
-          geometry.set(name, loader.loadAsync(`/models/vehicles/${name}.glb`).then((g) => {
-            let found: THREE.BufferGeometry | null = null;
-            g.scene.traverse((o) => {
-              if ((o as THREE.Mesh).isMesh && !found) found = (o as THREE.Mesh).geometry;
-            });
-            return found!;
-          }));
-        return geometry.get(name)!;
-      };
-      const real: Partial<Record<Kind, THREE.InstancedMesh[]>> = {};
-      for (const [kind, options] of Object.entries(REAL) as [Kind, { model: string; skins: string[] }[]][]) {
-        const skins = options.reduce((n, o) => n + o.skins.length, 0);
-        const list: THREE.InstancedMesh[] = [];
-        for (const o of options) {
-          const g = await geo(o.model);
-          for (const skin of o.skins) {
-            const map = await textures.loadAsync(`/models/vehicles/${skin}.png`);
-            map.colorSpace = THREE.SRGBColorSpace;
-            map.flipY = false; // glTF texture coordinates
-            map.anisotropy = 4;
-            const mesh = new THREE.InstancedMesh(g, new THREE.MeshStandardMaterial({ map, roughness: 0.5, metalness: 0.15 }), Math.max(4, Math.ceil((limit / skins) * 2)));
-            mesh.count = 0;
-            mesh.frustumCulled = false;
-            mesh.castShadow = true;
-            mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-            list.push(mesh);
-          }
-        }
-        real[kind] = list;
-      }
-      for (const list of Object.values(real)) for (const m of list) this.group.add(m);
-      this.real = real;
-    } catch {
-      // The models did not download: the shapes built in code stay.
+  private async loadModern() {
+    const loader = new GLTFLoader();
+    loader.setMeshoptDecoder(MeshoptDecoder);
+    const files = new Map<string, Promise<{ paint: THREE.BufferGeometry; fixed: THREE.BufferGeometry } | null>>();
+    const load = (name: string) => {
+      if (!files.has(name))
+        files.set(name, loader.loadAsync(`/models/vehicles/${name}.glb`).then((g) => {
+          g.scene.updateMatrixWorld(true);
+          const parts: Record<string, THREE.BufferGeometry> = {};
+          g.scene.traverse((o) => {
+            const mesh = o as THREE.Mesh;
+            if (mesh.isMesh) parts[mesh.name.startsWith('paint') ? 'paint' : 'fixed'] = toFloat(mesh.geometry, mesh.matrixWorld);
+          });
+          return parts.paint && parts.fixed ? { paint: parts.paint, fixed: parts.fixed } : null;
+        }, () => null));
+      return files.get(name)!;
+    };
+    for (const [key, name] of Object.entries(MODERN) as [BatchKey, string][]) {
+      const parts = await load(name);
+      if (!parts) continue; // not downloaded: keep the shape built in code
+      const b = this.batches[key];
+      b.body.geometry = parts.paint;
+      b.fixed.geometry = parts.fixed;
     }
   }
 
@@ -429,6 +441,8 @@ export class StreetTraffic {
   private blockedFor = new Map<number, number>();
   private lastS = new Map<number, number>();
   private lastT = 0;
+  /** Traffic lights: vehicles stop at the line on red (set by the street test). */
+  signals: { shouldStop: (x: number, z: number, heading: number, half: number, t: number) => boolean } | null = null;
   /** Is this point on a street drawn at ground level? (Set by the street test.) */
   onStreet: ((x: number, z: number) => boolean) | null = null;
   /** Called when a driver hoots at the player (x, z in metres). */
@@ -464,6 +478,7 @@ export class StreetTraffic {
         let s = p.s - held;
         let pos = held ? this.traffic.at(p.v, s, lane) : p;
         let stopped = false;
+        let byPlayer = false;
         if (player) {
           // Is the player standing in this vehicle's lane, just ahead?
           const [x, z] = this.toLocal(pos.lon, pos.lat);
@@ -471,7 +486,12 @@ export class StreetTraffic {
           const fz = -Math.cos(pos.heading);
           const ahead = (player.x - x) * fx + (player.z - z) * fz;
           const side = Math.abs((player.x - x) * -fz + (player.z - z) * fx);
-          if (ahead > -half && ahead < half + 9 && side < 1.7) stopped = true;
+          if (ahead > -half && ahead < half + 9 && side < 1.7) stopped = byPlayer = true;
+        }
+        // A red light ahead: wait at the line.
+        if (!stopped && this.signals) {
+          const [x, z] = this.toLocal(pos.lon, pos.lat);
+          if (this.signals.shouldStop(x, z, pos.heading, half, t)) stopped = true;
         }
         // Stopped: stay exactly where it was last frame, however long the frame took.
         if (stopped) held = Math.max(held, p.s - (this.lastS.get(p.v.id) ?? p.s - held));
@@ -488,7 +508,7 @@ export class StreetTraffic {
           this.held.set(p.v.id, held);
         } else this.held.delete(p.v.id);
         // Hoot after waiting a moment.
-        const waited = stopped ? (this.blockedFor.get(p.v.id) ?? 0) + dt : 0;
+        const waited = stopped && byPlayer ? (this.blockedFor.get(p.v.id) ?? 0) + dt : 0;
         if (waited > 1.2 && this.onHoot) {
           const [x, z] = this.toLocal(p.lon, p.lat);
           this.onHoot(x, z);
@@ -550,50 +570,32 @@ export class StreetTraffic {
       }
     }
     this.boxes = local.map((a) => ({ x: a.x, z: a.z, fx: a.fx, fz: a.fz, half: a.half, halfW: a.halfW }));
-    const counts: Record<Kind, number> = { car: 0, taxi: 0, trotro: 0, tricycle: 0, okada: 0, bus: 0, truck: 0, pickup: 0, suv: 0 };
+    const counts: Record<BatchKey, number> = { car: 0, hatch: 0, taxi: 0, trotro: 0, tricycle: 0, okada: 0, bus: 0, truck: 0, pickup: 0, suv: 0 };
     let shadowCount = 0;
-    for (const m of this.realCount.keys()) this.realCount.set(m, 0);
     for (const p of placed) {
-      const b = this.batches[p.v.kind];
+      // Cars are a mix: about one in three is a small hatchback.
+      const key: BatchKey = p.v.kind === 'car' && p.v.id % 3 === 0 ? 'hatch' : p.v.kind;
+      const b = this.batches[key];
+      const i = counts[key]++;
       const [x, z] = this.toLocal(p.lon, p.lat);
       // A gentle bounce, different for each vehicle, so they don't glide like toys.
       this.v.set(x, Math.sin(t * 9 + p.v.id) * 0.012, z);
-      const realList = this.real[p.v.kind];
-      if (realList?.length) {
-        // A real model: the vehicle's number picks its model and paint, the same on every phone.
-        const mesh = realList[Math.abs(p.v.id * 7 + 3) % realList.length];
-        const n = this.realCount.get(mesh) ?? 0;
-        if (n < mesh.instanceMatrix.count) {
-          this.q.setFromAxisAngle(this.up, Math.PI - p.heading + REAL_TURN);
-          this.m.compose(this.v, this.q, this.s);
-          mesh.setMatrixAt(n, this.m);
-          this.realCount.set(mesh, n + 1);
-        }
-      } else {
-        const i = counts[p.v.kind]++;
-        this.q.setFromAxisAngle(this.up, Math.PI - p.heading);
-        this.m.compose(this.v, this.q, this.s);
-        b.body.setMatrixAt(i, this.m);
-        b.fixed.setMatrixAt(i, this.m);
-        b.body.setColorAt(i, this.c.set(p.v.colour));
-      }
+      this.q.setFromAxisAngle(this.up, Math.PI - p.heading);
+      this.m.compose(this.v, this.q, this.s);
+      b.body.setMatrixAt(i, this.m);
+      b.fixed.setMatrixAt(i, this.m);
+      b.body.setColorAt(i, this.c.set(p.v.colour));
       this.q.setFromAxisAngle(this.up, Math.PI - p.heading);
       this.v.y = 0.03;
       this.m.compose(this.v, this.q, this.shadowScale.set(b.shadow[0], 1, b.shadow[1]));
       this.shadows.setMatrixAt(shadowCount++, this.m);
     }
-    for (const [kind, b] of Object.entries(this.batches) as [Kind, (typeof this.batches)[Kind]][]) {
+    for (const [kind, b] of Object.entries(this.batches) as [BatchKey, (typeof this.batches)[BatchKey]][]) {
       b.body.count = b.fixed.count = counts[kind];
       b.body.instanceMatrix.needsUpdate = b.fixed.instanceMatrix.needsUpdate = true;
       if (b.body.instanceColor) b.body.instanceColor.needsUpdate = true;
     }
     this.shadows.count = shadowCount;
     this.shadows.instanceMatrix.needsUpdate = true;
-    for (const list of Object.values(this.real)) {
-      for (const mesh of list) {
-        mesh.count = this.realCount.get(mesh) ?? 0;
-        mesh.instanceMatrix.needsUpdate = true;
-      }
-    }
   }
 }

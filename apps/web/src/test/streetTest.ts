@@ -14,6 +14,8 @@ import { StreetBuildings } from '../game/streetBuildings';
 import { applyStreetStyle } from '../map/streetStyle';
 import { StreetLife } from '../game/streetLife';
 import type { Nearby } from '../game/streetScenes';
+import { Signals, lightFor } from '../game/signals';
+import { box, merge, paint } from '../game/vehicles3d';
 import { SkyTraffic } from '../game/sky3d';
 import { StreetSound } from '../game/streetSound';
 import { createPerson, type Move, type Person } from '../game/person';
@@ -216,6 +218,9 @@ function buildOkada(): Okada {
 }
 
 const okada = buildOkada();
+// In the story you arrive with nothing: no okada. It stays for tests (?okada, ?auto).
+const hasOkada = params.has('okada') || params.has('auto');
+okada.root.visible = hasOkada;
 okada.lean.traverse((o) => (o.castShadow = PRESET.shadows));
 scene.add(okada.root);
 
@@ -538,7 +543,7 @@ function step(player: Player, dt: number, t: number) {
   else if (life && performance.now() - startedAt < 30000 && ++placeCheck % 20 === 0 && !state.onOkada && Math.abs(state.speed) < 0.1 && life.roadAt(state.x, state.z, 0.4)) placeOnPavement();
 
   // The action button: what it does depends on what is next to you.
-  const nearOkada = !state.onOkada && Math.hypot(state.x - state.okadaX, state.z - state.okadaZ) < MOUNT_DISTANCE_M;
+  const nearOkada = hasOkada && !state.onOkada && Math.hypot(state.x - state.okadaX, state.z - state.okadaZ) < MOUNT_DISTANCE_M;
   const action = chooseAction(nearOkada, state.onOkada || me.doing !== 'none' ? null : life?.scenes?.nearest(state.x, state.z) ?? null);
   showAction(action);
   if (tapped.delete('act')) doAction(action, t);
@@ -730,12 +735,16 @@ function step(player: Player, dt: number, t: number) {
       bubbles.push({ el, at: new THREE.Vector3(x, height + 0.25, z), until: performance.now() / 1000 + 2.6 });
     };
   }
+  if (life) signals.junctions = life.junctions;
+  signals.update(state.x, state.z, Date.now() / 1000);
   streetTraffic?.update(here[0], here[1], Date.now() / 1000, TRAFFIC_LANE_M, state);
   updateStats(dt);
   updateButtons();
   updateThief(dt);
+  story.onFrame?.();
+  if (auntie.group.visible) auntie.person?.mixer.update(dt);
   updateMarker(t);
-  const blips = state.onOkada ? [] : [{ x: state.okadaX, z: state.okadaZ, color: '#c8442e', size: 5 }];
+  const blips = state.onOkada || !hasOkada ? [] : [{ x: state.okadaX, z: state.okadaZ, color: '#c8442e', size: 5 }];
   if (story.auntie) blips.push({ x: story.auntie.x, z: story.auntie.z, color: '#e3a92b', size: 7 });
   if (thief.on) blips.push({ x: thief.x, z: thief.z, color: '#f2efe6', size: 4 });
   minimap?.update(state.x, state.z, state.camHeading + look.yaw, blips);
@@ -981,9 +990,7 @@ function updateButtons() {
 // The first goals: they teach the game by playing it. Real missions come with the phone.
 const did = { ride: 0, greet: 0, sit: 0, dance: 0 };
 const GOALS: { text: () => string; done: (from: typeof did) => boolean }[] = [
-  { text: () => 'Get on the okada', done: () => state.onOkada },
-  { text: () => `Ride 300 m · ${Math.min(300, Math.round(did.ride - goalFrom.ride))} m`, done: (f) => did.ride - f.ride >= 300 },
-  { text: () => 'Get off and greet someone', done: (f) => did.greet > f.greet },
+  { text: () => 'Greet someone on the street', done: (f) => did.greet > f.greet },
   { text: () => 'Rest on a chop bar chair', done: (f) => did.sit > f.sit },
   { text: () => 'Dance where the music plays', done: (f) => did.dance > f.dance },
 ];
@@ -1043,7 +1050,135 @@ const story = {
   goal: '',
   auntie: null as { x: number; z: number; reached: () => void } | null,
   shot: null as { x: number; z: number; bearing: number; zoom: number; pitch: number } | null,
+  onFrame: null as (() => void) | null,
 };
+
+// The story's kelewele auntie (Auntie Akos): her own stall across the road from the nearest zebra.
+const auntie = {
+  group: new THREE.Group(),
+  person: null as Person | null,
+  x: 0,
+  z: 0,
+  async load() {
+    // A woman in an orange top and a green wrap skirt with a matching head wrap colour.
+    const p = await createPerson({ shirt: '#e2731f', trousers: '#2f8f57', shoes: '#3a2a20', hair: '#141110', skin: '#6e625b' }, 'female', tier === 'light' ? 'lite' : 'full');
+    p.actions.idle.play();
+    p.actions.talk.play();
+    p.actions.talk.setEffectiveWeight(0);
+    p.model.traverse((o) => (o.castShadow = PRESET.shadows));
+    this.person = p;
+    this.group.add(p.root);
+    this.group.add(stallModel());
+    this.group.visible = false;
+    scene.add(this.group);
+  },
+  talk(on: boolean) {
+    if (!this.person) return;
+    this.person.actions.talk.setEffectiveWeight(on ? 1 : 0);
+    this.person.actions.idle.setEffectiveWeight(on ? 0 : 1);
+  },
+};
+// Umbrella, table, coal pot with the pan of kelewele, and two plastic chairs. Built facing +z (the
+// auntie stands at -z behind the table, the customer's chair is at +z).
+function stallModel() {
+  const g = new THREE.Group();
+  const parts = [
+    paint(new THREE.CylinderGeometry(0.03, 0.03, 2.3, 6).translate(0, 1.15, 0.1), '#d9d2c2'),
+    paint(box(1.1, 0.06, 0.7, 0, 0.78, 0.1), '#7a5636'),
+    paint(box(0.06, 0.76, 0.06, 0.5, 0.38, -0.2), '#5a3f28'),
+    paint(box(0.06, 0.76, 0.06, -0.5, 0.38, -0.2), '#5a3f28'),
+    paint(box(0.06, 0.76, 0.06, 0.5, 0.38, 0.4), '#5a3f28'),
+    paint(box(0.06, 0.76, 0.06, -0.5, 0.38, 0.4), '#5a3f28'),
+    paint(new THREE.CylinderGeometry(0.2, 0.15, 0.32, 10).translate(0.75, 0.16, -0.25), '#2b2b2b'), // coal pot
+    paint(new THREE.CylinderGeometry(0.3, 0.22, 0.08, 14).translate(0.75, 0.36, -0.25), '#1a1a1a'), // pan
+    paint(new THREE.CylinderGeometry(0.26, 0.26, 0.02, 14).translate(0.75, 0.39, -0.25), '#d88a1c'), // the kelewele
+    paint(box(0.46, 0.05, 0.44, 0.2, 0.44, 1.05), '#1f5fa8'), // blue chair (the customer's)
+    paint(box(0.46, 0.45, 0.05, 0.2, 0.68, 1.27), '#1f5fa8'),
+    paint(box(0.46, 0.05, 0.44, -0.75, 0.44, 0.7), '#c8442e'), // red chair
+    paint(box(0.46, 0.45, 0.05, -0.75, 0.68, 0.92), '#c8442e'),
+  ];
+  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7 });
+  const solid = new THREE.Mesh(merge(parts), mat);
+  solid.castShadow = true;
+  g.add(solid);
+  // Red and yellow umbrella.
+  const canopy = new THREE.ConeGeometry(1.35, 0.45, 8, 1, true).translate(0, 2.35, 0.1);
+  const cols: number[] = [];
+  const pos = canopy.getAttribute('position');
+  for (let i = 0; i < pos.count; i++) {
+    const a = Math.atan2(pos.getZ(i) - 0.1, pos.getX(i));
+    const c = new THREE.Color(Math.floor(((a + Math.PI) / (Math.PI * 2)) * 8) % 2 ? '#e3a92b' : '#c8442e');
+    cols.push(c.r, c.g, c.b);
+  }
+  canopy.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+  const umbrella = new THREE.Mesh(canopy, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, side: THREE.DoubleSide }));
+  umbrella.castShadow = true;
+  g.add(umbrella);
+  return g;
+}
+
+// Put the stall on the pavement across the road from the player, beside the nearest zebra (or, with
+// no zebra near, at the nearest clear pavement). Returns where the auntie and the chair are.
+function placeAuntie() {
+  const zebra = signals.nearestZebra(state.x, state.z, 250);
+  const tries: { x: number; z: number; face: number }[] = [];
+  if (zebra) {
+    const rx = Math.cos(zebra.angle);
+    const rz = Math.sin(zebra.angle);
+    const mine = Math.sign((state.x - zebra.x) * rx + (state.z - zebra.z) * rz) || 1;
+    const far = -mine; // the other side of the road
+    for (const along of [4, 6, 8, 2.5, 10]) {
+      const ox = Math.sin(zebra.angle) * along;
+      const oz = -Math.cos(zebra.angle) * along;
+      for (const out of [3.2, 4, 2.6]) {
+        const face = zebra.angle + (far > 0 ? -Math.PI / 2 : Math.PI / 2); // her table faces the road
+        tries.push({ x: zebra.x + ox + rx * (zebra.half + out) * far, z: zebra.z + oz + rz * (zebra.half + out) * far, face });
+      }
+    }
+  }
+  const pave = life?.pavementNear(state.x + 15, state.z, 2);
+  if (pave) tries.push({ x: pave.x, z: pave.z, face: state.heading + Math.PI });
+  for (const t of tries) {
+    if (solidAt(t.x, t.z, 1.2) || life?.roadAt(t.x, t.z, 1.4)) continue;
+    // The stall's model faces +z: turn it so the customer's chair is on the road side.
+    auntie.group.position.set(t.x, 0, t.z);
+    auntie.group.rotation.y = Math.PI - t.face;
+    auntie.group.visible = true;
+    const fx = Math.sin(t.face);
+    const fz = -Math.cos(t.face);
+    // She stands behind the table; the chair is in front of it.
+    const ax = t.x - fx * 0.65;
+    const az = t.z - fz * 0.65;
+    auntie.person?.root.position.set(0, 0, -0.65);
+    auntie.person?.root.rotation.set(0, 0, 0);
+    const right = { x: Math.cos(t.face), z: Math.sin(t.face) };
+    const chair = { x: t.x + fx * 1.05 - right.x * 0.2, z: t.z + fz * 1.05 - right.z * 0.2, face: t.face + Math.PI }; // the model's +x is to the left of where it faces
+    return { x: ax, z: az, chair, zebra: zebra && Math.hypot(zebra.x - t.x, zebra.z - t.z) < 20 ? zebra : null };
+  }
+  return null;
+}
+
+// Mission card (title in big letters) and the "AYEKOO!" banner when a mission is done (brief 9.4).
+const missionEl = document.getElementById('mission')!;
+function missionCard(label: string, title: string, goal: string) {
+  missionEl.innerHTML = '';
+  const make = (cls: string, text: string) => {
+    const d = document.createElement('div');
+    d.className = cls;
+    d.textContent = text;
+    missionEl.append(d);
+  };
+  make('m-label', label.toUpperCase());
+  make('m-title', title);
+  make('m-goal', goal);
+  missionEl.classList.remove('ayekoo');
+  missionEl.classList.add('on');
+  setTimeout(() => missionEl.classList.remove('on'), 4200);
+}
+function ayekoo(title: string, line: string) {
+  missionCard('Ayekoo!', title, line);
+  missionEl.classList.add('ayekoo');
+}
 const moneyEl = document.getElementById('money')!;
 function setMoney(cedis: number) {
   // What the story says you have. Real money will always come from the server.
@@ -1066,8 +1201,23 @@ function placeOnPavement() {
   let roads = false;
   for (let a = 0; a < 8 && !roads; a++) roads = life.roadAt(state.x + Math.cos(a) * 12, state.z + Math.sin(a) * 12);
   if (!roads) return performance.now() - startedAt > 20000; // give up after a while
-  // Well clear of the road edge (Circle's wide roads and islands look like road too).
-  const spot = life.pavementNear(state.x, state.z, 2.5) ?? life.pavementNear(state.x, state.z);
+  if (!life.junctions.length && performance.now() - startedAt < 6000) return false; // wait a moment for the junctions
+  // Beside the nearest zebra crossing if there is one close by, so the first thing you see is
+  // the traffic stopping at the lights; otherwise well clear of the road edge.
+  const zebra = signals.nearestZebra(state.x, state.z, 220);
+  let spot: { x: number; z: number } | null = null;
+  if (zebra) {
+    for (const side of [1, -1]) {
+      const sx = zebra.x + Math.cos(zebra.angle) * (zebra.half + 2.2) * side;
+      const sz = zebra.z + Math.sin(zebra.angle) * (zebra.half + 2.2) * side;
+      if (!solidAt(sx, sz, 0.4) && !life.roadAt(sx, sz, 0.3)) {
+        spot = { x: sx, z: sz };
+        state.heading = state.camHeading = zebra.angle + (side > 0 ? -Math.PI / 2 : Math.PI / 2); // facing across the road
+        break;
+      }
+    }
+  }
+  spot ??= life.pavementNear(state.x, state.z, 2.5) ?? life.pavementNear(state.x, state.z);
   if (!spot) return true;
   const ok = life.pavementNear(spot.x + 1.6, spot.z, 1.5) ?? spot;
   [state.okadaX, state.okadaZ] = [ok.x, ok.z];
@@ -1202,45 +1352,68 @@ async function playOpening(start: StartChoice) {
   toast('Catch the thief!', 'Hold RUN to sprint');
   await chase;
   toast('You lost him…', 'He is gone, into the crowd');
-  // 4. The kelewele auntie at the nearest food stall.
-  await new Promise((r) => setTimeout(r, 1500));
-  const sellers = life?.scenes?.sellers() ?? [];
-  const food = sellers.filter((s) => s.food);
-  const list = food.length ? food : sellers;
-  list.sort((a, b) => Math.hypot(a.x - state.x, a.z - state.z) - Math.hypot(b.x - state.x, b.z - state.z));
-  const auntie = list[0];
-  if (auntie) {
-    storyGoal('Find the kelewele auntie (gold marker)');
-    await new Promise<void>((reached) => (story.auntie = { x: auntie.x, z: auntie.z, reached }));
+  // 4. Mission 1: find the kelewele auntie. Her stall is across the road at the nearest zebra:
+  // wait for the lights to stop the cars, cross, and talk to her. (After the "You lost him" message.)
+  await new Promise((r) => setTimeout(r, 2600));
+  const stall = placeAuntie();
+  missionCard('Mission 1', 'Find the kelewele auntie', stall?.zebra ? 'Cross at the zebra when the cars stop' : 'Follow the gold marker');
+  if (stall) {
+    storyGoal(stall.zebra ? 'Cross at the zebra, find the kelewele auntie' : 'Find the kelewele auntie (gold marker)');
+    let called = false;
+    let toldToCross = false;
+    story.onFrame = () => {
+      const d = Math.hypot(stall.x - state.x, stall.z - state.z);
+      // She sees you coming and calls you over.
+      if (!called && d < 16) {
+        called = true;
+        life?.scenes?.onSpeak?.(stall.x, stall.z, 1.95, start.body === 'female' ? 'Hey! My daughter! Come, come here!' : 'Hey! My son! Come, come here!');
+      }
+      // At the zebra: tell the player when the cars have stopped for them.
+      const z = stall.zebra;
+      if (z && !toldToCross && Math.hypot(z.x - state.x, z.z - state.z) < 9 && lightFor(z.j, z.angle, Date.now() / 1000) === 'red') {
+        toldToCross = true;
+        toast('The light is red: the cars have stopped', 'Cross now on the zebra');
+      }
+    };
+    await new Promise<void>((reached) => (story.auntie = { x: stall.x, z: stall.z, reached }));
     story.auntie = null;
-    // 5. She calls your uncle.
+    story.onFrame = null;
+    // 5. The talk: she sits you down, feeds you and calls your uncle.
     story.frozen = true;
     state.speed = 0;
-    state.heading = Math.atan2(auntie.x - state.x, -(auntie.z - state.z));
-    me.doing = 'greet';
-    me.until = Infinity;
+    me.doing = 'sit';
+    me.seat = { x: stall.chair.x, z: stall.chair.z, face: stall.chair.face };
+    [state.x, state.z, state.heading] = [stall.chair.x, stall.chair.z, stall.chair.face];
     storyGoal('');
     // Side-on shot of you and the auntie (on whichever side has no wall in the way).
-    const across = state.heading + Math.PI / 2;
-    const mid = { x: (state.x + auntie.x) / 2, z: (state.z + auntie.z) / 2 };
+    const across = stall.chair.face + Math.PI / 2;
+    const mid = { x: (stall.chair.x + stall.x) / 2, z: (stall.chair.z + stall.z) / 2 };
     const clear = (side: number) => !solidAt(mid.x + Math.sin(across) * 4 * side, mid.z - Math.cos(across) * 4 * side, 0.5);
     const side = clear(1) ? 1 : -1;
-    story.shot = { ...mid, bearing: ((across + (side > 0 ? Math.PI : 0)) * 180) / Math.PI, zoom: 23.6, pitch: 72 };
+    story.shot = { ...mid, bearing: ((across + (side > 0 ? Math.PI : 0)) * 180) / Math.PI, zoom: 23.7, pitch: 72 };
+    auntie.talk(true);
     cine.begin();
-    await cine.say('AUNTIE', 'Ei! Sit down, my child. What happened?');
+    await cine.say('AUNTIE AKOS', 'Ei! Sit down, my child. What happened?');
     await cine.say('YOU', 'A boy took my bag. My money, my phone… everything.');
-    await cine.say('AUNTIE', 'Sorry, ooo. Who do you know in Accra?');
+    await cine.say('AUNTIE AKOS', 'Sorry, ooo. Eat small. Who do you know in Accra?');
     await cine.say('YOU', 'My uncle. Uncle Kwame.');
-    await cine.say('AUNTIE', 'Give me his number. I will call him on my phone.');
+    await cine.say('AUNTIE AKOS', 'Give me his number. I will call him on my phone.');
     cine.call('Uncle Kwame');
-    await cine.wait(1.2);
+    await cine.wait(1.4);
     await cine.say('UNCLE KWAME', 'Stay there. I’m coming.');
     cine.call(null);
-    me.doing = 'none';
+    await cine.say('AUNTIE AKOS', 'Don’t worry. Accra will not swallow you. Eat!');
+    auntie.talk(false);
     story.shot = null;
+    cine.end();
+    ayekoo('Mission 1 complete', 'You found Auntie Akos. Uncle Kwame is on his way.');
+    me.vibe += 5;
+    await new Promise((r) => setTimeout(r, 3500));
+    cine.begin();
     await cine.title(`Chapter 1 · From ${home} to Accra`, 'Coming soon: Uncle Kwame, the compound and your first hustle.', 3.5);
     await cine.black(false, 0.8);
     cine.end();
+    stopDoing();
   }
   story.frozen = false;
   story.busy = false;
@@ -1336,6 +1509,10 @@ function placeBubbles(now: number) {
   }
 }
 
+// Traffic lights and zebra crossings at the big junctions (vehicles stop on red).
+const signals = new Signals();
+scene.add(signals.group);
+
 // Planes on the Kotoka flight paths and helicopters circling over the city.
 const sky = new SkyTraffic((lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT]);
 scene.add(sky.group);
@@ -1352,7 +1529,7 @@ async function start() {
     })(),
     new Promise<void>((r) => map.once('load', () => r())),
   ]);
-  const [player] = await Promise.all([loadPlayer(choice.body), skipStory ? null : loadThief()]);
+  const [player] = await Promise.all([loadPlayer(choice.body), skipStory ? null : loadThief(), skipStory ? null : auntie.load()]);
   for (const move of ['jumpLoop', 'jumpLand'] as const) {
     player.actions[move].play();
     player.actions[move].setEffectiveWeight(0);
@@ -1383,13 +1560,14 @@ async function start() {
     trafficModel = traffic;
     traffic.addRoads(pendingRoads.splice(0));
     // Busy roads (raised from the first budget of 15 / 40 / 100: they are drawn in batches, so they cost little).
-    const limit = { light: 40, standard: 90, ultra: 150 }[tier];
+    const limit = { light: 30, standard: 65, ultra: 110 }[tier];
     streetTraffic = new StreetTraffic(traffic, (lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT], limit, { light: 150, standard: 190, ultra: 240 }[tier]);
     scene.add(streetTraffic.group);
     streetTraffic.onStreet = (x, z) => !life || life.roadAt(x, z, 0.5);
+    streetTraffic.signals = signals;
     if (life) life.vehicleAt = vehicleAt;
     streetTraffic.onHoot = (x, z) => honk(Math.hypot(x - state.x, z - state.z), true);
-    if (debug) Object.assign(window, { __street: { state, sky, look, life, story, thief, traffic: streetTraffic, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
+    if (debug) Object.assign(window, { __street: { state, sky, look, life, story, thief, signals, lightFor, traffic: streetTraffic, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
   });
 
   document.getElementById('loading')!.remove();
@@ -1419,7 +1597,7 @@ async function start() {
   if (debug) debugLine.hidden = false;
   if (!params.has('full')) {
     let density = 1;
-    const baseLimit = { light: 40, standard: 90, ultra: 150 }[tier];
+    const baseLimit = { light: 30, standard: 65, ultra: 110 }[tier];
     for (;;) {
       const fps = await measureFps(2);
       if (fps < 26 && density > 0.25) density *= 0.75;
