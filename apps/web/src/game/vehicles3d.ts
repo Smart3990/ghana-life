@@ -14,7 +14,7 @@ import type { Kind, Placed, Traffic } from './traffic';
 // scripts/vehicles. Each file has a "paint" part (repainted per vehicle) and a "fixed" part (glass,
 // lights, tyres). Until they have downloaded, the shapes built in code below are shown.
 // Batches: each kind, plus a second car model so the streets mix sedans and hatchbacks.
-type BatchKey = Kind | 'hatch' | 'motorking' | 'sprinter';
+export type BatchKey = Kind | 'hatch' | 'motorking' | 'sprinter';
 const MODERN: Partial<Record<BatchKey, string>> = {
   // Our own models shaped after the real vehicles at Circle (scripts/vehicles/build_ghana.py).
   car: 'saloon', // Corolla-type saloon
@@ -94,22 +94,29 @@ const paintPart = (g: THREE.BufferGeometry, colour: string) => paint(g, colour);
 // ---------- Adverts on vehicles (design brief 18.1: moving ads on trotros, buses and trucks) ----------
 // One picture holds all the adverts, one per row; each vehicle shows the row its number picks.
 // Placeholder brands only (the game's own), until real advertisers buy the space.
-export const AD_ROWS = 6;
-function adAtlas() {
-  const c = document.createElement('canvas');
+export const AD_ROWS = 8;
+export type VehicleAd = { title: string; line: string; bg: [string, string]; accent: string; ink?: string };
+// Placeholder adverts (the game's own brands). Advertisers' own adverts come from /data/ads.json
+// (the same fields), so new ones can be added without changing the game.
+const DEFAULT_ADS: VehicleAd[] = [
+  { title: 'SIKA MOBILE MONEY', line: 'Send money home in seconds', bg: ['#0f6b3a', '#1c9b57'], accent: '#f2c21a' },
+  { title: 'GHANAVERSE FM 98.5', line: 'The sound of the city, all day', bg: ['#4a1d6e', '#7a3fb0'], accent: '#ffd25a' },
+  { title: 'YOUR AD HERE', line: 'Ride the whole city · ₵250 a week', bg: ['#f2efe6', '#e3dccb'], accent: '#c8442e', ink: '#121a14' },
+  { title: 'KELEWELE AT CIRCLE', line: 'Hot and spicy every evening', bg: ['#c2410c', '#f08a24'], accent: '#fff3c4' },
+  { title: 'COOL SACHET WATER', line: 'Clean, cold, everywhere', bg: ['#0b4f8a', '#2a86d1'], accent: '#ffffff' },
+  { title: 'GHANAVERSE NEWS', line: 'Tonight at 8 on every big screen', bg: ['#8e1b1b', '#c8442e'], accent: '#ffffff' },
+  { title: 'TONIGHT IN GHANAVERSE', line: 'Highlife night at Osu · free entry', bg: ['#1f4f8a', '#121a14'], accent: '#e3a92b' },
+  { title: 'PHONES & CHARGERS', line: 'Best prices at Circle, come and see', bg: ['#121a14', '#3a3d42'], accent: '#2dd4bf' },
+];
+function adAtlas(ads: VehicleAd[], canvas = document.createElement('canvas')) {
+  const c = canvas;
   c.width = 1024;
   c.height = 256 * AD_ROWS;
   const g = c.getContext('2d')!;
-  const ads = [
-    { bg: ['#0f6b3a', '#1c9b57'], big: 'SIKA MOBILE MONEY', small: 'Send money home in seconds · dial *123#', accent: '#f2c21a', ink: '#ffffff' },
-    { bg: ['#4a1d6e', '#7a3fb0'], big: 'GHANAVERSE FM 98.5', small: 'The sound of the city, all day', accent: '#ffd25a', ink: '#ffffff' },
-    { bg: ['#f2efe6', '#e3dccb'], big: 'YOUR AD HERE', small: 'Ride the whole city · ₵250 a week', accent: '#c8442e', ink: '#121a14' },
-    { bg: ['#c2410c', '#f08a24'], big: 'KELEWELE AT CIRCLE', small: 'Hot and spicy every evening', accent: '#fff3c4', ink: '#ffffff' },
-    { bg: ['#0b4f8a', '#2a86d1'], big: 'COOL SACHET WATER', small: 'Clean, cold, everywhere', accent: '#ffffff', ink: '#ffffff' },
-    { bg: ['#8e1b1b', '#c8442e'], big: 'GHANAVERSE NEWS', small: 'Tonight at 8 on every big screen', accent: '#ffffff', ink: '#ffffff' },
-  ];
   const kente = ['#e3a92b', '#121a14', '#c8442e', '#121a14', '#2f8f57', '#121a14', '#1f5fa8', '#121a14'];
-  ads.forEach((a, r) => {
+  for (let r = 0; r < AD_ROWS; r++) {
+    const a = ads[r % ads.length];
+    const ink = a.ink ?? '#ffffff';
     const y = (AD_ROWS - 1 - r) * 256;
     const grad = g.createLinearGradient(0, y, 1024, y + 256);
     grad.addColorStop(0, a.bg[0]);
@@ -124,13 +131,13 @@ function adAtlas() {
     g.beginPath();
     g.arc(930, y + 110, 70, 0, Math.PI * 2);
     g.fill();
-    g.fillStyle = a.ink;
+    g.fillStyle = ink;
     g.font = '900 86px system-ui, sans-serif';
-    g.fillText(a.big, 34, y + 118, 820);
-    g.fillStyle = a.ink === '#121a14' ? '#c8442e' : a.accent;
+    g.fillText(a.title, 34, y + 118, 820);
+    g.fillStyle = ink === '#121a14' ? '#c8442e' : a.accent;
     g.font = '700 44px system-ui, sans-serif';
-    g.fillText(a.small, 38, y + 190, 820);
-  });
+    g.fillText(a.line, 38, y + 190, 820);
+  }
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = 4;
@@ -139,11 +146,13 @@ function adAtlas() {
 
 // Where the advert panels go on each commercial vehicle, in the vehicle's own metres (front is +z):
 // [half width, bottom, top, back end, front end].
+// Full wraps, as on Accra's buses and trotros: from just above the wheels up over the windows to
+// the roof line, from behind the driver's door to the back.
 const AD_PANELS: Partial<Record<BatchKey, [number, number, number, number, number]>> = {
-  trotro: [0.885, 0.7, 1.04, -2.3, 1.45], // above the wheels, below the windows
-  sprinter: [0.985, 0.76, 1.16, -2.8, 1.6],
-  bus: [1.26, 0.45, 1.25, -2.3, 2.6], // between the wheels
-  truck: [1.165, 1.1, 2.12, -3.65, 1.85],
+  trotro: [0.885, 0.7, 2.02, -2.42, 1.35],
+  sprinter: [0.985, 0.76, 2.45, -2.9, 1.5],
+  bus: [1.262, 1.0, 2.92, -5.25, 3.55], // stops before the front door
+  truck: [1.165, 1.1, 2.6, -3.7, 1.85],
 };
 function adPanels([hw, y0, y1, z0, z1]: [number, number, number, number, number]) {
   // Two flat panels, one on each side, each reading the right way round from outside.
@@ -154,8 +163,8 @@ function adPanels([hw, y0, y1, z0, z1]: [number, number, number, number, number]
     const x = side * (hw + 0.012);
     // Corners: back-bottom, front-bottom, front-top, back-top.
     const quad = [[x, y0, z0], [x, y0, z1], [x, y1, z1], [x, y1, z0]];
-    // From the right side (+x) the front is on the right of the picture; from the left, on its left.
-    const u = side > 0 ? [0, 1, 1, 0] : [1, 0, 0, 1];
+    // Reads left to right from outside on both sides (the right side reads front to back).
+    const u = side > 0 ? [1, 0, 0, 1] : [0, 1, 1, 0];
     const order = side > 0 ? [0, 2, 1, 0, 3, 2] : [0, 1, 2, 0, 2, 3];
     for (const k of order) {
       pos.push(...quad[k]);
@@ -169,12 +178,15 @@ function adPanels([hw, y0, y1, z0, z1]: [number, number, number, number, number]
   g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
   return g;
 }
+const AD_TIME = { value: 0 };
 function adMaterial(map: THREE.Texture) {
   const m = new THREE.MeshStandardMaterial({ map, roughness: 0.55, polygonOffset: true, polygonOffsetFactor: -2 });
+  // The wrap changes advert every 8 seconds (each vehicle at its own moment), like a moving screen.
   m.onBeforeCompile = (shader) => {
+    shader.uniforms.uTime = AD_TIME;
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute float aAd;')
-      .replace('#include <uv_vertex>', '#include <uv_vertex>\nvMapUv.y = (vMapUv.y + aAd) / ' + AD_ROWS.toFixed(1) + ';');
+      .replace('#include <common>', '#include <common>\nattribute float aAd;\nuniform float uTime;')
+      .replace('#include <uv_vertex>', '#include <uv_vertex>\nfloat row = mod(aAd + floor((uTime + aAd * 2.7) / 8.0), ' + AD_ROWS.toFixed(1) + ');\nvMapUv.y = (vMapUv.y + row) / ' + AD_ROWS.toFixed(1) + ';');
   };
   m.customProgramCacheKey = () => 'vehicle-ad';
   return m;
@@ -549,7 +561,17 @@ export class StreetTraffic {
     const fixedMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, metalness: 0.1 });
     const models: Record<BatchKey, Model> = { car: car(false), hatch: car(false), sprinter: trotro(), motorking: motorKing(), taxi: car(true), trotro: trotro(), tricycle: pragya(), okada: okada(), bus: bus(), truck: truck(), pickup: pickup(), suv: suv() };
     this.batches = {} as typeof this.batches;
-    const adMat = adMaterial(adAtlas());
+    const adCanvas = document.createElement('canvas');
+    const adMat = adMaterial(adAtlas(DEFAULT_ADS, adCanvas));
+    // Advertisers' adverts, when there are any.
+    fetch('/data/ads.json')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((list: VehicleAd[] | null) => {
+        if (!Array.isArray(list) || !list.length) return;
+        adMat.map = adAtlas([...list, ...DEFAULT_ADS].slice(0, AD_ROWS), adCanvas);
+        adMat.needsUpdate = true;
+      })
+      .catch(() => undefined);
     // "TAXI" on the front and back of the roof sign.
     const signGeo = new THREE.BufferGeometry();
     {
@@ -652,6 +674,8 @@ export class StreetTraffic {
   signals: { shouldStop: (x: number, z: number, heading: number, half: number, t: number) => boolean } | null = null;
   private ads: Partial<Record<BatchKey, THREE.InstancedMesh>> = {};
   private taxiSigns!: THREE.InstancedMesh;
+  /** Vehicles parked for good (the trotro station): drawn with the others, and solid. */
+  parked: { key: BatchKey; id: number; x: number; z: number; heading: number; colour: string }[] = [];
   /** Share of vehicles shown (1 = all), lowered when the phone struggles. */
   density = 1;
   /** The flyover deck's height at a point (set by the street test). */
@@ -761,41 +785,49 @@ export class StreetTraffic {
     // Forget vehicles that have gone.
     if (this.held.size > 4000) for (const id of [...this.held.keys()]) if (!before.has(id)) this.held.delete(id);
     this.boxes = local.filter((a) => !a.up).map((a) => ({ x: a.x, z: a.z, fx: a.fx, fz: a.fz, half: a.half, halfW: a.halfW }));
+    for (const q of this.parked) this.boxes.push({ x: q.x, z: q.z, fx: Math.sin(q.heading), fz: -Math.cos(q.heading), half: 2.7, halfW: 0.95 });
     const adCount: Partial<Record<BatchKey, number>> = {};
     let signs = 0;
     const counts: Record<BatchKey, number> = { car: 0, hatch: 0, sprinter: 0, motorking: 0, taxi: 0, trotro: 0, tricycle: 0, okada: 0, bus: 0, truck: 0, pickup: 0, suv: 0 };
     let shadowCount = 0;
+    type Draw = { key: BatchKey; id: number; x: number; z: number; ground: number; heading: number; colour: string; bounce: boolean };
+    const draws: Draw[] = [];
     for (const p of placed) {
-      // Cars are a mix: about one in three is a small hatchback.
-      // Tricycles: half carry passengers (pragya), half carry goods (motor king, painted orange or blue).
+      // Cars are a mix: about one in three is a small hatchback. About a third of trotros are the
+      // longer Sprinter type. Tricycles: half carry passengers (pragya), half goods (motor king).
       const key: BatchKey =
         p.v.kind === 'car' && p.v.id % 3 === 0 ? 'hatch'
-        : p.v.kind === 'trotro' && p.v.id % 3 === 0 ? 'sprinter' // about a third of trotros are the longer Sprinter type
+        : p.v.kind === 'trotro' && p.v.id % 3 === 0 ? 'sprinter'
         : p.v.kind === 'tricycle' && p.v.id % 2 === 0 ? 'motorking'
         : p.v.kind;
-      const b = this.batches[key];
-      const i = counts[key]++;
       const [x, z] = this.toLocal(p.lon, p.lat);
-      // On a flyover: at the deck's height. A gentle bounce, different for each vehicle.
+      // On a flyover: at the deck's height.
       const ground = p.bridge && this.deckHeight ? this.deckHeight(x, z) : 0;
-      this.v.set(x, ground + Math.sin(t * 9 + p.v.id) * 0.012, z);
-      this.q.setFromAxisAngle(this.up, Math.PI - p.heading);
+      draws.push({ key, id: p.v.id, x, z, ground, heading: p.heading, colour: p.v.colour, bounce: true });
+    }
+    for (const q of this.parked) draws.push({ ...q, ground: 0, bounce: false });
+    for (const d of draws) {
+      const b = this.batches[d.key];
+      if (counts[d.key] >= b.body.instanceMatrix.count) continue;
+      const i = counts[d.key]++;
+      // A gentle bounce, different for each moving vehicle.
+      this.v.set(d.x, d.ground + (d.bounce ? Math.sin(t * 9 + d.id) * 0.012 : 0), d.z);
+      this.q.setFromAxisAngle(this.up, Math.PI - d.heading);
       this.m.compose(this.v, this.q, this.s);
       b.body.setMatrixAt(i, this.m);
       b.fixed.setMatrixAt(i, this.m);
-      b.body.setColorAt(i, this.c.set(p.v.colour));
+      b.body.setColorAt(i, this.c.set(d.colour));
       // Most commercial vehicles carry an advert along both sides; taxis have the roof sign.
-      const ads = this.ads[key];
-      const r = ((p.v.id * 2246822519) >>> 0) / 4294967296;
+      const ads = this.ads[d.key];
+      const r = ((d.id * 2246822519) >>> 0) / 4294967296;
       if (ads && r < 0.8) {
-        const n = adCount[key] ?? 0;
-        adCount[key] = n + 1;
+        const n = adCount[d.key] ?? 0;
+        adCount[d.key] = n + 1;
         ads.setMatrixAt(n, this.m);
         (ads.geometry.getAttribute('aAd') as THREE.InstancedBufferAttribute).setX(n, Math.floor(r * 1.25 * AD_ROWS) % AD_ROWS);
       }
-      if (key === 'taxi') this.taxiSigns.setMatrixAt(signs++, this.m);
-      this.q.setFromAxisAngle(this.up, Math.PI - p.heading);
-      this.v.y = ground + 0.03;
+      if (d.key === 'taxi') this.taxiSigns.setMatrixAt(signs++, this.m);
+      this.v.y = d.ground + 0.03;
       this.m.compose(this.v, this.q, this.shadowScale.set(b.shadow[0], 1, b.shadow[1]));
       this.shadows.setMatrixAt(shadowCount++, this.m);
     }
@@ -811,6 +843,7 @@ export class StreetTraffic {
       ads.instanceMatrix.needsUpdate = true;
       ads.geometry.getAttribute('aAd').needsUpdate = true;
     }
+    AD_TIME.value = t;
     this.taxiSigns.count = signs;
     this.taxiSigns.instanceMatrix.needsUpdate = true;
   }

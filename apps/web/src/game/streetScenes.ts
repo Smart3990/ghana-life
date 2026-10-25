@@ -29,6 +29,7 @@ type Member = {
   orbit: { cx: number; cz: number; r: number; speed: number; phase: number } | null;
   greeted: number;
   kind: Kind;
+  words?: string[];
 };
 
 const hash = (a: number, b: number) => {
@@ -42,6 +43,7 @@ export const GREETINGS = ['Chale!', 'Ei, my friend!', 'How far?', 'Akwaaba!', 'B
 const REPLIES = ['I dey, how about you?', 'Fine, fine!', 'Chale, I dey kraa!', 'Akwaaba!', 'We dey here oo!', 'Medaase!', 'God dey!'];
 const SELLER_REPLIES = ['Welcome! What do you want?', 'My customer!', 'Everything dey, come!', 'Special price for you!'];
 export type Nearby = { kind: 'seat' | 'music' | 'seller' | 'person'; x: number; z: number; face: number; d: number; who: number };
+const PHONE_CALLS = ['Phones! Phones!', 'Charger, earpiece, power bank!', 'Screen guard, boss!', 'Credit and data dey!', 'Bring your phone, I fix am!', 'Original charger, come!'];
 const SELLER_CALLS = ['Come and buy!', 'Pure water! Pure water!', 'Fresh bread!', 'Ice cold!', 'Credit dey!', 'Kenkey hot!', 'Waakye dey!'];
 
 function plasticChair(): THREE.BufferGeometry {
@@ -73,6 +75,8 @@ export class StreetScenes {
   private c = new THREE.Color();
   /** Where music is playing (for the sound of the street). */
   musicSpots: { x: number; z: number }[] = [];
+  /** People who always stand at one place (the trotro station's bus mates and passengers), added on every rebuild. */
+  fixed: { kind: Kind; x: number; z: number; face: number; clip: Clip; cycle: Clip[] | null; words?: string[] }[] = [];
   /** Empty plastic chairs the player can sit on to rest. */
   seats: { x: number; z: number; face: number }[] = [];
   /** Called when someone calls out to the player: position and words. */
@@ -115,7 +119,7 @@ export class StreetScenes {
   }
 
   /** Set up the scenes at the places near the player (call after moving a fair way). */
-  rebuild(kiosks: Spot[], umbrellas: Spot[], footballSpots: { x: number; z: number }[], t: number) {
+  rebuild(kiosks: Spot[], umbrellas: Spot[], footballSpots: { x: number; z: number }[], t: number, phones: Spot[] = []) {
     // Hand every slot back, then fill the places again.
     for (const m of this.members) {
       this.free[m.body].push(m.slot);
@@ -126,6 +130,13 @@ export class StreetScenes {
     this.musicSpots = [];
     this.seats = [];
     let chairs = 0;
+    // The fixed people first (the station), so they always get their places.
+    for (const [i, f] of this.fixed.entries()) {
+      if (kiosks[0] && Math.hypot(f.x - kiosks[0].x, f.z - kiosks[0].z) > 300) continue; // only when the player is near
+      const m = this.add(f.kind, 9000 + i * 7, f.x, f.z, f.face, f.clip, f.cycle, t);
+      if (m && f.words) m.words = f.words;
+    }
+
 
     for (const k of kiosks) {
       const fx = Math.sin(k.angle);
@@ -186,6 +197,21 @@ export class StreetScenes {
     this.chairs.count = chairs;
     this.chairs.instanceMatrix.needsUpdate = true;
     if (this.chairs.instanceColor) this.chairs.instanceColor.needsUpdate = true;
+
+    // The Circle boys at the phone stands: a seller calling out, a customer or two looking at phones.
+    for (const ph of phones) {
+      const fx = Math.sin(ph.angle);
+      const fz = -Math.cos(ph.angle);
+      const seed = ph.x * 3 + ph.z * 13;
+      const seller = this.add('man', seed, ph.x - fx * 0.55, ph.z - fz * 0.55, ph.angle, 'call', ['call', 'phone', 'sell', 'call', 'hand'], t);
+      if (seller) seller.words = PHONE_CALLS;
+      const n = 1 + Math.floor(hash(seed, 2) * 2);
+      for (let c = 0; c < n; c++) {
+        const side = (c - (n - 1) / 2) * 0.7;
+        const kinds: Kind[] = ['man', 'woman', 'pupil', 'man', 'muslimMan'];
+        this.add(kinds[Math.floor(hash(seed, 30 + c) * kinds.length)], seed + 7 * c, ph.x + fx * 0.75 + Math.cos(ph.angle) * side, ph.z + fz * 0.75 + Math.sin(ph.angle) * side, ph.angle + Math.PI, 'phone', ['phone', 'talk', 'phone', 'yes'], t);
+      }
+    }
 
     // Children playing football at the nearest side-street spot.
     this.football = null;
@@ -279,7 +305,7 @@ export class StreetScenes {
           const seller = !!m.cycle?.includes('sell');
           this.switchTo(m, 'call', t);
           m.nextChange = t + 2.5;
-          const words = seller ? SELLER_CALLS : GREETINGS;
+          const words = m.words ?? (seller ? SELLER_CALLS : GREETINGS);
           this.onSpeak?.(x, z, 1.95 * m.look.scale, words[Math.floor(hash(i, t) * words.length)]);
         }
       }

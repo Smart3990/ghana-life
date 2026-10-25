@@ -261,6 +261,7 @@ Everything before the compound gate is a **private story bubble** played alone w
 | --- | --- |
 | Uncle Kwame | Your uncle, compound tenant, always has advice |
 | Auntie Esi | Chop bar owner, loud and loving. Calls mid-chase: "Have you eaten?" |
+| Auntie Dede | Kelewele seller at Circle who takes in the newcomer after the bag is snatched and calls Uncle Kwame (opening, Mission 1) |
 | Kofi Shortcut | Trotro mate. His "shortcuts" always end in trouble |
 | Tunde No-Wahala | Your Nigerian rival, also new in Accra. Every plan starts "Trust me, this one is clean". There is always wahala |
 | Landlord Two-Years | The compound landlord. Only ever says "two years' advance" |

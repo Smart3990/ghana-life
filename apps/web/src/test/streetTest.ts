@@ -19,6 +19,7 @@ import { Signals, lightFor } from '../game/signals';
 import { Flyovers } from '../game/flyovers';
 import { BigScreen } from '../game/bigScreen';
 import { RoadSigns } from '../game/roadSigns';
+import { planStation } from '../game/trotroStation';
 import { box, merge, paint } from '../game/vehicles3d';
 import { SkyTraffic } from '../game/sky3d';
 import { StreetSound } from '../game/streetSound';
@@ -759,6 +760,7 @@ function step(player: Player, dt: number, t: number) {
   }
   const screenEvery = tier === 'light' ? 0.25 : 0.1;
   bigScreen.update(Date.now() / 1000, state.x, state.z, screenEvery);
+  if (!stationPlaced && life && streetTraffic && performance.now() - startedAt > 6000 && ++stationCheck % 30 === 0) stationPlaced = placeStation();
   if (life && bigScreen.isPlaced && moreScreens.length < 5 && ++screenCheck % 90 === 0) {
     const all = [bigScreen, ...moreScreens];
     const spot = life.boardsNear(state.x, state.z, 180).find((b) => all.every((sc) => Math.hypot(sc.group.position.x - b.x, sc.group.position.z - b.z) > 380));
@@ -1150,7 +1152,7 @@ const story = {
   onFrame: null as (() => void) | null,
 };
 
-// The story's kelewele auntie (Auntie Akos): her own stall across the road from the nearest zebra.
+// The story's kelewele auntie (Auntie Dede): her own stall across the road from the nearest zebra.
 const auntie = {
   group: new THREE.Group(),
   person: null as Person | null,
@@ -1505,20 +1507,20 @@ async function playOpening(start: StartChoice) {
     story.shot = { ...mid, bearing: ((across + (side > 0 ? Math.PI : 0)) * 180) / Math.PI, zoom: 23.7, pitch: 72 };
     auntie.talk(true);
     cine.begin();
-    await cine.say('AUNTIE AKOS', 'Ei! Sit down, my child. What happened?');
+    await cine.say('AUNTIE DEDE', 'Ei! Sit down, my child. What happened?');
     await cine.say('YOU', 'A boy took my bag. My money, my phone… everything.');
-    await cine.say('AUNTIE AKOS', 'Sorry, ooo. Eat small. Who do you know in Accra?');
+    await cine.say('AUNTIE DEDE', 'Sorry, ooo. Eat small. Who do you know in Accra?');
     await cine.say('YOU', 'My uncle. Uncle Kwame.');
-    await cine.say('AUNTIE AKOS', 'Give me his number. I will call him on my phone.');
+    await cine.say('AUNTIE DEDE', 'Give me his number. I will call him on my phone.');
     cine.call('Uncle Kwame');
     await cine.wait(1.4);
     await cine.say('UNCLE KWAME', 'Stay there. I’m coming.');
     cine.call(null);
-    await cine.say('AUNTIE AKOS', 'Don’t worry. Accra will not swallow you. Eat!');
+    await cine.say('AUNTIE DEDE', 'Don’t worry. Accra will not swallow you. Eat!');
     auntie.talk(false);
     story.shot = null;
     cine.end();
-    ayekoo('Mission 1 complete', 'You found Auntie Akos. Uncle Kwame is on his way.');
+    ayekoo('Mission 1 complete', 'You found Auntie Dede. Uncle Kwame is on his way.');
     me.vibe += 5;
     await new Promise((r) => setTimeout(r, 3500));
     cine.begin();
@@ -1596,9 +1598,11 @@ const buildings = new StreetBuildings(
 scene.add(buildings.group);
 life = new StreetLife((x, z, m) => buildings.blocked(x, z, m), { ...{
   // Busy but not packed (owner, 2026-10-25: the earlier 110 / 320 / 560 walkers was too much).
-  light: { radiusM: 140, people: 60, props: 250, scenes: 20 },
-  standard: { radiusM: 200, people: 170, props: 600, scenes: 44 },
-  ultra: { radiusM: 280, people: 300, props: 1200, scenes: 70 },
+  // Circle is packed (owner, 2026-10-25): many more people on the pavements, and shops everywhere.
+  // On a struggling phone the walkers thin out automatically (busy %), the shops stay.
+  light: { radiusM: 140, people: 95, props: 450, scenes: 36 },
+  standard: { radiusM: 200, people: 250, props: 1000, scenes: 80 },
+  ultra: { radiusM: 280, people: 480, props: 1600, scenes: 130 },
 }[tier], smoothCrowd: PRESET.smoothCrowd });
 scene.add(life.group);
 // The sound of Accra (starts on the first tap), with a button to switch it off.
@@ -1628,6 +1632,42 @@ function placeBubbles(now: number) {
     if (visible) b.el.style.transform = `translate(${((projected.x / projected.w + 1) / 2) * w}px, ${((1 - projected.y / projected.w) / 2) * h}px) translate(-50%, -100%)`;
   }
 }
+
+// The trotro station at Circle: the nearest open ground (no buildings, no roads) big enough for
+// the yard, 40 to 250 m from the middle of Circle, facing the nearest main road.
+let stationPlaced = false;
+let stationCheck = 0;
+function placeStation() {
+  if (!life || !streetTraffic) return false;
+  const clearYard = (cx: number, cz: number, face: number) => {
+    const R = [Math.cos(face), Math.sin(face)];
+    const F = [Math.sin(face), -Math.cos(face)];
+    for (let u = -17; u <= 17; u += 3)
+      for (let v = -12; v <= 12; v += 3) {
+        const px = cx + R[0] * u + F[0] * v;
+        const pz = cz + R[1] * u + F[1] * v;
+        if (buildings.blocked(px, pz, 0.5) || life!.roadAt(px, pz, 0.8)) return false;
+      }
+    return true;
+  };
+  const tries: [number, number][] = [];
+  for (let r = 40; r <= 250; r += 12) for (let a = 0; a < Math.PI * 2; a += 12 / r) tries.push([Math.cos(a) * r, Math.sin(a) * r]);
+  for (const [cx, cz] of tries) {
+    if (Math.hypot(cx - state.x, cz - state.z) < 30) continue; // not on top of the player
+    const toRoad = life.roadDirNear(cx, cz, 26);
+    if (toRoad === null || !clearYard(cx, cz, toRoad)) continue;
+    const plan = planStation(cx, cz, toRoad);
+    life.clearArea(cx, cz, 21);
+    scene.add(plan.group);
+    streetTraffic.parked = plan.parked;
+    if (life.scenes) life.scenes.fixed = plan.people;
+    life.refreshSoon();
+    station = plan;
+    return true;
+  }
+  return performance.now() - startedAt > 30000; // nothing found: stop looking
+}
+let station: ReturnType<typeof planStation> | null = null;
 
 // Street-name plates and green direction signs to the nearby areas.
 const roadSigns = new RoadSigns(PLACES.map((p) => ({ name: p.name, x: (p.at[0] - START[0]) * M_LON, z: (START[1] - p.at[1]) * M_LAT })));
@@ -1704,7 +1744,7 @@ async function start() {
     streetTraffic.signals = signals;
     if (life) life.vehicleAt = vehicleAt;
     streetTraffic.onHoot = (x, z) => honk(Math.hypot(x - state.x, z - state.z), true);
-    if (debug) Object.assign(window, { __street: { state, sky, look, life, story, thief, signals, lightFor, flyovers, pinch, bigScreen, roadSigns, traffic: streetTraffic, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
+    if (debug) Object.assign(window, { __street: { state, sky, look, life, story, thief, signals, lightFor, flyovers, pinch, bigScreen, roadSigns, getStation: () => station, traffic: streetTraffic, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
   }
 
   document.getElementById('loading')!.remove();

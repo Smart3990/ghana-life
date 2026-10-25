@@ -19,7 +19,7 @@ Photorealistic cinematic film, shot on 35mm film with an anamorphic lens, natura
 ## Character sheet (paste with every shot)
 
 - **The newcomer (you):** a Ghanaian young man of about 20, slim, short black hair, a dark navy zip jacket over a plain light-grey T-shirt, dark trousers, worn trainers. He has **no bag now** (it was stolen): his shoulder is empty and his hands keep going to where the strap was. Dusty, sweaty from running, eyes worried but polite.
-- **The kelewele auntie (Auntie Akos):** a Ghanaian woman of about 50, round, kind face, strong arms, a bright orange-and-green wax-print dress and matching head wrap tied high, a faded apron over it, small gold earrings. Loud, warm, motherly; she laughs easily and scolds with love.
+- **The kelewele auntie (Auntie Dede):** a Ghanaian woman of about 50, round, kind face, strong arms, a bright orange-and-green wax-print dress and matching head wrap tied high, a faded apron over it, small gold earrings. Loud, warm, motherly; she laughs easily and scolds with love.
 - **Her stall:** a wooden table under a big faded red-and-yellow beach umbrella at the edge of the station. A charcoal coal pot with a wide black frying pan of hot oil; cubes of ripe plantain sizzling, turning golden. A tray of cut plantain, a bowl of ginger and pepper paste, a stack of small paper wraps and clear plastic bags, a plastic bucket of water. Two plastic chairs (one blue, one red) beside the table. Smoke and steam rising into the sunlight.
 - **Uncle Kwame:** a Ghanaian man of about 55, grey at the temples, short beard, reading glasses pushed up on his forehead, a short-sleeved checked shirt with a pen in the pocket, a calm, wise face that hides a lot of worry.
 - **Background:** the busy station: white minibuses (trotros), taxis with yellow-painted corners, hawkers with head trays, umbrella stalls, a concrete road flyover far behind.
@@ -40,9 +40,9 @@ Photorealistic cinematic film, shot on 35mm film with an anamorphic lens, natura
 
 ## Shot 2: The auntie calls out (7 s)
 
-**Start picture prompt:** Over the newcomer's shoulder, a few metres away at the edge of the station, Auntie Akos's kelewele stall under a big faded red-and-yellow umbrella: smoke rising from the coal pot, plantain sizzling in a wide black pan. She has stopped frying and is looking straight at the newcomer with concern, spoon in one hand, the other hand on her hip.
+**Start picture prompt:** Over the newcomer's shoulder, a few metres away at the edge of the station, Auntie Dede's kelewele stall under a big faded red-and-yellow umbrella: smoke rising from the coal pot, plantain sizzling in a wide black pan. She has stopped frying and is looking straight at the newcomer with concern, spoon in one hand, the other hand on her hip.
 
-**Video prompt:** The camera slowly pushes past the newcomer's shoulder towards the stall. 0 to 2 s: oil bubbles, golden plantain cubes sizzle, smoke curls up through the sunbeams. 2 to 4 s: Auntie Akos lifts her head and sees him; her face changes from busy to worried. 4 to 7 s: she waves her spoon and beckons him over with her whole arm, calling out. The newcomer turns towards her.
+**Video prompt:** The camera slowly pushes past the newcomer's shoulder towards the stall. 0 to 2 s: oil bubbles, golden plantain cubes sizzle, smoke curls up through the sunbeams. 2 to 4 s: Auntie Dede lifts her head and sees him; her face changes from busy to worried. 4 to 7 s: she waves her spoon and beckons him over with her whole arm, calling out. The newcomer turns towards her.
 
 **Spoken (Auntie, loud, warm Ghanaian English):** "Hey! My son! Come, come here!"
 
@@ -54,7 +54,7 @@ Photorealistic cinematic film, shot on 35mm film with an anamorphic lens, natura
 
 ## Shot 3: "Ei! Sit down, my child" (8 s)
 
-**Start picture prompt:** A medium shot beside the stall. Auntie Akos pulls a blue plastic chair out from beside her table with one hand, looking up at the newcomer, who stands in front of her, dusty and lost. The coal pot smokes between them.
+**Start picture prompt:** A medium shot beside the stall. Auntie Dede pulls a blue plastic chair out from beside her table with one hand, looking up at the newcomer, who stands in front of her, dusty and lost. The coal pot smokes between them.
 
 **Video prompt:** Side-on shot at seated height; slow dolly to the left. 0 to 2 s: she drags the plastic chair across the ground towards him; it scrapes. 2 to 5 s: she taps the seat twice and points at it, speaking. 5 to 8 s: he hesitates, then sits down slowly, elbows on knees; she leans towards him, studying his face.
 
@@ -80,7 +80,7 @@ Photorealistic cinematic film, shot on 35mm film with an anamorphic lens, natura
 
 ## Shot 5: "Sorry, ooo" (9 s)
 
-**Start picture prompt:** Auntie Akos, in a medium close-up, scooping a small portion of golden kelewele out of the pan into a paper wrap, her face full of sympathy, looking at the newcomer.
+**Start picture prompt:** Auntie Dede, in a medium close-up, scooping a small portion of golden kelewele out of the pan into a paper wrap, her face full of sympathy, looking at the newcomer.
 
 **Video prompt:** Slow arc around the auntie from her side to her front. 0 to 3 s: she clicks her tongue and shakes her head slowly, scooping hot kelewele into a paper wrap. 3 to 5 s: she sprinkles a pinch of roasted groundnuts on top and holds it out to him. 5 to 9 s: she speaks gently while he takes the warm paper with both hands; steam rises from it.
 
@@ -106,7 +106,7 @@ Photorealistic cinematic film, shot on 35mm film with an anamorphic lens, natura
 
 ## Shot 7: She calls him on her phone (9 s)
 
-**Start picture prompt:** A close shot of Auntie Akos holding a small, old, scratched basic phone with physical buttons, wrapped in a rubber band, close to her face, her thumb on the keys, the newcomer blurred beside her. No screen text visible.
+**Start picture prompt:** A close shot of Auntie Dede holding a small, old, scratched basic phone with physical buttons, wrapped in a rubber band, close to her face, her thumb on the keys, the newcomer blurred beside her. No screen text visible.
 
 **Video prompt:** Slow push-in on the auntie and the phone. 0 to 3 s: she pulls the phone from her apron pocket and speaks to the newcomer without looking at him. 3 to 6 s: he says the number quietly (not heard clearly); she taps the keys with her thumb, lips moving as she repeats the digits under her breath. 6 to 9 s: she lifts the phone to her ear and waits, eyebrows raised, looking at him; we hear the ringing tone.
 
@@ -154,4 +154,4 @@ text, subtitles, captions, letters, numbers on screens, logos, brand names, wate
 
 Send the clips here. I will put them in the game after "You lost him…": the gold marker and TALK button stay (you still walk to the auntie yourself), then TALK plays shots 3 to 9 in order, with subtitles. "Chapter 1 · From [your hometown] to Accra" follows shot 9, then free roam and the first goals start. Shots 1 and 2 play just before the goal "Find the kelewele auntie" appears. Cheap phones and slow connections keep the current in-game scene, so the film never makes anyone wait.
 
-The auntie now has a name, Auntie Akos (the brief's cast list has Auntie Akua for the chop bar in Chapter 1 and Auntie Esi as the chop bar owner). If you prefer one of those names, tell me and I will change it everywhere.
+The kelewele seller is **Auntie Dede** (a Ga name, as she is an Accra woman at Circle). Auntie Akos stays the Ghanaverse News presenter (brief 17), Auntie Esi the chop bar owner and Auntie Akua the Chapter 1 chop bar, so every name in the story is a different person.
