@@ -1,12 +1,12 @@
 [
  {
-  "id": "move-move-my-bag",
-  "line": "Move! Move! My bag!",
+  "id": "hey-my-bag-thief",
+  "line": "Hey! My bag! Thief!",
   "who": "You and Auntie Dede (in the street)"
  },
  {
-  "id": "hey-my-bag",
-  "line": "Hey! My bag!",
+  "id": "move-move-my-bag",
+  "line": "Move! Move! My bag!",
   "who": "You and Auntie Dede (in the street)"
  },
  {
@@ -85,8 +85,8 @@
   "who": "You, the player (young man about 20; a young woman reads them for a female player)"
  },
  {
-  "id": "everything-is-moving-so-fast",
-  "line": "Everything is moving so fast…",
+  "id": "uncle-is-nima-far",
+  "line": "Uncle, is Nima far?",
   "who": "You, the player (young man about 20; a young woman reads them for a female player)"
  },
  {
@@ -120,9 +120,34 @@
   "who": "Uncle Kwame (man about 55, deep and calm)"
  },
  {
-  "id": "ha-tomorrow-i-will-show-you-around-today-you-rest",
-  "line": "Ha! Tomorrow I will show you around. Today, you rest.",
+  "id": "not-far-fifteen-minutes-if-the-traffic-allows-ha",
+  "line": "Not far. Fifteen minutes, if the traffic allows. Ha!",
   "who": "Uncle Kwame (man about 55, deep and calm)"
+ },
+ {
+  "id": "tomorrow-i-will-show-you-around-today-you-rest",
+  "line": "Tomorrow I will show you around. Today, you rest.",
+  "who": "Uncle Kwame (man about 55, deep and calm)"
+ },
+ {
+  "id": "thief-thief",
+  "line": "Thief! Thief!",
+  "who": "You, the player (shouting while running)"
+ },
+ {
+  "id": "stop-him-stop-that-boy",
+  "line": "Stop him! Stop that boy!",
+  "who": "You, the player (shouting while running)"
+ },
+ {
+  "id": "somebody-hold-him",
+  "line": "Somebody hold him!",
+  "who": "You, the player (shouting while running)"
+ },
+ {
+  "id": "my-bag-thief",
+  "line": "My bag! Thief!",
+  "who": "You, the player (shouting while running)"
  },
  {
   "id": "chale-comot-for-road",

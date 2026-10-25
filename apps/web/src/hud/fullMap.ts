@@ -17,8 +17,8 @@ type View = {
   you: { lng: number; lat: number; heading: number };
   /** Where the story wants you: the person or place, with a picture-sign and a name. */
   goal: { lng: number; lat: number; label: string; who?: string; role?: string; icon?: string } | null;
-  /** The part of the city that is open now (the rest is greyed out and locked). */
-  open: { lng: number; lat: number; radius: number; name: string };
+  /** The parts of the city open now (the rest is greyed out and locked). */
+  open: { lng: number; lat: number; radius: number; name: string }[];
   /** The player's card. */
   player: { name: string; home: string; energy: number; vibe: number; money: number; mission: string };
   places: MapPlace[];
@@ -158,6 +158,18 @@ const metres = (a: { lng: number; lat: number }, b: { lng: number; lat: number }
 const groupOf = (kind: string) => GROUPS.find((g) => g.kinds.includes(kind));
 const far = (m: number) => (m < 1000 ? `${Math.round(m / 10) * 10} m` : `${(m / 1000).toFixed(1)} km`);
 const empty = { type: 'FeatureCollection' as const, features: [] };
+type Area = { lng: number; lat: number; radius: number; name: string };
+const inAny = (opens: Area[], p: { lng: number; lat: number }) => opens.some((o) => metres(p, o) <= o.radius);
+/** The edge of an open area: a gently uneven ring, like a district boundary rather than a circle. */
+function edgeRing(o: Area) {
+  const ring: number[][] = [];
+  for (let i = 0; i <= 72; i++) {
+    const a = (i / 72) * Math.PI * 2;
+    const r = o.radius * (1 + 0.035 * Math.sin(a * 3 + 1) + 0.02 * Math.sin(a * 5));
+    ring.push([o.lng + (Math.cos(a) * r) / M_LON, o.lat + (Math.sin(a) * r) / M_LAT]);
+  }
+  return ring;
+}
 
 export class FullMap {
   private root: HTMLElement;
@@ -225,16 +237,16 @@ export class FullMap {
     this.map = new maplibregl.Map({
       container: this.mapEl,
       style: buildStyle(this.tier === 'light' ? 'light' : 'standard'),
-      center: [view.open.lng, view.open.lat],
+      center: [you.lng, you.lat],
       zoom: 14.2, // starts high over the open area, then flies down to you
       minZoom: 13.8,
       maxZoom: 18.5,
       // You can look a little past the edge of the open area (to see what is locked), no further.
       maxBounds: [
-        view.open.lng - (view.open.radius * 1.9) / M_LON,
-        view.open.lat - (view.open.radius * 1.9) / M_LAT,
-        view.open.lng + (view.open.radius * 1.9) / M_LON,
-        view.open.lat + (view.open.radius * 1.9) / M_LAT,
+        Math.min(...view.open.map((o) => o.lng - (o.radius * 1.9) / M_LON)),
+        Math.min(...view.open.map((o) => o.lat - (o.radius * 1.9) / M_LAT)),
+        Math.max(...view.open.map((o) => o.lng + (o.radius * 1.9) / M_LON)),
+        Math.max(...view.open.map((o) => o.lat + (o.radius * 1.9) / M_LAT)),
       ],
       pitch: 0,
       bearing: -25,
@@ -309,19 +321,12 @@ export class FullMap {
       },
     });
     // The locked city: everything outside the open area is greyed out, with a gold dashed edge.
-    const open = this.get().open;
-    const ring: number[][] = [];
-    for (let i = 0; i <= 72; i++) {
-      const a = (i / 72) * Math.PI * 2;
-      // A gently uneven edge, like a district boundary rather than a perfect circle.
-      const r = open.radius * (1 + 0.035 * Math.sin(a * 3 + 1) + 0.02 * Math.sin(a * 5));
-      ring.push([open.lng + (Math.cos(a) * r) / M_LON, open.lat + (Math.sin(a) * r) / M_LAT]);
-    }
+    const rings = this.get().open.map(edgeRing);
     map.addSource('fm-lock', {
       type: 'geojson',
-      data: { type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [[[-1.5, 4.5], [1.5, 4.5], [1.5, 7], [-1.5, 7], [-1.5, 4.5]], ring.slice().reverse()] } },
+      data: { type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [[[-1.5, 4.5], [1.5, 4.5], [1.5, 7], [-1.5, 7], [-1.5, 4.5]], ...rings.map((r) => r.slice().reverse())] } },
     });
-    map.addSource('fm-edge', { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: ring } } });
+    map.addSource('fm-edge', { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'MultiLineString', coordinates: rings } } });
     map.addLayer({ id: 'fm-lock', type: 'fill', source: 'fm-lock', paint: { 'fill-color': '#4a4f55', 'fill-opacity': 0.66 } }, 'fm-route-glow');
     map.addLayer({ id: 'fm-edge-glow', type: 'line', source: 'fm-edge', paint: { 'line-color': '#e3a92b', 'line-width': 9, 'line-opacity': 0.25, 'line-blur': 4 } }, 'fm-route-glow');
     map.addLayer({ id: 'fm-edge', type: 'line', source: 'fm-edge', paint: { 'line-color': '#e3a92b', 'line-width': 2.5, 'line-dasharray': [3, 2] } }, 'fm-route-glow');
@@ -424,7 +429,7 @@ export class FullMap {
       <div class="fm-stats"><span>⚡ ${Math.round(pl.energy)}</span><span>✨ ${pl.vibe}</span><span>₵ ${pl.money.toLocaleString('en-GH')}</span></div>
       ${goal}
       <div class="fm-near">${rows.map(([i, n, d]) => `<span>${i} ${n} <em>${far(d)}</em></span>`).join('')}</div>
-      <div class="fm-more">🔒 Only ${view.open.name} is open for now. More of Accra opens up as you play the story.</div>`;
+      <div class="fm-more">🔒 Open now: ${view.open.map((o) => o.name).join(' and ')}. More of Accra opens up as you play the story.</div>`;
   }
 
   private drawMarkers(animate: boolean) {
@@ -434,7 +439,7 @@ export class FullMap {
     const view = this.get();
     const group = GROUPS.find((g) => g.name === this.filter);
     // Nearest first, so the pins drop in rippling out from you.
-    const inside = (p: { lng: number; lat: number }) => metres(p, view.open) <= view.open.radius;
+    const inside = (p: { lng: number; lat: number }) => inAny(view.open, p);
     const list = view.places
       .filter(inside)
       .filter((p) => metres(p, view.you) > 14) // never on top of your own arrow
@@ -483,7 +488,7 @@ export class FullMap {
     }
     for (const a of view.areas) {
       const el = document.createElement('div');
-      const locked = metres(a, view.open) > view.open.radius;
+      const locked = !inAny(view.open, a);
       el.className = locked ? 'fm-area locked' : 'fm-area';
       el.innerHTML = locked ? `🔒 ${a.name}<small>Opens later in the story</small>` : a.name;
       this.markers.push(new maplibregl.Marker({ element: el }).setLngLat([a.lng, a.lat]).addTo(this.map));

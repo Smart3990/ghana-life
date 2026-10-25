@@ -264,6 +264,13 @@ export class Places {
     }
   }
 
+  /** Take away the signs, stops and stations standing on a plot (Uncle Kwame's compound goes there). */
+  clearArea(x: number, z: number, r: number) {
+    const before = this.all.length;
+    this.all = this.all.filter((p) => Math.hypot(p.x - x, p.z - z) > r);
+    if (this.all.length !== before) this.last.n = -1;
+  }
+
   /** Every place found so far, with what it is (for the big map). */
   list() {
     return this.all.map((p) => ({ x: p.x, z: p.z, kind: p.kind === 'fuel' ? 'FILLING STATION' : p.kind === 'stop' ? 'BUS STOP' : SIGNS[p.row].label }));

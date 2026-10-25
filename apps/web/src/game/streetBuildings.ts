@@ -61,15 +61,34 @@ function clip(ring: { x: number; y: number }[]) {
   return pts;
 }
 
+// A plot cleared of the map's buildings (Uncle Kwame's compound stands there): centre, its turn, and
+// half its size. Buildings there are not drawn and do not block.
+const CLEAR = { a: { value: new THREE.Vector4(0, 0, 1, 0) }, b: { value: new THREE.Vector4(0, 0, 0, 0) } };
+
 // The wall material: lit like everything else, with windows, doors and shutters painted in by the shader.
 function wallMaterial() {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0 });
   m.onBeforeCompile = (shader) => {
+    shader.uniforms.uClearA = CLEAR.a;
+    shader.uniforms.uClearB = CLEAR.b;
     shader.vertexShader = shader.vertexShader
-      .replace('void main() {', 'attribute vec3 facade;\nvarying vec3 vFacade;\nvoid main() {\n  vFacade = facade;')
+      .replace('void main() {', 'attribute vec3 facade;\nvarying vec3 vFacade;\nvarying vec2 vClearP;\nvoid main() {\n  vFacade = facade;\n  vClearP = position.xz;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>');
     shader.fragmentShader = shader.fragmentShader
-      .replace('void main() {', 'varying vec3 vFacade;\nvoid main() {')
+      .replace(
+        'void main() {',
+        `varying vec3 vFacade;
+varying vec2 vClearP;
+uniform vec4 uClearA;
+uniform vec4 uClearB;
+void main() {
+  if (uClearB.z > 0.5) {
+    vec2 d = vClearP - uClearA.xy;
+    float cu = -(d.x * uClearA.z + d.y * uClearA.w);
+    float cv = d.x * uClearA.w - d.y * uClearA.z;
+    if (abs(cu) < uClearB.x && abs(cv) < uClearB.y) discard;
+  }`,
+      )
       .replace(
         '#include <color_fragment>',
         `#include <color_fragment>
@@ -359,8 +378,24 @@ export class StreetBuildings {
     this.pending.clear();
   }
 
+  /** Clear a plot of the map's buildings (centre, the way it faces, half width and half depth). */
+  clearPlot(x: number, z: number, face: number, halfW: number, halfD: number) {
+    CLEAR.a.value.set(x, z, Math.cos(face), Math.sin(face));
+    CLEAR.b.value.set(halfW, halfD, 1, 0);
+    this.plot = { x, z, c: Math.cos(face), s: Math.sin(face), hw: halfW, hd: halfD };
+  }
+  private plot: { x: number; z: number; c: number; s: number; hw: number; hd: number } | null = null;
+  private inPlot(x: number, z: number) {
+    const p = this.plot;
+    if (!p) return false;
+    const dx = x - p.x;
+    const dz = z - p.z;
+    return Math.abs(-(dx * p.c + dz * p.s)) < p.hw && Math.abs(dx * p.s - dz * p.c) < p.hd;
+  }
+
   /** True if the point (metres) is inside a building. */
   blocked(x: number, z: number, margin = 0.3) {
+    if (this.inPlot(x, z)) return false;
     const cx = Math.floor(x / CELL_M);
     const cz = Math.floor(z / CELL_M);
     for (let i = -1; i <= 1; i++) {

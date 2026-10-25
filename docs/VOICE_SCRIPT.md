@@ -21,8 +21,8 @@ Lines with `{...}` in them say a name the game fills in (your hometown, a place)
 
 | File | Line |
 | --- | --- |
+| `hey-my-bag-thief.mp3` | Hey! My bag! Thief! |
 | `move-move-my-bag.mp3` | Move! Move! My bag! |
-| `hey-my-bag.mp3` | Hey! My bag! |
 | `hey-my-daughter-come-come-here.mp3` | Hey! My daughter! Come, come here! |
 | `hey-my-son-come-come-here.mp3` | Hey! My son! Come, come here! |
 
@@ -66,7 +66,7 @@ Lines with `{...}` in them say a name the game fills in (your hometown, a place)
 | --- | --- |
 | `a-boy-took-my-bag-my-money-my-phone-everything.mp3` | A boy took my bag. My money, my phone… everything. |
 | `my-uncle-uncle-kwame.mp3` | My uncle. Uncle Kwame. |
-| `everything-is-moving-so-fast.mp3` | Everything is moving so fast… |
+| `uncle-is-nima-far.mp3` | Uncle, is Nima far? |
 
 ## Story: Uncle Kwame
 
@@ -81,7 +81,19 @@ Lines with `{...}` in them say a name the game fills in (your hometown, a place)
 | (filled in by the game) | {dayName}! Welcome to Accra. Come, let us go home. |
 | `welcome-home-this-is-our-compound-come-in-let-me-show-you-yo.mp3` | Welcome home. This is our compound. Come in, let me show you your corner. |
 | `this-is-accra-busy-busy-you-will-learn-it-fast.mp3` | This is Accra. Busy, busy. You will learn it fast. |
-| `ha-tomorrow-i-will-show-you-around-today-you-rest.mp3` | Ha! Tomorrow I will show you around. Today, you rest. |
+| `not-far-fifteen-minutes-if-the-traffic-allows-ha.mp3` | Not far. Fifteen minutes, if the traffic allows. Ha! |
+| `tomorrow-i-will-show-you-around-today-you-rest.mp3` | Tomorrow I will show you around. Today, you rest. |
+
+## You, chasing the thief
+
+*Who:* You, the player (shouting while running)
+
+| File | Line |
+| --- | --- |
+| `thief-thief.mp3` | Thief! Thief! |
+| `stop-him-stop-that-boy.mp3` | Stop him! Stop that boy! |
+| `somebody-hold-him.mp3` | Somebody hold him! |
+| `my-bag-thief.mp3` | My bag! Thief! |
 
 ## Drivers when you stand in the road
 
@@ -522,4 +534,4 @@ Lines with `{...}` in them say a name the game fills in (your hometown, a place)
 
 ---
 
-256 lines to record.
+261 lines to record.

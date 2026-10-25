@@ -121,6 +121,7 @@ walkAll(test, (a) => {
 
 // 2. Drivers, mates and people in the street.
 const LISTS = [
+  [test, 'CHASE_SHOUTS', 'You, chasing the thief', 'You, the player (shouting while running)'],
   [test, 'SHOUTS', 'Drivers when you stand in the road', 'Drivers (men, annoyed but not angry, shouting from the car)'],
   [test, 'MATE_SHOUTS', 'Trotro mates when you stand in the road', 'Trotro mates (young men, loud)'],
   [test, 'PUSH_LINES', 'A driver who gets down to push you aside', 'Driver (man, firm)'],
