@@ -23,7 +23,7 @@ type ToLocal = (lng: number, lat: number) => [number, number];
 type Footprint = { ring: Float32Array; minX: number; maxX: number; minZ: number; maxZ: number };
 /** A road from the tiles, in local metres: kind is the map's road kind (major_road, minor_road, ...). */
 // edge: a lane, service road or flyover. It only keeps stalls and trees off its tarmac (no traffic, no pavements).
-export type StreetLine = { kind: string; pts: Float32Array; edge?: boolean };
+export type StreetLine = { kind: string; pts: Float32Array; edge?: boolean; bridge?: boolean };
 /** The middle of a roof: where tanks and signs can go. */
 export type Roof = { x: number; z: number; top: number; id: number };
 export type StreetsListener = (roads: StreetLine[], roofs: Roof[]) => void;
@@ -213,7 +213,7 @@ export class StreetBuildings {
             // Only the part inside this tile (the border is repeated in the next tile).
             let run: number[] = [];
             const flush = () => {
-              if (run.length >= 4) roads.push({ kind, pts: new Float32Array(run), edge });
+              if (run.length >= 4) roads.push({ kind, pts: new Float32Array(run), edge, bridge: !!f.properties.is_bridge });
               run = [];
             };
             for (const p of line) {

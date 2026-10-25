@@ -202,6 +202,13 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
   - **Film clip in the opening:** the owner's 10-second ImagineArt clip (waking up, Grandma, the ₵50 and her letter, the bus leaving) now plays in the film with subtitles, in place of the first three pictures. Shrunk from 4 MB to 640 KB (854×480), in MP4 and WebM so every phone can play it; it starts downloading on the START tap and is unlocked by that tap so it plays with its sound. Light phones, Data Saver and 2G/3G connections keep the moving pictures (330 KB). If the clip is not ready within 4 s, the pictures are used.
   - **Vehicles painted like Circle** (from the owner's Circle photos): taxis in dark body colours with orange-yellow front and back corners and a yellow roof sign; trotros white on top with a yellow stripe and a white or blue lower body; buses in Metro yellow with a blue and red stripe; pickups loaded high with wooden crates. The pack's truck (a tractor unit) is dropped; the cargo truck built in code stays.
 
+- **Circle looks like Circle (2026-10-25, from the owner's Circle photos):**
+  - **The Kwame Nkrumah Interchange in 3D** (`src/game/flyovers.ts`): every road the map marks as a bridge becomes a concrete flyover about 7 m up, with low walls along both edges and round pillars every 24 m, sloping down where it ends. Nothing drives on it yet (scenery).
+  - **Electricity poles and wires** along one side of every street: concrete poles with crossbars every 30 m or so, three sagging wires between neighbours (about 2,500 poles around Circle, wires drawn only near you).
+  - **Billboards** along the main roads, on two legs behind the pavement, with the game's own made-up adverts (Sika Mobile Money, Auntie Akos Kelewele, Verse FM, Ghanaverse, Akos Pure Water). These are the in-world ad spaces of brief 18.1, ready for real advertisers later.
+  - **Motor kings:** half of the tricycles are now cargo tricycles (mostly orange) loaded with sacks and a crate.
+  - Real photos from the internet are used only to look at, never put into the game, unless their licence allows it (CLAUDE.md rule); the owner's own photos and paid, licensed photos can be used and recorded in LICENSES.md.
+
 ## Waiting on the owner
 
 - Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.

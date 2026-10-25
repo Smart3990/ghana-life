@@ -59,6 +59,70 @@ function palm(): Part {
   return merge(parts);
 }
 
+// An electricity pole: a weathered concrete post with a crossbar and three insulators (the wires
+// between poles are drawn separately).
+function powerPole(): Part {
+  return merge([
+    paint(new THREE.CylinderGeometry(0.1, 0.14, 8.4, 6).translate(0, 4.2, 0), '#9a958b'),
+    paint(box(1.5, 0.1, 0.1, 0, 7.6, 0), '#6b665e'),
+    paint(box(0.08, 0.18, 0.08, -0.6, 7.74, 0), '#e9e5dc'),
+    paint(box(0.08, 0.18, 0.08, 0, 7.74, 0), '#e9e5dc'),
+    paint(box(0.08, 0.18, 0.08, 0.6, 7.74, 0), '#e9e5dc'),
+  ]);
+}
+
+// A billboard on two legs: the frame and legs (the poster is a separate picture).
+function billboardFrame(): Part {
+  return merge([
+    paint(box(0.25, 6, 0.25, -2.6, 3, -0.2), '#5d5a55'),
+    paint(box(0.25, 6, 0.25, 2.6, 3, -0.2), '#5d5a55'),
+    paint(box(8.4, 4.4, 0.18, 0, 7.2, -0.12), '#3e3c39'),
+    paint(box(8.4, 0.12, 0.6, 0, 4.95, 0.1), '#5d5a55'), // the walkway under the poster
+  ]);
+}
+
+// Posters for the game's own made-up brands (painted in code; no real brands in the city). These are
+// the in-world ad spaces of design brief 18.1: real advertisers' posters can replace them later.
+function poster(n: number): THREE.CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = 512;
+  c.height = 256;
+  const g = c.getContext('2d')!;
+  const designs = [
+    { bg: ['#0f6b3a', '#1c9b57'], big: 'SIKA MOBILE MONEY', small: 'Send money home in seconds', accent: '#f2c21a' },
+    { bg: ['#c2410c', '#f08a24'], big: 'AUNTIE AKOS KELEWELE', small: 'Hot and spicy, every evening', accent: '#fff3c4' },
+    { bg: ['#4a1d6e', '#7a3fb0'], big: 'VERSE FM', small: 'The sound of the city', accent: '#ffd25a' },
+    { bg: ['#121a14', '#2a3a2e'], big: 'GHANAVERSE', small: 'Your Accra. Your story.', accent: '#e3a92b' },
+    { bg: ['#0b4f8a', '#2a86d1'], big: 'AKOS PURE WATER', small: 'Clean sachet water, ice cold', accent: '#ffffff' },
+  ];
+  const d = designs[n % designs.length];
+  const grad = g.createLinearGradient(0, 0, 512, 256);
+  grad.addColorStop(0, d.bg[0]);
+  grad.addColorStop(1, d.bg[1]);
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 512, 256);
+  // A kente strip along the bottom on every poster.
+  const kente = ['#e3a92b', '#121a14', '#c8442e', '#121a14', '#2f8f57', '#121a14', '#1f5fa8', '#121a14'];
+  for (let x = 0, i = 0; x < 512; x += 16, i++) {
+    g.fillStyle = kente[i % kente.length];
+    g.fillRect(x, 232, 16, 24);
+  }
+  g.fillStyle = d.accent;
+  g.beginPath();
+  g.arc(440, 96, 58, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = '#ffffff';
+  g.font = '900 46px system-ui, sans-serif';
+  g.fillText(d.big, 28, 108, 380);
+  g.fillStyle = d.accent;
+  g.font = '700 26px system-ui, sans-serif';
+  g.fillText(d.small, 30, 160, 380);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
+}
+
 function streetLight(): Part {
   return merge([
     paint(new THREE.CylinderGeometry(0.07, 0.1, 7.5, 6).translate(0, 3.75, 0), '#7d8287'),
@@ -204,6 +268,19 @@ export class StreetLife {
     this.kiosks = make(kiosk(), true);
     this.umbrellas = make(umbrella(), true);
     this.tanks = make(polytank(), false);
+    this.poles = make(powerPole(), false);
+    this.boards = make(billboardFrame(), false);
+    // Posters: one batch per design.
+    for (let n = 0; n < 5; n++) {
+      const mesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(8, 4).translate(0, 7.2, -0.02), new THREE.MeshStandardMaterial({ map: poster(n), roughness: 0.7 }), 40);
+      mesh.count = 0;
+      mesh.frustumCulled = false;
+      this.posters.push(mesh);
+      this.group.add(mesh);
+    }
+    this.wires = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0x1d1d1d, transparent: true, opacity: 0.85 }));
+    this.wires.frustumCulled = false;
+    this.group.add(this.wires);
     this.shadowBatch = new THREE.InstancedMesh(
       new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2),
       new THREE.MeshBasicMaterial({ map: shadowTexture(), transparent: true, depthWrite: false }),
@@ -227,6 +304,11 @@ export class StreetLife {
   private kiosks: Batch;
   private umbrellas: Batch;
   private tanks: Batch;
+  private poles!: Batch;
+  private boards!: Batch;
+  private posters: THREE.InstancedMesh[] = [];
+  private wires!: THREE.LineSegments;
+  private spans: number[] = []; // wires between neighbouring poles: x1, z1, x2, z2, angle
 
   // Everyone who will be out on the streets, with their looks fixed for the session.
   private async makePeople() {
@@ -329,6 +411,15 @@ export class StreetLife {
     this.umbrellas.all = clear(this.umbrellas.all, 0.9);
     this.trees.all = clear(this.trees.all, 0.5);
     this.palms.all = clear(this.palms.all, 0.5);
+    this.poles.all = clear(this.poles.all, 0.3);
+    this.boards.all = clear(this.boards.all, 2.5);
+    const spans: number[] = [];
+    for (let i = 0; i < this.spans.length; i += 5) {
+      // A wire whose pole is now on a road goes too.
+      if (this.onRoad(this.spans[i], this.spans[i + 1], 0.3) || this.onRoad(this.spans[i + 2], this.spans[i + 3], 0.3)) continue;
+      spans.push(...this.spans.slice(i, i + 5));
+    }
+    this.spans = spans;
     this.gatherings = this.gatherings.filter((g) => !this.onRoad(g.x, g.z, 0.9));
     this.footballSpots = this.footballSpots.filter((g) => !this.onRoad(g.x, g.z, 2));
     // Lanes, service roads and flyovers only keep the tarmac clear; everything else is placed along
@@ -356,6 +447,23 @@ export class StreetLife {
           const edge = size.half + GUTTER + size.walk;
           const at = (extra: number) => [x - dz * (edge + extra) * side, z + dx * (edge + extra) * side] as const;
           const facing = angle + (side > 0 ? -Math.PI / 2 : Math.PI / 2); // facing the road
+          if (Math.round(s / spacing) % 2 === 1) {
+            // Electricity poles along one side of every street, with wires from pole to pole.
+            const off = size.half + GUTTER + size.walk + 0.35;
+            const [px, pz] = [x + dz * off, z - dx * off];
+            if (this.free(px, pz, 0.3)) {
+              this.poles.all.push({ x: px, z: pz, angle, scale: 1, colour: 0 });
+              const last = this.lastPole.get(road);
+              if (last && Math.hypot(last[0] - px, last[1] - pz) < 45) this.spans.push(last[0], last[1], px, pz, angle);
+              this.lastPole.set(road, [px, pz]);
+            }
+          }
+          if (road.kind !== 'minor_road' && Math.round(s / spacing) % 9 === 4 && hash(x, z * 3) < 0.6) {
+            // Billboards along the big roads, set back behind the pavement, facing the traffic.
+            const back = size.half + GUTTER + size.walk + 2.2;
+            const [bx, bz] = [x - dz * back * side, z + dx * back * side];
+            if (this.free(bx, bz, 2.8)) this.boards.all.push({ x: bx, z: bz, angle: facing, scale: 1, colour: Math.floor(hash(bx, bz) * 5) });
+          }
           if (road.kind !== 'minor_road' && Math.round(s / spacing) % 2 === 0) {
             // Street lights along the big roads, at the kerb.
             const [lx, lz] = [x - dz * (size.half + GUTTER + 0.3) * side, z + dx * (size.half + GUTTER + 0.3) * side];
@@ -502,7 +610,7 @@ export class StreetLife {
         b.mesh.setMatrixAt(n, this.m);
         if (b.tint) b.mesh.setColorAt(n, this.colour.set(s.colour));
         n++;
-        if (y === 0 && b !== this.lights && shadows < this.opts.props) {
+        if (y === 0 && b !== this.lights && b !== this.poles && b !== this.boards && shadows < this.opts.props) {
           const size = b === this.kiosks ? 3.4 : b === this.umbrellas ? 2.6 : 3.2 * s.scale;
           this.m.compose(this.p.set(s.x, 0.04, s.z), this.q, this.sc.set(size, 1, size));
           this.shadowBatch.setMatrixAt(shadows++, this.m);
@@ -513,6 +621,46 @@ export class StreetLife {
       if (b.mesh.instanceColor) b.mesh.instanceColor.needsUpdate = true;
     }
     this.propShadows = shadows;
+    // Posters on the billboards near the player (each design is its own batch).
+    const counts = this.posters.map(() => 0);
+    for (const bd of this.boards.all) {
+      if ((bd.x - x) ** 2 + (bd.z - z) ** 2 > r2) continue;
+      const k = bd.colour % this.posters.length;
+      if (counts[k] >= 40) continue;
+      this.q.setFromAxisAngle(this.up, Math.PI - bd.angle);
+      this.m.compose(this.p.set(bd.x, 0, bd.z), this.q, this.sc.setScalar(1));
+      this.posters[k].setMatrixAt(counts[k]++, this.m);
+    }
+    this.posters.forEach((m, k) => {
+      m.count = counts[k];
+      m.instanceMatrix.needsUpdate = true;
+    });
+    // Wires: three per span, sagging a little in the middle.
+    const w: number[] = [];
+    const wireReach = Math.min(160, this.opts.radiusM);
+    for (let i = 0; i < this.spans.length; i += 5) {
+      const [x1, z1, x2, z2, a] = [this.spans[i], this.spans[i + 1], this.spans[i + 2], this.spans[i + 3], this.spans[i + 4]];
+      if (Math.abs(x1 - x) > wireReach || Math.abs(z1 - z) > wireReach) continue;
+      const cx = Math.cos(a);
+      const cz = Math.sin(a);
+      for (const o of [-0.6, 0, 0.6]) {
+        let px = x1 + cx * o;
+        let pz = z1 + cz * o;
+        let py = 7.82;
+        for (let k = 1; k <= 4; k++) {
+          const f = k / 4;
+          const nx = x1 + (x2 - x1) * f + cx * o;
+          const nz = z1 + (z2 - z1) * f + cz * o;
+          const ny = 7.82 - Math.sin(f * Math.PI) * 0.45;
+          w.push(px, py, pz, nx, ny, nz);
+          [px, py, pz] = [nx, ny, nz];
+        }
+      }
+    }
+    this.wires.geometry.dispose();
+    const wg = new THREE.BufferGeometry();
+    wg.setAttribute('position', new THREE.Float32BufferAttribute(w, 3));
+    this.wires.geometry = wg;
     // The solid things near the player: you cannot walk or ride through them.
     this.solids = [];
     const near = (list: Spot[], r: number, box = false) => {
@@ -524,9 +672,12 @@ export class StreetLife {
     near(this.lights.all, 0.12);
     near(this.tanks.all, 0.6);
     near(this.umbrellas.all, 0.45);
+    near(this.poles.all, 0.18);
+    near(this.boards.all, 0.2); // only the legs matter; the posters are high up
   }
   private propShadows = 0;
   private solids: { x: number; z: number; r: number; angle: number; box: boolean }[] = [];
+  private lastPole = new Map<StreetLine, [number, number]>();
 
   /** Is there a kiosk, tree, pole or tank at this point (with room around it)? */
   solid(x: number, z: number, room: number) {

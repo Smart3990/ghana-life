@@ -15,6 +15,7 @@ import { applyStreetStyle } from '../map/streetStyle';
 import { StreetLife } from '../game/streetLife';
 import type { Nearby } from '../game/streetScenes';
 import { Signals, lightFor } from '../game/signals';
+import { Flyovers } from '../game/flyovers';
 import { box, merge, paint } from '../game/vehicles3d';
 import { SkyTraffic } from '../game/sky3d';
 import { StreetSound } from '../game/streetSound';
@@ -738,6 +739,7 @@ function step(player: Player, dt: number, t: number) {
   }
   if (life) signals.junctions = life.junctions;
   signals.update(state.x, state.z, Date.now() / 1000);
+  flyovers.update();
   streetTraffic?.update(here[0], here[1], Date.now() / 1000, TRAFFIC_LANE_M, state);
   updateStats(dt);
   updateButtons();
@@ -1540,6 +1542,9 @@ const buildings = new StreetBuildings(
   { light: 220, standard: 320, ultra: 450 }[tier],
   (roads, roofs) => {
     life?.add(roads, roofs);
+    // Bridges become real flyovers (the Kwame Nkrumah Interchange at Circle).
+    const ROAD_HALF: Record<string, number> = { highway: 7, major_road: 5, minor_road: 3.25, other: 2.4 };
+    flyovers.add(roads.filter((r) => r.bridge).map((r) => ({ pts: r.pts, half: ROAD_HALF[r.kind] ?? 4 })));
     // Every street the map loads gets traffic too: two lanes each way on main roads, one on others.
     const toLngLat = (x: number, z: number): [number, number] => [START[0] + x / M_LON, START[1] - z / M_LAT];
     pendingRoads.push(
@@ -1586,6 +1591,10 @@ function placeBubbles(now: number) {
     if (visible) b.el.style.transform = `translate(${((projected.x / projected.w + 1) / 2) * w}px, ${((1 - projected.y / projected.w) / 2) * h}px) translate(-50%, -100%)`;
   }
 }
+
+// Flyovers built from the map's bridges.
+const flyovers = new Flyovers();
+scene.add(flyovers.group);
 
 // Traffic lights and zebra crossings at the big junctions (vehicles stop on red).
 const signals = new Signals();
@@ -1645,7 +1654,7 @@ async function start() {
     streetTraffic.signals = signals;
     if (life) life.vehicleAt = vehicleAt;
     streetTraffic.onHoot = (x, z) => honk(Math.hypot(x - state.x, z - state.z), true);
-    if (debug) Object.assign(window, { __street: { state, sky, look, life, story, thief, signals, lightFor, traffic: streetTraffic, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
+    if (debug) Object.assign(window, { __street: { state, sky, look, life, story, thief, signals, lightFor, flyovers, pinch, traffic: streetTraffic, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
   });
 
   document.getElementById('loading')!.remove();

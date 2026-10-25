@@ -14,7 +14,7 @@ import type { Kind, Placed, Traffic } from './traffic';
 // scripts/vehicles. Each file has a "paint" part (repainted per vehicle) and a "fixed" part (glass,
 // lights, tyres). Until they have downloaded, the shapes built in code below are shown.
 // Batches: each kind, plus a second car model so the streets mix sedans and hatchbacks.
-type BatchKey = Kind | 'hatch';
+type BatchKey = Kind | 'hatch' | 'motorking';
 const MODERN: Partial<Record<BatchKey, string>> = {
   car: 'sedan',
   hatch: 'hatch',
@@ -221,6 +221,39 @@ function trotro(): Model {
   return { body, fixed: merge(fixed), shadow: [2.4, 6.2] };
 }
 
+function motorKing(): Model {
+  // Cargo tricycle ("motor king" / aboboyaa): a motorbike front pulling a painted steel cargo box,
+  // loaded high with sacks and crates, a rider in front.
+  const body = merge([
+    box(1.4, 0.08, 1.9, 0, 0.62, -0.75), // cargo floor
+    box(0.06, 0.55, 1.9, 0.7, 0.9, -0.75), // sides
+    box(0.06, 0.55, 1.9, -0.7, 0.9, -0.75),
+    box(1.4, 0.55, 0.06, 0, 0.9, -1.7), // tailgate
+    box(1.4, 0.75, 0.06, 0, 1.0, 0.2), // front board
+    box(0.3, 0.32, 0.6, 0, 0.62, 0.65), // tank and engine cover
+  ]);
+  const skin = '#4e3322';
+  const sack = (x: number, y: number, z: number, c: string) => paint(new THREE.SphereGeometry(0.36, 8, 6).scale(1, 0.62, 1.15).translate(x, y, z), c);
+  const fixed: Part[] = [
+    sack(-0.34, 1.05, -0.4, '#c9b48a'), sack(0.34, 1.05, -0.4, '#bba57c'), sack(-0.34, 1.05, -1.2, '#c4ae84'), sack(0.34, 1.05, -1.2, '#d1bd94'),
+    sack(0, 1.48, -0.8, '#bfa97f'), sack(-0.3, 1.45, -1.35, '#2f6b3f'),
+    paint(box(0.5, 0.4, 0.45, 0.35, 1.5, -1.35), '#3a5fa8'), // a blue crate on top
+    paint(box(0.3, 0.1, 0.5, 0, 0.88, 0.62), '#1f1f1f'), // seat
+    paint(box(0.7, 0.04, 0.04, 0, 1.18, 1.0), TRIM), // handlebar
+    paint(box(0.05, 0.6, 0.05, 0, 0.85, 1.02), TRIM), // fork
+    paint(box(0.14, 0.12, 0.08, 0, 1.0, 1.08), HEAD),
+    // The rider
+    paint(box(0.36, 0.5, 0.26, 0, 1.2, 0.6), '#7a7f86'),
+    paint(new THREE.SphereGeometry(0.12, 10, 8).translate(0, 1.58, 0.62), skin),
+    paint(box(0.12, 0.42, 0.12, 0.13, 0.78, 0.8), '#3b5f8a'),
+    paint(box(0.12, 0.42, 0.12, -0.13, 0.78, 0.8), '#3b5f8a'),
+    ...wheel(0.27, 0.12, 0, 1.05),
+    ...wheel(0.27, 0.16, 0.62, -1.0),
+    ...wheel(0.27, 0.16, -0.62, -1.0),
+  ];
+  return { body, fixed: merge(fixed), shadow: [1.7, 3.2] };
+}
+
 function pragya(): Model {
   // Passenger tricycle: painted canopy and side panels, a driver in front.
   const body = merge([
@@ -405,7 +438,7 @@ export class StreetTraffic {
   ) {
     const paintMat = new THREE.MeshStandardMaterial({ roughness: 0.38, metalness: 0.25 });
     const fixedMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, metalness: 0.1 });
-    const models: Record<BatchKey, Model> = { car: car(false), hatch: car(false), taxi: car(true), trotro: trotro(), tricycle: pragya(), okada: okada(), bus: bus(), truck: truck(), pickup: pickup(), suv: suv() };
+    const models: Record<BatchKey, Model> = { car: car(false), hatch: car(false), motorking: motorKing(), taxi: car(true), trotro: trotro(), tricycle: pragya(), okada: okada(), bus: bus(), truck: truck(), pickup: pickup(), suv: suv() };
     this.batches = {} as typeof this.batches;
     for (const [kind, model] of Object.entries(models) as [BatchKey, Model][]) {
       const look = kind === 'taxi' || kind === 'trotro' || kind === 'bus' ? livery(paintMat, kind) : paintMat;
@@ -602,11 +635,12 @@ export class StreetTraffic {
       }
     }
     this.boxes = local.map((a) => ({ x: a.x, z: a.z, fx: a.fx, fz: a.fz, half: a.half, halfW: a.halfW }));
-    const counts: Record<BatchKey, number> = { car: 0, hatch: 0, taxi: 0, trotro: 0, tricycle: 0, okada: 0, bus: 0, truck: 0, pickup: 0, suv: 0 };
+    const counts: Record<BatchKey, number> = { car: 0, hatch: 0, motorking: 0, taxi: 0, trotro: 0, tricycle: 0, okada: 0, bus: 0, truck: 0, pickup: 0, suv: 0 };
     let shadowCount = 0;
     for (const p of placed) {
       // Cars are a mix: about one in three is a small hatchback.
-      const key: BatchKey = p.v.kind === 'car' && p.v.id % 3 === 0 ? 'hatch' : p.v.kind;
+      // Tricycles: half carry passengers (pragya), half carry goods (motor king, painted orange or blue).
+      const key: BatchKey = p.v.kind === 'car' && p.v.id % 3 === 0 ? 'hatch' : p.v.kind === 'tricycle' && p.v.id % 2 === 0 ? 'motorking' : p.v.kind;
       const b = this.batches[key];
       const i = counts[key]++;
       const [x, z] = this.toLocal(p.lon, p.lat);
