@@ -8,6 +8,7 @@ import { paint, merge } from './vehicles3d';
 const HIGH = 7; // deck height, metres
 const SLOPE = 0.11; // how steeply the ends come down
 const PILLAR_EVERY = 24;
+const LOW = 4.5; // below this a deck is a solid ramp, not a bridge you can pass under
 
 type Line = { pts: Float32Array; half: number; heights?: Float32Array };
 
@@ -20,6 +21,8 @@ export class Flyovers {
   private bannerMat = new THREE.MeshStandardMaterial({ map: bannerTexture(), roughness: 0.6, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 });
   private banners: THREE.Mesh | null = null;
   private seen = new Set<string>();
+  /** Goes up each time the flyovers are rebuilt (so traffic re-checks its routes). */
+  version = 0;
 
   add(lines: Line[]) {
     for (const l of lines) {
@@ -37,10 +40,20 @@ export class Flyovers {
     return deckHeightAt(this.lines, x, z);
   }
 
+  /**
+   * Where a flyover comes down low (under 4.5 m) it is a solid ramp with walls to the ground: nothing
+   * can pass under it. Returns true at a point inside such a ramp (for traffic and for walking).
+   */
+  lowRampAt(x: number, z: number) {
+    const h = deckHeightAt(this.lines, x, z, 0.4);
+    return h > 0.05 && h < LOW;
+  }
+
   /** Rebuild the flyovers if new ones arrived (cheap: a few dozen pieces). */
   update() {
     if (!this.dirty) return;
     this.dirty = false;
+    this.version++;
     if (this.mesh) {
       this.group.remove(this.mesh);
       this.mesh.geometry.dispose();
@@ -76,6 +89,8 @@ export class Flyovers {
         const h1 = height(cum[i]);
         const h2 = height(cum[i + 1]);
         parts.push(deckPiece(x1, z1, h1, x2, z2, h2, half));
+        // Low parts: retaining walls down to the ground on both sides (a solid ramp, like the real ones).
+        if (Math.min(h1, h2) < LOW) parts.push(rampWalls(x1, z1, Math.min(h1, LOW), x2, z2, Math.min(h2, LOW), half));
         // Long banners along the side of the deck on high, straight stretches (as on Circle's flyovers).
         if (len > 22 && Math.min(h1, h2) > 5.5 && bannerCount < 40 && (i + Math.round(x1)) % 2 === 0) {
           bannerCount++;
@@ -164,7 +179,28 @@ function bannerTexture() {
   return t;
 }
 
-export function deckHeightAt(lines: Line[], x: number, z: number) {
+// The two side walls of a low ramp, from the ground up to the deck.
+function rampWalls(x1: number, z1: number, h1: number, x2: number, z2: number, h2: number, half: number) {
+  const len = Math.hypot(x2 - x1, z2 - z1);
+  const ax = -(z2 - z1) / len;
+  const az = (x2 - x1) / len;
+  const pos: number[] = [];
+  for (const side of [1, -1]) {
+    const o = half * side;
+    const a = [x1 + ax * o, 0, z1 + az * o];
+    const b = [x2 + ax * o, 0, z2 + az * o];
+    const c = [x2 + ax * o, Math.max(0, h2 - 0.9), z2 + az * o];
+    const d = [x1 + ax * o, Math.max(0, h1 - 0.9), z1 + az * o];
+    pos.push(...a, ...b, ...c, ...a, ...c, ...d);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.computeVertexNormals();
+  return paint(g, '#a9a59c');
+}
+
+/** The deck height at a point (0 if none). With `edge`, only on the deck itself (its width plus edge metres). */
+export function deckHeightAt(lines: Line[], x: number, z: number, edge?: number) {
   let best = 0;
   let bestD = Infinity;
   for (const l of lines) {
@@ -177,6 +213,7 @@ export function deckHeightAt(lines: Line[], x: number, z: number) {
       const dz = z2 - z1;
       const k = Math.max(0, Math.min(1, ((x - x1) * dx + (z - z1) * dz) / (dx * dx + dz * dz || 1)));
       const d = Math.hypot(x1 + dx * k - x, z1 + dz * k - z);
+      if (edge !== undefined && d > l.half + 0.6 + edge) continue;
       if (d < bestD) [bestD, best] = [d, l.heights[i] + (l.heights[i + 1] - l.heights[i]) * k];
     }
   }

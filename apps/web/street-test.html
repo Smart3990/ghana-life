@@ -410,6 +410,25 @@
       #adcard .ac-cbtn { flex: 1; text-align: center; text-decoration: none; background: #2f8f57; color: #fff; border-radius: 10px; padding: 9px 4px; font: 700 12px system-ui, sans-serif; }
       #adcard .ac-colours button { width: 24px; height: 24px; border-radius: 50%; border: 2px solid transparent; }
       #adcard .ac-colours button.on { border-color: #f2efe6; }
+
+      /* Signboards during the ride to Nima */
+      #car-tag { position: fixed; left: 0; top: 0; z-index: 31; pointer-events: none; display: flex; flex-direction: column; align-items: center; padding: 4px 9px; border-radius: 8px; background: #e3a92b; color: #121a14; font-family: system-ui, sans-serif; box-shadow: 0 3px 10px rgba(0,0,0,.4); }
+      #car-tag[hidden] { display: none; }
+      #car-tag b { font-size: 12px; } #car-tag small { font-size: 10px; font-weight: 600; }
+      #car-tag::after { content: ''; position: absolute; bottom: -7px; left: 50%; margin-left: -6px; border: 6px solid transparent; border-top-color: #e3a92b; border-bottom: 0; }
+      #ride-signs { position: fixed; right: max(16px, var(--safe-r, 0px)); top: 16%; z-index: 31; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; pointer-events: none; font-family: system-ui, sans-serif; }
+      #ride-signs .rs { display: flex; flex-direction: column; min-width: 190px; max-width: 46vw; padding: 9px 14px; border-radius: 8px; border: 3px solid #fff; box-shadow: 0 6px 18px rgba(0,0,0,.45); color: #fff; animation: rs-in .45s cubic-bezier(.2,.9,.3,1.2); transition: transform .5s, opacity .5s; }
+      #ride-signs .rs.out { transform: translateX(40px); opacity: 0; }
+      @keyframes rs-in { from { transform: translateX(60px) scale(.9); opacity: 0; } }
+      #ride-signs .rs b { font: 800 17px system-ui, sans-serif; letter-spacing: .02em; }
+      #ride-signs .rs small { font: 700 12px system-ui, sans-serif; opacity: .92; margin-top: 2px; }
+      #ride-signs .rs-road { background: #0f6b3a; }
+      #ride-signs .rs-area { background: #1f4f8a; }
+      #ride-signs .rs-area b::before { content: '📍 '; }
+      #ride-signs .rs-landmark { background: #6b3e1f; flex-direction: row; align-items: center; gap: 9px; }
+      #ride-signs .rs-landmark i { font-style: normal; font-size: 20px; }
+      #ride-signs .rs-welcome { background: linear-gradient(135deg, #e3a92b, #c8442e); border-color: #121a14; color: #121a14; min-width: 240px; }
+      #ride-signs .rs-welcome b { font-size: 22px; }
     </style>
   </head>
   <body>

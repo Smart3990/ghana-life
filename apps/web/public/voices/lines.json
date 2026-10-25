@@ -85,6 +85,11 @@
   "who": "You, the player (young man about 20; a young woman reads them for a female player)"
  },
  {
+  "id": "thank-you-uncle-medaase",
+  "line": "Thank you, Uncle. Medaase.",
+  "who": "You, the player (young man about 20; a young woman reads them for a female player)"
+ },
+ {
   "id": "uncle-is-nima-far",
   "line": "Uncle, is Nima far?",
   "who": "You, the player (young man about 20; a young woman reads them for a female player)"
@@ -110,13 +115,23 @@
   "who": "Uncle Kwame (man about 55, deep and calm)"
  },
  {
-  "id": "welcome-home-this-is-our-compound-come-in-let-me-show-you-yo",
-  "line": "Welcome home. This is our compound. Come in, let me show you your corner.",
+  "id": "welcome-home-this-is-our-compound-come-let-me-show-you-your",
+  "line": "Welcome home. This is our compound. Come, let me show you your room.",
   "who": "Uncle Kwame (man about 55, deep and calm)"
  },
  {
-  "id": "this-is-accra-busy-busy-you-will-learn-it-fast",
-  "line": "This is Accra. Busy, busy. You will learn it fast.",
+  "id": "this-is-your-room-it-is-small-but-it-is-yours-the-mattress-i",
+  "line": "This is your room. It is small, but it is yours. The mattress is new.",
+  "who": "Uncle Kwame (man about 55, deep and calm)"
+ },
+ {
+  "id": "rest-well-tomorrow-we-start",
+  "line": "Rest well. Tomorrow, we start.",
+  "who": "Uncle Kwame (man about 55, deep and calm)"
+ },
+ {
+  "id": "this-is-ring-road-busy-busy-you-will-learn-it-fast",
+  "line": "This is Ring Road. Busy, busy. You will learn it fast.",
   "who": "Uncle Kwame (man about 55, deep and calm)"
  },
  {
@@ -125,8 +140,8 @@
   "who": "Uncle Kwame (man about 55, deep and calm)"
  },
  {
-  "id": "tomorrow-i-will-show-you-around-today-you-rest",
-  "line": "Tomorrow I will show you around. Today, you rest.",
+  "id": "this-is-nima-our-home-everybody-knows-everybody-here",
+  "line": "This is Nima. Our home. Everybody knows everybody here.",
   "who": "Uncle Kwame (man about 55, deep and calm)"
  },
  {

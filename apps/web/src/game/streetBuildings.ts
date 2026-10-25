@@ -30,6 +30,24 @@ export type Roof = { x: number; z: number; top: number; id: number };
 export type Poi = { kind: string; name: string; x: number; z: number };
 export type StreetsListener = (roads: StreetLine[], roofs: Roof[], pois: Poi[]) => void;
 
+/** The part of the piece from (ax, ay) to (bx, by) inside the tile, and whether it leaves the tile at its end. */
+function clipToTile(ax: number, ay: number, bx: number, by: number): [number, number, number, number, boolean] | null {
+  let t0 = 0;
+  let t1 = 1;
+  const dx = bx - ax;
+  const dy = by - ay;
+  for (const [p, q] of [[-dx, ax], [dx, EXTENT - ax], [-dy, ay], [dy, EXTENT - ay]]) {
+    if (p === 0) {
+      if (q < 0) return null;
+    } else {
+      const t = q / p;
+      if (p < 0) t0 = Math.max(t0, t);
+      else t1 = Math.min(t1, t);
+    }
+  }
+  if (t0 > t1) return null;
+  return [ax + dx * t0, ay + dy * t0, ax + dx * t1, ay + dy * t1, t1 < 1];
+}
 const tileX = (lng: number) => Math.floor(((lng + 180) / 360) * 2 ** Z);
 const tileY = (lat: number) => {
   const r = (lat * Math.PI) / 180;
@@ -186,14 +204,23 @@ export class StreetBuildings {
     if (dx) want.push([tx + dx, ty]);
     if (dy) want.push([tx, ty + dy]);
     if (dx && dy) want.push([tx + dx, ty + dy]);
-    for (const [wx, wy] of want) {
-      const key = `${wx}/${wy}`;
-      if (this.tiles.has(key)) continue;
-      this.tiles.add(key);
-      this.load(wx, wy);
-    }
+    for (const [wx, wy] of want) this.want(wx, wy);
     void x;
     void z;
+  }
+  private want(tx: number, ty: number) {
+    const key = `${tx}/${ty}`;
+    if (this.tiles.has(key)) return;
+    this.tiles.add(key);
+    this.inflight++;
+    void this.load(tx, ty).finally(() => this.inflight--);
+  }
+  private inflight = 0;
+  /** Loads every tile within `radiusM` of a place now (say, where the story is about to take you). */
+  loadAround([lng, lat]: LngLat, radiusM: number) {
+    const dLat = radiusM / 111195;
+    const dLng = dLat / Math.cos((lat * Math.PI) / 180);
+    for (let tx = tileX(lng - dLng); tx <= tileX(lng + dLng); tx++) for (let ty = tileY(lat + dLat); ty <= tileY(lat - dLat); ty++) this.want(tx, ty);
   }
 
   private async load(tx: number, ty: number) {
@@ -237,12 +264,21 @@ export class StreetBuildings {
               if (run.length >= 4) roads.push({ kind, pts: new Float32Array(run), edge, bridge: !!f.properties.is_bridge, name: f.properties.name ? String(f.properties.name) : undefined });
               run = [];
             };
-            for (const p of line) {
-              if (p.x < 0 || p.y < 0 || p.x > EXTENT || p.y > EXTENT) {
+            // Each piece is cut exactly at the tile's border (a long straight road can cross it in
+            // one piece, which would otherwise be lost from both tiles).
+            const put = (x: number, y: number) => {
+              const [lx, lz] = this.toLocal(...toLngLat(x, y));
+              if (run.length < 2 || run[run.length - 2] !== lx || run[run.length - 1] !== lz) run.push(lx, lz);
+            };
+            for (let i = 1; i < line.length; i++) {
+              const cut = clipToTile(line[i - 1].x, line[i - 1].y, line[i].x, line[i].y);
+              if (!cut) {
                 flush();
                 continue;
               }
-              run.push(...this.toLocal(...toLngLat(p.x, p.y)));
+              put(cut[0], cut[1]);
+              put(cut[2], cut[3]);
+              if (cut[4]) flush(); // it leaves the tile here
             }
             flush();
           }
@@ -413,7 +449,7 @@ export class StreetBuildings {
 
   /** True while new streets are still being built. */
   get loading() {
-    return this.queue.length > 0;
+    return this.queue.length > 0 || this.inflight > 0;
   }
 }
 

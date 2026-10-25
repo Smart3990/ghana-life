@@ -66,6 +66,7 @@ Lines with `{...}` in them say a name the game fills in (your hometown, a place)
 | --- | --- |
 | `a-boy-took-my-bag-my-money-my-phone-everything.mp3` | A boy took my bag. My money, my phone… everything. |
 | `my-uncle-uncle-kwame.mp3` | My uncle. Uncle Kwame. |
+| `thank-you-uncle-medaase.mp3` | Thank you, Uncle. Medaase. |
 | `uncle-is-nima-far.mp3` | Uncle, is Nima far? |
 
 ## Story: Uncle Kwame
@@ -79,10 +80,12 @@ Lines with `{...}` in them say a name the game fills in (your hometown, a place)
 | `auntie-thank-you-oo-god-bless-you-for-looking-after-my-niece.mp3` | Auntie, thank you oo! God bless you for looking after my niece. |
 | `auntie-thank-you-oo-god-bless-you-for-looking-after-my-nephe.mp3` | Auntie, thank you oo! God bless you for looking after my nephew. |
 | (filled in by the game) | {dayName}! Welcome to Accra. Come, let us go home. |
-| `welcome-home-this-is-our-compound-come-in-let-me-show-you-yo.mp3` | Welcome home. This is our compound. Come in, let me show you your corner. |
-| `this-is-accra-busy-busy-you-will-learn-it-fast.mp3` | This is Accra. Busy, busy. You will learn it fast. |
+| `welcome-home-this-is-our-compound-come-let-me-show-you-your.mp3` | Welcome home. This is our compound. Come, let me show you your room. |
+| `this-is-your-room-it-is-small-but-it-is-yours-the-mattress-i.mp3` | This is your room. It is small, but it is yours. The mattress is new. |
+| `rest-well-tomorrow-we-start.mp3` | Rest well. Tomorrow, we start. |
+| `this-is-ring-road-busy-busy-you-will-learn-it-fast.mp3` | This is Ring Road. Busy, busy. You will learn it fast. |
 | `not-far-fifteen-minutes-if-the-traffic-allows-ha.mp3` | Not far. Fifteen minutes, if the traffic allows. Ha! |
-| `tomorrow-i-will-show-you-around-today-you-rest.mp3` | Tomorrow I will show you around. Today, you rest. |
+| `this-is-nima-our-home-everybody-knows-everybody-here.mp3` | This is Nima. Our home. Everybody knows everybody here. |
 
 ## You, chasing the thief
 
@@ -534,4 +537,4 @@ Lines with `{...}` in them say a name the game fills in (your hometown, a place)
 
 ---
 
-261 lines to record.
+264 lines to record.

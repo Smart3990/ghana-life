@@ -32,7 +32,7 @@ import { Minimap } from '../hud/minimap';
 import { FullMap } from '../hud/fullMap';
 import { AdCard, type AdContact } from '../hud/adCard';
 import { forPlayer } from '../game/address';
-import { COMPOUND, compoundHouse, compoundSolid } from '../game/compound';
+import { COMPOUND, compoundHouse, compoundSolid, inYourRoom } from '../game/compound';
 import { AD_COUNT, adThumb } from '../game/adPosters';
 import type { PlaceAt } from '../game/places';
 import { Phone, type MissionRow, type Destination } from '../hud/phone';
@@ -43,8 +43,12 @@ import { Cinema, startScreen, type StartChoice } from '../hud/cinema';
 // ---------- Where and how big ----------
 
 const START: [number, number] = [-0.2166, 5.5694]; // Kwame Nkrumah Circle
-const M_LAT = 110574;
-const M_LON = 111320 * Math.cos((START[1] * Math.PI) / 180);
+// The 3D world is drawn on the map's own grid (Mercator, on MapLibre's round earth of radius
+// 6,371,008.8 m), so metres here must be the map's metres, the same both ways. (The usual 110,574 m
+// per degree north and 111,320 m east put our 3D streets about 8 m off the map at Nima.)
+const MAP_M_PER_DEG = (2 * Math.PI * 6371008.8) / 360;
+const M_LAT = MAP_M_PER_DEG;
+const M_LON = MAP_M_PER_DEG * Math.cos((START[1] * Math.PI) / 180);
 const OKADA_SEAT = new THREE.Vector3(0, 0.86, -0.24); // top of the seat, in the bike's space
 
 // Camera: close and low behind the player on foot, a little higher on the okada.
@@ -384,6 +388,7 @@ const VIEW_TRIES: [number, number, number][] = [];
   add([0, 40, 80, 120, 180], 28, 0.75);
   add([0, 45, 90, 135, 180], 34, 0.55);
 }
+let flyoverVersion = 0;
 let deckNear = false; // is a flyover close (only then are decks checked: it saves work)
 function keepPlayerInView(dt: number, baseBearing: number, basePitch: number) {
   camAvoid.check -= dt;
@@ -734,7 +739,9 @@ function step(player: Player, dt: number, t: number) {
   const stepX = Math.sin(state.heading) * state.speed * dt;
   const stepZ = -Math.cos(state.heading) * state.speed * dt;
   const room = state.onOkada ? 0.7 : 0.3;
-  if (!solidAt(state.x + stepX, state.z + stepZ, room)) {
+  // Already inside something (a kiosk put down where you stand): you can always walk out.
+  const stuck = solidAt(state.x, state.z, room);
+  if (stuck || !solidAt(state.x + stepX, state.z + stepZ, room)) {
     state.x += stepX;
     state.z += stepZ;
   } else if (!solidAt(state.x + stepX, state.z, room)) {
@@ -894,6 +901,10 @@ function step(player: Player, dt: number, t: number) {
   if (life) signals.junctions = life.junctions;
   signals.update(state.x, state.z, Date.now() / 1000);
   flyovers.update();
+  if (flyovers.version !== flyoverVersion) {
+    flyoverVersion = flyovers.version;
+    streetTraffic?.recheckRoutes();
+  }
   if (!bigScreen.isPlaced && life && performance.now() - startedAt > 4000) {
     const spot = life.boardNear(0, 0); // the middle of Circle is the map's start point
     if (spot && Math.hypot(spot.x, spot.z) < 260) {
@@ -931,6 +942,14 @@ function step(player: Player, dt: number, t: number) {
   updateThief(dt);
   updateDriver(dt);
   updateUncle(dt);
+  if (compound.placed && compound.group) {
+    const dx = state.x - compound.x;
+    const dz = state.z - compound.z;
+    const c = Math.cos(compound.face);
+    const sn = Math.sin(compound.face);
+    const roof = compound.group.getObjectByName('roof');
+    if (roof) roof.visible = !story.roomView && !inYourRoom(-(dx * c + dz * sn), dx * sn - dz * c);
+  }
   streetVoices(performance.now() / 1000);
   story.onFrame?.();
   if (auntie.group.visible) auntie.person?.mixer.update(dt);
@@ -975,7 +994,7 @@ function vehicleAt(x: number, z: number, room: number) {
   return null;
 }
 function solidAt(x: number, z: number, room: number) {
-  return buildings.blocked(x, z, room) || !!life?.solid(x, z, room) || !!vehicleAt(x, z, room) || places.solid(x, z, room) || compoundAt(x, z, room);
+  return buildings.blocked(x, z, room) || !!life?.solid(x, z, room) || !!vehicleAt(x, z, room) || places.solid(x, z, room) || compoundAt(x, z, room) || flyovers.lowRampAt(x, z);
 }
 function pushOutOfVehicles(room: number) {
   for (let i = 0; i < 3; i++) {
@@ -1365,6 +1384,8 @@ const story = {
   handsOnHead: false,
   /** The player is out of sight (in Uncle Kwame's car). */
   hidePlayer: false,
+  /** The film is looking into your room: its roof is lifted away. */
+  roomView: false,
   /** The story is running the player towards this point (the chase). */
   autoRun: null as { x: number; z: number; stop?: boolean; walk?: boolean } | null,
 };
@@ -1673,8 +1694,13 @@ function placeAuntie() {
   }
   const pave = life?.pavementNear(state.x + 15, state.z, 2);
   if (pave) tries.push({ x: pave.x, z: pave.z, face: state.heading + Math.PI });
-  for (const t of tries) {
-    if (solidAt(t.x, t.z, 1.2) || life?.roadAt(t.x, t.z, 1.4)) continue;
+  // First a free spot; if kiosks fill them all, she takes the first spot clear of roads and
+  // buildings and the kiosks there move aside.
+  const free = (t: { x: number; z: number }) => !solidAt(t.x, t.z, 1.2) && !life?.roadAt(t.x, t.z, 1.4);
+  const open = (t: { x: number; z: number }) => !buildings.blocked(t.x, t.z, 1.2) && !flyovers.lowRampAt(t.x, t.z) && !life?.roadAt(t.x, t.z, 1.4);
+  const pick = tries.find(free) ?? tries.find(open);
+  if (pick && !free(pick)) life?.clearArea(pick.x, pick.z, 2.6);
+  for (const t of pick ? [pick] : []) {
     // The stall's model faces +z: turn it so the customer's chair is on the road side.
     auntie.group.position.set(t.x, 0, t.z);
     auntie.group.rotation.y = Math.PI - t.face;
@@ -2204,6 +2230,82 @@ const pause = (seconds: number) =>
     tick();
   });
 
+// ---------- The way to Nima (the ride's route and signboards) ----------
+// The real road route from Circle to Nima (public/data/route-nima.json, found on our own map tiles
+// by scripts/route/nima-route.mjs), and what you pass on the way: roads, areas and public landmarks
+// (no businesses or brands).
+type RideSign = { at: number; kind: 'road' | 'area' | 'landmark' | 'welcome'; name: string; sub?: string; icon?: string };
+const RIDE_SIGNS: RideSign[] = [
+  { at: 100, kind: 'road', name: 'Kwame Nkrumah Interchange' },
+  { at: 222, kind: 'landmark', name: 'Circle Lorry Station', icon: '🚌' },
+  { at: 270, kind: 'landmark', name: 'Ghana National Fire Service', icon: '🚒' },
+  { at: 380, kind: 'road', name: 'Ring Road Central', sub: '↑ Nima · Kanda' },
+  { at: 700, kind: 'area', name: 'Kokomlemle' },
+  { at: 920, kind: 'area', name: 'Asylum Down' },
+  { at: 1500, kind: 'road', name: 'Ring Road Central', sub: '← Nima · Kanda   Osu →' },
+  { at: 1900, kind: 'road', name: 'Al-Waleed Bin Talal Highway' },
+  { at: 1990, kind: 'landmark', name: 'Nima Police Station', icon: '👮' },
+  { at: 2267, kind: 'landmark', name: 'Nima Cluster of Schools', icon: '🏫' },
+  { at: 2420, kind: 'road', name: 'Nima Roundabout' },
+  { at: 2434, kind: 'landmark', name: 'Nima Government Clinic', icon: '🏥' },
+  { at: 2770, kind: 'landmark', name: 'Nima Market', icon: '🧺' },
+  { at: 2900, kind: 'landmark', name: 'Nima Post Office', icon: '📮' },
+  { at: 2940, kind: 'welcome', name: 'Welcome to Nima', sub: 'Ayawaso East · Accra' },
+];
+type Way = { length: number; at: (d: number) => { x: number; z: number; heading: number } };
+const nimaRoute: Promise<Way | null> = fetch('/data/route-nima.json')
+  .then((r) => (r.ok ? r.json() : null))
+  .then((j: { path: [number, number][] } | null) => {
+    if (!j?.path?.length) return null;
+    const pts = j.path.map(([lng, lat]) => ({ x: (lng - START[0]) * M_LON, z: (START[1] - lat) * M_LAT }));
+    const cum = [0];
+    for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z));
+    return {
+      length: cum[cum.length - 1],
+      at: (d: number) => {
+        let i = 1;
+        while (i < pts.length - 1 && cum[i] < d) i++;
+        const a = pts[i - 1];
+        const b = pts[i];
+        const k = Math.max(0, Math.min(1, (d - cum[i - 1]) / (cum[i] - cum[i - 1] || 1)));
+        return { x: a.x + (b.x - a.x) * k, z: a.z + (b.z - a.z) * k, heading: Math.atan2(b.x - a.x, -(b.z - a.z)) };
+      },
+    };
+  })
+  .catch(() => null);
+// A small gold tag over Uncle Kwame's car during the ride (seen from above it is only a few pixels).
+const carTag = (() => {
+  const el = document.createElement('div');
+  el.id = 'car-tag';
+  el.innerHTML = '<b>🚗 Uncle Kwame</b><small>and you</small>';
+  el.hidden = true;
+  document.body.append(el);
+  return el;
+})();
+const tagAt = new THREE.Vector4();
+function placeCarTag(x: number, z: number) {
+  tagAt.set(x, 2, z, 1).applyMatrix4(camera3d.projectionMatrix);
+  if (tagAt.w <= 0) return;
+  carTag.hidden = false;
+  carTag.style.transform = `translate(${((tagAt.x / tagAt.w + 1) / 2) * innerWidth}px, ${((1 - tagAt.y / tagAt.w) / 2) * innerHeight}px) translate(-50%, -100%)`;
+}
+const rideSigns = (() => {
+  const el = document.createElement('div');
+  el.id = 'ride-signs';
+  document.body.append(el);
+  return el;
+})();
+/** A signboard sliding in during the ride (green road and area signs, brown landmark signs). */
+function rideSign(sg: RideSign) {
+  const card = document.createElement('div');
+  card.className = `rs rs-${sg.kind}`;
+  card.innerHTML = sg.kind === 'landmark' ? `<i>${sg.icon ?? '📍'}</i><b>${sg.name}</b>` : `<b>${sg.name}</b>${sg.sub ? `<small>${sg.sub}</small>` : ''}`;
+  rideSigns.append(card);
+  while (rideSigns.children.length > 3) rideSigns.firstElementChild?.remove();
+  setTimeout(() => card.classList.add('out'), 2300);
+  setTimeout(() => card.remove(), 2900);
+}
+
 async function playOpening(start: StartChoice) {
   const home = start.hometown;
   homeTown = home;
@@ -2384,17 +2486,20 @@ async function playOpening(start: StartChoice) {
 
     // 6. Uncle Kwame arrives in his car, thanks her, gives her something, and takes you.
     const route = routeNear(stall.x, stall.z);
+    // Where his car drives: along a traffic route that passes the stall, or else along the nearest road.
+    const along: ((d: number) => { x: number; z: number; heading: number }) | null =
+      route && streetTraffic ? (d) => streetTraffic!.routeAt(route.v, route.s + d) : roadLineNear(stall.x, stall.z);
     await cine.black(true, 0.6);
     await cine.title('Forty minutes later…', '', 1.6);
     dropProp(props.food);
     story.pose = null;
     let uCar: NonNullable<typeof streetTraffic>['story'][number] | null = null;
-    if (route && streetTraffic) {
-      streetTraffic.hide.add(route.v.id);
-      uCar = { key: 'car', kind: 'car', id: 900002, x: 0, z: 0, heading: 0, colour: '#1e3a5f', shown: true, moving: true };
+    if (along && streetTraffic) {
+      if (route) streetTraffic.hide.add(route.v.id);
+      uCar = { key: 'car', kind: 'car', id: 900002, x: 0, z: 0, heading: 0, colour: '#b3261e', shown: true, moving: true }; // Uncle Kwame's red saloon
       streetTraffic.story.push(uCar);
       const at = (k: number) => {
-        const p = streetTraffic!.routeAt(route.v, route.s + k);
+        const p = along(k);
         [uCar!.x, uCar!.z, uCar!.heading] = [p.x, p.z, p.heading];
       };
       at(-40);
@@ -2455,78 +2560,155 @@ async function playOpening(start: StartChoice) {
     honk(4, true);
     await pause(0.6);
 
-    // 7. The ride to Nima (about 15 seconds): from inside the car, out of the windows and the
-    //    windscreen, while you and Uncle Kwame talk.
-    if (route && uCar && streetTraffic) {
+    // 7. The ride to Nima. First a few seconds inside the car at Circle, looking out; then the real
+    //    route from above (Ring Road Central, past Kokomlemle and Asylum Down, up the Al-Waleed Bin
+    //    Talal Highway to the Nima Roundabout), with a signboard for every road, area and public
+    //    landmark you pass, while you and Uncle Kwame talk.
+    if (along && uCar && streetTraffic) {
       const t0 = gameClock;
-      const LEN = 15;
+      uCar.moving = true;
+      void cine.say('', 'Uncle Kwame drives you home to Nima.', 2.6);
+      while (gameClock - t0 < 4) {
+        const t = gameClock - t0;
+        const d = t < 3 ? 1.5 * t * t : 13.5 + (t - 3) * 9; // pulls away, then about 9 m/s
+        const p = along(d);
+        [uCar.x, uCar.z, uCar.heading] = [p.x, p.z, p.heading];
+        [state.x, state.z, state.heading] = [p.x, p.z, p.heading];
+        const right = { x: Math.cos(p.heading), z: Math.sin(p.heading) };
+        story.shot = seatShot(p.x + right.x * 0.4, p.z + right.z * 0.4, p.heading + (t < 2 ? Math.PI / 2 : 0));
+        await pause(0.02);
+      }
+      if (route) streetTraffic.hide.delete(route.v.id);
+    }
+    const way = await nimaRoute;
+    if (way && uCar) {
+      // From above: the map's own 3D city along the whole way (our street pieces stay at Circle).
+      buildings.group.visible = false;
+      for (const id of ['buildings', 'roofs']) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', 'visible');
+      const LEN = 10;
+      const t0 = gameClock;
+      let bearing = way.at(60).heading;
+      let next = 0;
       let line = 0;
       const lines: [number, string, string][] = [
-        [0.8, '', 'Uncle Kwame drives you home to Nima.'],
-        [3.2, 'UNCLE KWAME', 'This is Accra. Busy, busy. You will learn it fast.'],
-        [6.6, 'YOU', 'Uncle, is Nima far?'],
-        [9.0, 'UNCLE KWAME', 'Not far. Fifteen minutes, if the traffic allows. Ha!'],
-        [12.2, 'UNCLE KWAME', 'Tomorrow I will show you around. Today, you rest.'],
+        [0.6, 'UNCLE KWAME', 'This is Ring Road. Busy, busy. You will learn it fast.'],
+        [3.6, 'YOU', 'Uncle, is Nima far?'],
+        [5.8, 'UNCLE KWAME', 'Not far. Fifteen minutes, if the traffic allows. Ha!'],
+        [8.2, 'UNCLE KWAME', 'This is Nima. Our home. Everybody knows everybody here.'],
       ];
       uCar.moving = true;
       while (gameClock - t0 < LEN) {
-        const t = gameClock - t0;
-        const d = t < 3 ? 1.5 * t * t : 13.5 + (t - 3) * 9; // pulls away, then about 9 m/s
-        const p = streetTraffic.routeAt(route.v, route.s + d);
-        [uCar.x, uCar.z, uCar.heading] = [p.x, p.z, p.heading];
-        [state.x, state.z, state.heading] = [p.x, p.z, p.heading]; // the city loads around you
-        // The camera sits in your seat (front right, at eye height) and looks out: right window,
-        // then through the windscreen, then across Uncle Kwame and out of the left window.
+        const k = Math.min(1, (gameClock - t0) / LEN);
+        const e = k * k * (3 - 2 * k);
+        const d = 60 + (way.length - 120) * e;
+        const p = way.at(d);
         const right = { x: Math.cos(p.heading), z: Math.sin(p.heading) };
-        const seat = { x: p.x + right.x * 0.4, z: p.z + right.z * 0.4 };
-        const look = t < 5 ? Math.PI / 2 : t < 10 ? 0 : -Math.PI / 2;
-        story.shot = seatShot(seat.x, seat.z, p.heading + look);
-        if (line < lines.length && t >= lines[line][0]) {
-          void cine.say(lines[line][1], lines[line][2], 3);
+        [uCar.x, uCar.z, uCar.heading] = [p.x + right.x * 1.8, p.z + right.z * 1.8, p.heading]; // in the right-hand lane
+        bearing += angleDiff(p.heading, bearing) * Math.min(1, 0.06);
+        const fwd = { x: Math.sin(bearing), z: -Math.cos(bearing) };
+        story.shot = { x: uCar.x + fwd.x * 12, z: uCar.z + fwd.z * 12, bearing: (bearing * 180) / Math.PI, zoom: 19.1, pitch: 60 };
+        placeCarTag(uCar.x, uCar.z);
+        while (next < RIDE_SIGNS.length && d >= RIDE_SIGNS[next].at) rideSign(RIDE_SIGNS[next++]);
+        if (line < lines.length && gameClock - t0 >= lines[line][0]) {
+          void cine.say(lines[line][1], lines[line][2], 2.6);
           line++;
         }
         await pause(0.02);
       }
-      streetTraffic.hide.delete(route.v.id);
+      while (next < RIDE_SIGNS.length) rideSign(RIDE_SIGNS[next++]);
+      carTag.hidden = true;
+      for (const id of ['buildings', 'roofs']) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', 'none');
+      buildings.group.visible = true;
     }
 
-    // 8. Nima: the compound house. (The city around Nima loads while the screen is dark.)
+    // 8. Nima: the compound house. (The streets there load while the screen is dark.)
     await cine.black(true, 0.7);
     const nima = { x: (-0.1982 - START[0]) * M_LON, z: (START[1] - 5.5813) * M_LAT };
     [state.x, state.z] = [nima.x, nima.z];
-    if (uCar) [uCar.x, uCar.z] = [nima.x, nima.z];
-    await cine.title('Nima', 'Uncle Kwame’s neighbourhood', 2.2);
+    if (uCar) [uCar.x, uCar.z, uCar.shown] = [nima.x, nima.z, false];
+    // Every street within 250 m must be known before the house is placed, or it could land on a
+    // road from a map square that has not loaded yet.
+    buildings.loadAround(toLngLat(nima.x, nima.z), 250);
     await waitUntil(() => !!life?.roadDirNear(nima.x, nima.z, 80, 2), 25);
-    await pause(1.5);
+    await waitUntil(() => !buildings.loading, 25);
+    await pause(0.5);
     const home = placeCompound(nima.x, nima.z);
     storyStep.home = true; // Nima opens on the map
     if (home) {
+      // Places in the compound's own frame: u across, v towards the gate (the rooms are at -v).
+      const c = Math.cos(home.face);
+      const sn = Math.sin(home.face);
+      const at = (u: number, v: number) => ({ x: home.x - u * c + v * sn, z: home.z - u * sn - v * c });
+      const D = COMPOUND.d / 2;
+      const inward = home.face + Math.PI; // facing into the yard, towards the rooms
+      // Uncle drives in through the gate and parks in the yard.
       if (uCar) {
-        const right = { x: Math.cos(home.face), z: Math.sin(home.face) };
-        uCar.x = home.gate.x + home.F.x * 2.5 + right.x * 6;
-        uCar.z = home.gate.z + home.F.z * 2.5 + right.z * 6;
-        uCar.heading = home.face + Math.PI / 2;
+        uCar.shown = true;
+        uCar.moving = true;
+        uCar.heading = inward;
+        const p0 = at(0, D + 12);
+        [uCar.x, uCar.z] = [p0.x, p0.z];
+      }
+      story.hidePlayer = true;
+      const yardView = at(0, 1);
+      story.shot = frameShot(yardView.x, yardView.z, (inward * 180) / Math.PI + 18, 15, 66);
+      await cine.black(false, 0.8);
+      placeCard('Nima');
+      if (uCar) {
+        const t0 = gameClock;
+        while (gameClock - t0 < 4) {
+          const k = Math.min(1, (gameClock - t0) / 4);
+          const e = 1 - (1 - k) * (1 - k);
+          const p = at(0, D + 12 - (D + 12 - 2.6) * e);
+          [uCar.x, uCar.z] = [p.x, p.z];
+          await pause(0.02);
+        }
         uCar.moving = false;
       }
-      [state.x, state.z, state.heading, state.camHeading] = [home.gate.x + home.F.x * 1.2, home.gate.z + home.F.z * 1.2, home.face + Math.PI, home.face + Math.PI];
-      uncle.show(home.gate.x - home.F.x * 2.4, home.gate.z - home.F.z * 2.4, home.face);
-      story.shot = frameShot(home.gate.x, home.gate.z, ((home.face + Math.PI) * 180) / Math.PI, 15, 64);
+      // You both get out: Uncle on the driver's side (left), you on the other.
+      const right = { x: Math.cos(inward), z: Math.sin(inward) };
+      const carAt = at(0, 2.6);
+      uncle.show(carAt.x - right.x * 1.3, carAt.z - right.z * 1.3, inward);
+      [state.x, state.z, state.heading, state.camHeading] = [carAt.x + right.x * 1.3, carAt.z + right.z * 1.3, inward, inward];
+      story.hidePlayer = false;
+      await pause(0.6);
+      if (uncle.person) act(uncle.person, 'talk');
+      await cine.say('UNCLE KWAME', 'Welcome home. This is our compound. Come, let me show you your room.');
+      if (uncle.person) act(uncle.person, 'idle');
+      // To your room (the middle one at the back): through its doorway, inside.
+      const doorOut = at(-0.6, -D + 0.13 + 3.4 + 1.2);
+      story.autoRun = { x: doorOut.x, z: doorOut.z, walk: true };
+      await uncle.walkTo(at(-0.6, -D + 0.13 + 3.4 + 0.6).x, at(-0.6, -D + 0.13 + 3.4 + 0.6).z);
+      const uIn = at(0.2, -D + 1.7);
+      await uncle.walkTo(uIn.x, uIn.z);
+      const meIn = at(-0.7, -D + 2.6);
+      story.autoRun = { x: meIn.x, z: meIn.z, walk: true };
+      await waitUntil(() => !story.autoRun || Math.hypot(story.autoRun.x - state.x, story.autoRun.z - state.z) < 0.5, 8);
+      story.autoRun = null;
+      if (Math.hypot(meIn.x - state.x, meIn.z - state.z) > 0.6) [state.x, state.z] = [meIn.x, meIn.z]; // (a slow phone: you are in)
+      state.heading = inward; // facing Uncle, deeper in the room
+      story.roomView = true;
+      // Inside the room: looking down into it from above the front wall, the tin roof lifted away.
+      const roomMid = at(-0.2, -D + 1.9);
+      uncle.face(state.x, state.z);
+      story.shot = frameShot(roomMid.x, roomMid.z, (inward * 180) / Math.PI - 15, 3.8, 24);
+      if (uncle.person) act(uncle.person, 'talk');
+      await cine.say('UNCLE KWAME', 'This is your room. It is small, but it is yours. The mattress is new.');
+      story.pose = 'yes';
+      await cine.say('YOU', 'Thank you, Uncle. Medaase.');
+      story.pose = null;
+      await cine.say('UNCLE KWAME', 'Rest well. Tomorrow, we start.');
+      if (uncle.person) act(uncle.person, 'idle');
+      await cine.title(`Chapter 1 · From ${start.hometown} to Accra`, 'Uncle Kwame’s compound house, Nima', 3);
+      await cine.black(false, 0.9);
     }
     story.hidePlayer = false;
-    await cine.title(`Chapter 1 · From ${start.hometown} to Accra`, 'Uncle Kwame’s compound house, Nima', 3);
-    await cine.black(false, 0.9);
-    if (uncle.person) act(uncle.person, 'talk');
-    await cine.say('UNCLE KWAME', 'Welcome home. This is our compound. Come in, let me show you your corner.');
-    if (uncle.person) act(uncle.person, 'idle');
+    story.roomView = false;
     story.shot = null;
     cine.end();
     map.setPixelRatio(sharp);
     stopDoing();
     if (home) {
-      storyGoal('Walk into the compound');
-      story.target = { x: home.x, z: home.z, who: 'Uncle Kwame', role: 'Your uncle · his compound house', icon: '🏠', label: 'Walk into the compound', mission: 'CHAPTER 1' };
-      await waitUntil(() => Math.hypot(home.x - state.x, home.z - state.z) < COMPOUND.d / 2 - 1, 120);
-      story.target = null;
       missionCard('Chapter 1', 'Fresh in Accra', 'Coming soon: Welcome Chop, your first mission in the compound');
       storyStep.home = true;
     }
@@ -2561,6 +2743,20 @@ function seatShot(x: number, z: number, heading: number) {
   const R = 1.25 / Math.cos((pitch * Math.PI) / 180);
   const D = R * Math.sin((pitch * Math.PI) / 180);
   return { x: x + Math.sin(heading) * D, z: z - Math.cos(heading) * D, bearing: (heading * 180) / Math.PI, zoom: 23.1 - Math.log2(R / 10.7), pitch };
+}
+/** A straight drive along the nearest road to a point, in its right-hand lane (when no traffic route passes). */
+function roadLineNear(x: number, z: number) {
+  if (!life) return null;
+  const dir = life.roadDirNear(x, z, 40, 2);
+  if (dir === null) return null;
+  const F = { x: Math.sin(dir), z: -Math.cos(dir) };
+  let p = { x, z };
+  for (let k = 0; k < 80 && !life.roadAt(p.x, p.z, 0); k++) p = { x: p.x + F.x * 0.5, z: p.z + F.z * 0.5 };
+  p = { x: p.x + F.x * 1.6, z: p.z + F.z * 1.6 }; // into the first lane
+  // Along the road with the kerb on the right (Ghana drives on the right).
+  const heading = dir + Math.PI / 2; // its right side towards the kerb you are on
+  const T = { x: Math.sin(heading), z: -Math.cos(heading) };
+  return (d: number) => ({ x: p.x + T.x * d, z: p.z + T.z * d, heading });
 }
 /** A traffic route that passes close to a point (Uncle Kwame drives along it), and where on it. */
 function routeNear(x: number, z: number) {
@@ -3096,6 +3292,8 @@ async function start() {
   });
   scene.add(player.root);
   applyStreetStyle(map);
+  // Only our own places and signs in the game: the base map's business names are hidden.
+  for (const l of map.getStyle().layers) if ((l as { 'source-layer'?: string })['source-layer'] === 'pois') map.setLayoutProperty(l.id, 'visibility', 'none');
   for (const id of ['buildings', 'roofs']) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', 'none');
   map.addLayer(layer);
   // Sunset over Accra for this test: warm sky, light on the buildings from the west.
@@ -3120,11 +3318,12 @@ async function start() {
     streetTraffic = new StreetTraffic(traffic, (lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT], limit, { light: 140, standard: 180, ultra: 230 }[tier]);
     scene.add(streetTraffic.group);
     streetTraffic.deckHeight = (x, z) => flyovers.heightAt(x, z);
+    streetTraffic.lowRamp = (x, z) => flyovers.lowRampAt(x, z);
     streetTraffic.signals = signals;
     if (life) life.vehicleAt = vehicleAt;
     streetTraffic.onBlocked = onVehicleBlocked;
     void loadDriver();
-    if (debug) Object.assign(window, { __street: { state, sky, look, life, story, thief, signals, lightFor, flyovers, pinch, bigScreen, roadSigns, getStation: () => station, places, fuelWhy, bag, driver, shove, uncle, compound, props, camera3d, adCard, frameShot, placeCompound, buildings, fullMap, phone, camAvoid, camAt, viewBlocked, heightAtView, solidAt, traffic: streetTraffic, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
+    if (debug) Object.assign(window, { __street: { state, sky, look, life, story, thief, signals, lightFor, flyovers, pinch, bigScreen, roadSigns, getStation: () => station, places, fuelWhy, bag, driver, shove, uncle, compound, props, camera3d, adCard, frameShot, placeCompound, buildings, nimaRoute, rideSign, RIDE_SIGNS, map, placeCarTag, fullMap, phone, camAvoid, camAt, viewBlocked, heightAtView, solidAt, traffic: streetTraffic, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
   }
 
   document.getElementById('loading')!.remove();

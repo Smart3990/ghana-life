@@ -1,0 +1,379 @@
+{
+ "from": "Kwame Nkrumah Circle",
+ "to": "Nima",
+ "lengthM": 2799,
+ "path": [
+  [
+   -0.2166,
+   5.5694
+  ],
+  [
+   -0.216347,
+   5.569436
+  ],
+  [
+   -0.216239,
+   5.569509
+  ],
+  [
+   -0.215878,
+   5.569509
+  ],
+  [
+   -0.215445,
+   5.569653
+  ],
+  [
+   -0.214903,
+   5.569762
+  ],
+  [
+   -0.214795,
+   5.56987
+  ],
+  [
+   -0.214506,
+   5.56987
+  ],
+  [
+   -0.213676,
+   5.570123
+  ],
+  [
+   -0.213279,
+   5.570196
+  ],
+  [
+   -0.213134,
+   5.570268
+  ],
+  [
+   -0.209488,
+   5.571136
+  ],
+  [
+   -0.209379,
+   5.571245
+  ],
+  [
+   -0.209018,
+   5.571245
+  ],
+  [
+   -0.207105,
+   5.571751
+  ],
+  [
+   -0.20696,
+   5.571751
+  ],
+  [
+   -0.205444,
+   5.572149
+  ],
+  [
+   -0.2053,
+   5.572149
+  ],
+  [
+   -0.204361,
+   5.572403
+  ],
+  [
+   -0.204217,
+   5.572403
+  ],
+  [
+   -0.200967,
+   5.573235
+  ],
+  [
+   -0.200859,
+   5.573343
+  ],
+  [
+   -0.200751,
+   5.57356
+  ],
+  [
+   -0.200751,
+   5.57432
+  ],
+  [
+   -0.200787,
+   5.574356
+  ],
+  [
+   -0.200787,
+   5.577612
+  ],
+  [
+   -0.200751,
+   5.57772
+  ],
+  [
+   -0.200642,
+   5.577829
+  ],
+  [
+   -0.200642,
+   5.578046
+  ],
+  [
+   -0.200534,
+   5.578299
+  ],
+  [
+   -0.200029,
+   5.579095
+  ],
+  [
+   -0.198873,
+   5.581121
+  ],
+  [
+   -0.198765,
+   5.581374
+  ],
+  [
+   -0.198584,
+   5.581627
+  ]
+ ],
+ "along": [
+  {
+   "type": "landmark",
+   "kind": "marketplace",
+   "name": "Odoornaa Market",
+   "at": 0
+  },
+  {
+   "type": "road",
+   "name": "Ring Road Central",
+   "at": 4
+  },
+  {
+   "type": "road",
+   "name": "Kwame Nkrumah Circle",
+   "at": 99
+  },
+  {
+   "type": "road",
+   "name": "Ring Road Central",
+   "at": 216
+  },
+  {
+   "type": "landmark",
+   "kind": "bus_station",
+   "name": "Accra, Circle",
+   "at": 222
+  },
+  {
+   "type": "landmark",
+   "kind": "police",
+   "name": "Ghana National Fire\nService",
+   "at": 267
+  },
+  {
+   "type": "landmark",
+   "kind": "fire_station",
+   "name": "Ghana Fire Service",
+   "at": 271
+  },
+  {
+   "type": "landmark",
+   "kind": "fuel",
+   "name": "Goil",
+   "at": 392
+  },
+  {
+   "type": "area",
+   "name": "Kokomlemle East",
+   "kind": "neighbourhood",
+   "at": 710
+  },
+  {
+   "type": "area",
+   "name": "Kokomlemle East",
+   "kind": "neighbourhood",
+   "at": 710
+  },
+  {
+   "type": "area",
+   "name": "Asylum Down",
+   "kind": "neighbourhood",
+   "at": 924
+  },
+  {
+   "type": "area",
+   "name": "Asylum Down",
+   "kind": "neighbourhood",
+   "at": 924
+  },
+  {
+   "type": "landmark",
+   "kind": "university",
+   "name": "Sikkim Manipal University Ghana",
+   "at": 924
+  },
+  {
+   "type": "landmark",
+   "kind": "university",
+   "name": "Sikkim Manipal University Ghana",
+   "at": 924
+  },
+  {
+   "type": "landmark",
+   "kind": "fuel",
+   "name": "So",
+   "at": 1083
+  },
+  {
+   "type": "landmark",
+   "kind": "school",
+   "name": "Asanka Design School",
+   "at": 1142
+  },
+  {
+   "type": "landmark",
+   "kind": "school",
+   "name": "Asanka Design School",
+   "at": 1142
+  },
+  {
+   "type": "landmark",
+   "kind": "fuel",
+   "name": "Ring Road Total",
+   "at": 1494
+  },
+  {
+   "type": "landmark",
+   "kind": "place_of_worship",
+   "name": "Bahai Faith National Centre",
+   "at": 1510
+  },
+  {
+   "type": "landmark",
+   "kind": "place_of_worship",
+   "name": "Bahai Faith National Centre",
+   "at": 1510
+  },
+  {
+   "type": "landmark",
+   "kind": "clinic",
+   "name": "Dua Clinic",
+   "at": 1690
+  },
+  {
+   "type": "landmark",
+   "kind": "clinic",
+   "name": "Dua Clinic",
+   "at": 1690
+  },
+  {
+   "type": "landmark",
+   "kind": "school",
+   "name": "German Swiss International School",
+   "at": 1696
+  },
+  {
+   "type": "road",
+   "name": "Al Waleed Bin Talal Highway",
+   "at": 1908
+  },
+  {
+   "type": "landmark",
+   "kind": "police",
+   "name": "Nima Police Station",
+   "at": 1990
+  },
+  {
+   "type": "landmark",
+   "kind": "place_of_worship",
+   "name": "Nima Police Station Mosque",
+   "at": 2002
+  },
+  {
+   "type": "landmark",
+   "kind": "school",
+   "name": "Nima Cluster of Schools",
+   "at": 2267
+  },
+  {
+   "type": "landmark",
+   "kind": "place_of_worship",
+   "name": "Kingdom Hall",
+   "at": 2339
+  },
+  {
+   "type": "landmark",
+   "kind": "fuel",
+   "name": "Goil",
+   "at": 2403
+  },
+  {
+   "type": "road",
+   "name": "Nima Roundabout",
+   "at": 2423
+  },
+  {
+   "type": "landmark",
+   "kind": "clinic",
+   "name": "Nima Goverment Clinic",
+   "at": 2434
+  },
+  {
+   "type": "road",
+   "name": "Al-Waleed Bin-Talal Highway",
+   "at": 2458
+  },
+  {
+   "type": "landmark",
+   "kind": "school",
+   "name": "St. Kizito Catholic School",
+   "at": 2502
+  },
+  {
+   "type": "landmark",
+   "kind": "place_of_worship",
+   "name": "St. Kizito Catholic Church",
+   "at": 2552
+  },
+  {
+   "type": "landmark",
+   "kind": "fuel",
+   "name": "Shell Fuel Station",
+   "at": 2621
+  },
+  {
+   "type": "landmark",
+   "kind": "school",
+   "name": "31 DWM School",
+   "at": 2696
+  },
+  {
+   "type": "landmark",
+   "kind": "marketplace",
+   "name": "Nima Market",
+   "at": 2775
+  },
+  {
+   "type": "landmark",
+   "kind": "post_office",
+   "name": "Nima Post Office",
+   "at": 2902
+  },
+  {
+   "type": "area",
+   "name": "Nima",
+   "kind": "neighbourhood",
+   "at": 2948
+  },
+  {
+   "type": "area",
+   "name": "Nima",
+   "kind": "neighbourhood",
+   "at": 2948
+  }
+ ]
+}

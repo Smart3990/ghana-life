@@ -699,6 +699,32 @@ export class StreetTraffic {
   onHoot: ((x: number, z: number) => void) | null = null;
   /** Called every frame for each vehicle stopped because the player stands in its way. */
   onBlocked: ((v: { id: number; x: number; z: number; heading: number; kind: string; halfW: number; half: number; waited: number }) => void) | null = null;
+  /** Is a point inside a low flyover ramp (set by the street test)? Ground traffic never drives there. */
+  lowRamp: ((x: number, z: number) => boolean) | null = null;
+  private routeChecked = new Map<number, boolean>();
+  /** Check every route again (the flyovers changed). */
+  recheckRoutes() {
+    this.routeChecked.clear();
+  }
+  /**
+   * A route on the ground that passes under a low ramp (where the real road has no way through) gets no
+   * vehicles at all. Each route is checked once, along its whole length, the first time it shows up.
+   */
+  private routeOk(p: Placed) {
+    if (!this.lowRamp || p.bridge) return true;
+    const r = p.v.route;
+    const known = this.routeChecked.get(r);
+    if (known !== undefined) return known;
+    let ok = true;
+    for (let s = 0; s < 900 && ok; s += 3) {
+      const at = this.traffic.at(p.v, p.s + s, this.lane);
+      if (at.bridge) continue;
+      const [x, z] = this.toLocal(at.lon, at.lat);
+      if (this.lowRamp(x, z)) ok = false;
+    }
+    this.routeChecked.set(r, ok);
+    return ok;
+  }
   /** Vehicles not drawn (the story has taken their place on the road). */
   hide = new Set<number>();
   private lane = 1.35;
@@ -750,7 +776,7 @@ export class StreetTraffic {
     // so nothing flickers in and out.
     const placed: Placed[] = this.traffic
       .near(lon, lat, t, this.radiusM, this.limit * 2, lane)
-      .filter((p) => !this.hide.has(p.v.id))
+      .filter((p) => !this.hide.has(p.v.id) && this.routeOk(p))
       .filter((p) => this.density >= 1 || ((p.v.id * 2654435761) >>> 0) / 4294967296 < this.density)
       .slice(0, this.limit);
     // A vehicle held back for a while can be behind its timetable spot, which may already be out of
@@ -959,7 +985,8 @@ export class StreetTraffic {
       draws.push({ key, id: p.v.id, x, z, ground, heading: p.heading, colour: p.v.colour, bounce: true });
     }
     for (const q of this.parked) draws.push({ ...q, ground: 0, bounce: false });
-    for (const q of this.story) if (q.shown) draws.push({ key: q.key, id: q.id, x: q.x, z: q.z, heading: q.heading, colour: q.colour, ground: 0, bounce: q.moving });
+    // The story's own vehicles first, so they are always drawn even when a batch is full.
+    for (const q of this.story) if (q.shown) draws.unshift({ key: q.key, id: q.id, x: q.x, z: q.z, heading: q.heading, colour: q.colour, ground: 0, bounce: q.moving });
     for (const d of draws) {
       const b = this.batches[d.key];
       if (counts[d.key] >= b.body.instanceMatrix.count) continue;
