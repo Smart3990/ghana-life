@@ -30,6 +30,8 @@ import { StreetSound } from '../game/streetSound';
 import { createPerson, type Move, type Person } from '../game/person';
 import { Minimap } from '../hud/minimap';
 import { FullMap } from '../hud/fullMap';
+import { forPlayer } from '../game/address';
+import { AD_COUNT, adThumb } from '../game/adPosters';
 import type { PlaceAt } from '../game/places';
 import { Phone, type MissionRow, type Destination } from '../hud/phone';
 import { TouchControls } from '../hud/touchControls';
@@ -839,7 +841,9 @@ function step(player: Player, dt: number, t: number) {
     music: life?.scenes?.musicSpots ?? [],
   });
   if (life?.scenes && !life.scenes.onSpeak) {
-    life.scenes.onSpeak = (x, z, height, text, body, seed) => {
+    life.scenes.onSpeak = (x, z, height, said, body, seed) => {
+      // Calling out to the player: "Sister, come!" to a woman, "Bra, come!" to a man.
+      const text = seed === 4242 || (x === state.x && z === state.z) ? said : toMe(said);
       showBubble(x, z, height, text);
       // Someone calling out near you: you hear them (quieter further away).
       if (body && !chatting) {
@@ -984,6 +988,8 @@ const fill = (t: string) => t.replace(/\{home\}/g, homeTown).replace(/\{name\}/g
 type Who = { x: number; z: number; height: number; kind: string; seller: boolean; body: 'male' | 'female' | 'child'; seed: number; words?: string[] };
 const playerVoice = () => ({ body: (playerBody === 'female' ? 'female' : 'male') as 'male' | 'female', seed: 4242 });
 let playerBody: 'male' | 'female' = 'male';
+/** A line said to the player, in the form for a man or a woman ("my son" / "my daughter"). */
+const toMe = (text: string) => forPlayer(text, playerBody);
 
 function showChoices(node: TalkNode, pick: (i: number) => void) {
   talkEl.innerHTML = '';
@@ -1015,7 +1021,7 @@ async function chat(who: Who, t: number) {
   const start = { x: state.x, z: state.z };
   const away = () => Math.hypot(state.x - start.x, state.z - start.z) > 2.5 || me.doing !== 'greet';
   const speak = async (text: string, mine: boolean) => {
-    const line = fill(text);
+    const line = mine ? fill(text) : toMe(fill(text));
     if (mine) life?.scenes?.onSpeak?.(state.x, state.z, 1.95, line);
     else showBubble(who.x, who.z, who.height, line, 3 + line.length * 0.05);
     const wait = new Promise((r) => setTimeout(r, Math.max(1600, 700 + line.length * 55)));
@@ -1623,7 +1629,7 @@ const SHOUTS = [
   'Make way, make way! We dey go!',
   'Ah! You no hear horn? Move!',
 ];
-const MATE_SHOUTS = ['Ah! Sister, brother, move! Passengers dey wait!', 'Circle, Circle! Move, we dey go Circle!', 'Chale, you go pay our time? Move!'];
+const MATE_SHOUTS = ['Ah! My brother, move! Passengers dey wait!', 'Circle, Circle! Move, we dey go Circle!', 'Chale, you go pay our time? Move!'];
 const PUSH_LINES = ['Massa, I beg, go side!', 'Chale, the road no be your room!', 'Herh, go the pavement!'];
 const driver = {
   person: null as Person | null,
@@ -1656,7 +1662,7 @@ function onVehicleBlocked(v: { id: number; x: number; z: number; heading: number
   // 1. A shout (the mate on a trotro, otherwise the driver), then again every few seconds.
   if (v.waited > 0.9 && now - n.shout > 5) {
     n.shout = now;
-    const line = v.kind === 'trotro' && v.id % 2 ? pick(MATE_SHOUTS, v.id + now) : pick(SHOUTS, v.id * 7 + now);
+    const line = toMe(v.kind === 'trotro' && v.id % 2 ? pick(MATE_SHOUTS, v.id + now) : pick(SHOUTS, v.id * 7 + now));
     showBubble(mouthX, mouthZ, 2.3, line);
     void voices.say(line, { body: 'male', seed: v.id }, 1, 1);
   }
@@ -1678,7 +1684,7 @@ function onVehicleBlocked(v: { id: number; x: number; z: number; heading: number
     driver.time = 0; // seconds in this phase (game time, so slow phones work the same)
     streetTraffic?.hold.add(v.id);
     scene.add(driver.person.root);
-    const line = pick(PUSH_LINES, v.id);
+    const line = toMe(pick(PUSH_LINES, v.id));
     showBubble(driver.x, driver.z, 1.9, line);
     void voices.say(line, { body: 'male', seed: v.id }, 1, 2);
   }
@@ -1955,6 +1961,8 @@ const fullMap = new FullMap(tier, () => {
     areas: PLACES.map((a) => ({ name: a.name, lng: a.at[0], lat: a.at[1] })),
     cars: () => (streetTraffic?.placed ?? []).map((p) => ({ lng: p.lon, lat: p.lat, kind: p.v.kind })),
     here: placeLabel.textContent ?? '',
+    boards: (life?.boards.all ?? []).filter((b) => Math.hypot(b.x - state.x, b.z - state.z) < 700).map((b) => ({ ...lngLatOf(b.x, b.z), ad: b.colour % AD_COUNT })),
+    adPicture: (n) => adThumb(n, 160),
   };
 });
 // Where the Ride app is taking you (a teal marker on the maps).
@@ -2019,6 +2027,7 @@ const phone: Phone = new Phone({
   waypoint: () => waypoint,
   feed: () => feedPosts,
   say: (text, who) => voices.say(text, who, 1, 2),
+  toMe,
   stopTalking: () => voices.stop(),
   nickname: () => 'Newcomer',
   storyDone: (step) => (step === 'auntie' ? storyStep.auntie : false),

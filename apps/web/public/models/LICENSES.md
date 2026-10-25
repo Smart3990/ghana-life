@@ -29,3 +29,7 @@ The plastic chairs and football (`src/game/streetScenes.ts`) are built in code. 
 ## Opening film clip (public/film)
 
 - `journey-480.mp4`, `journey-480.webm`, `journey-poster.jpg`: the owner's 10-second clip "Young man traveling to Accra" (made with ImagineArt, 2026-10-25), shrunk for phones (854×480, about 640 KB each format). Same commercial-use check as the pictures above before launch.
+
+## Billboard advert photos (public/ads/)
+
+wallet.webp, kelewele.webp, radio.webp, water.webp: made for Ghanaverse with ImagineArt (Seedream v5 lite) on 2026-10-25, from our own prompts (fictional people, no text or logos). Resized to 768 x 432 WebP. Before launch, check that ImagineArt's plan allows commercial use of these images. The brands on the adverts (Sika Mobile Money, Ghanaverse FM, Cool Sachet Water, Adinkra Bank and so on) are the game's own, fictional.

@@ -75,8 +75,18 @@
   "who": "Drivers (men, annoyed but not angry, shouting from the car)"
  },
  {
+  "id": "madam-move-you-no-see-the-car",
+  "line": "Madam, move! You no see the car?",
+  "who": "Drivers (men, annoyed but not angry, shouting from the car)"
+ },
+ {
   "id": "herh-give-way-my-brother",
   "line": "Herh! Give way, my brother!",
+  "who": "Drivers (men, annoyed but not angry, shouting from the car)"
+ },
+ {
+  "id": "herh-give-way-my-sister",
+  "line": "Herh! Give way, my sister!",
   "who": "Drivers (men, annoyed but not angry, shouting from the car)"
  },
  {
@@ -95,8 +105,18 @@
   "who": "Drivers (men, annoyed but not angry, shouting from the car)"
  },
  {
+  "id": "sista-abeg-shift-small",
+  "line": "Sista, abeg shift small!",
+  "who": "Drivers (men, annoyed but not angry, shouting from the car)"
+ },
+ {
   "id": "jimmy-move-from-the-road",
   "line": "Jimmy! Move from the road!",
+  "who": "Drivers (men, annoyed but not angry, shouting from the car)"
+ },
+ {
+  "id": "sister-move-from-the-road",
+  "line": "Sister! Move from the road!",
   "who": "Drivers (men, annoyed but not angry, shouting from the car)"
  },
  {
@@ -115,8 +135,13 @@
   "who": "Drivers (men, annoyed but not angry, shouting from the car)"
  },
  {
-  "id": "ah-sister-brother-move-passengers-dey-wait",
-  "line": "Ah! Sister, brother, move! Passengers dey wait!",
+  "id": "ah-my-brother-move-passengers-dey-wait",
+  "line": "Ah! My brother, move! Passengers dey wait!",
+  "who": "Trotro mates (young men, loud)"
+ },
+ {
+  "id": "ah-my-sister-move-passengers-dey-wait",
+  "line": "Ah! My sister, move! Passengers dey wait!",
   "who": "Trotro mates (young men, loud)"
  },
  {
@@ -132,6 +157,11 @@
  {
   "id": "massa-i-beg-go-side",
   "line": "Massa, I beg, go side!",
+  "who": "Driver (man, firm)"
+ },
+ {
+  "id": "madam-i-beg-go-side",
+  "line": "Madam, I beg, go side!",
   "who": "Driver (man, firm)"
  },
  {
@@ -210,6 +240,11 @@
   "who": "Anyone: men, women, children (two or three different voices)"
  },
  {
+  "id": "my-sister-how-far",
+  "line": "My sister, how far?",
+  "who": "Anyone: men, women, children (two or three different voices)"
+ },
+ {
   "id": "i-will-call-you-back",
   "line": "I will call you back.",
   "who": "Anyone: men, women, children (two or three different voices)"
@@ -245,13 +280,28 @@
   "who": "Anyone: men and women"
  },
  {
+  "id": "madam-come-and-buy",
+  "line": "Madam, come and buy!",
+  "who": "Anyone: men and women"
+ },
+ {
   "id": "bra-you-dey",
   "line": "Bra, you dey?",
   "who": "Anyone: men and women"
  },
  {
+  "id": "sista-you-dey",
+  "line": "Sista, you dey?",
+  "who": "Anyone: men and women"
+ },
+ {
   "id": "sister-come",
   "line": "Sister, come!",
+  "who": "Anyone: men and women"
+ },
+ {
+  "id": "brother-come",
+  "line": "Brother, come!",
   "who": "Anyone: men and women"
  },
  {
@@ -860,6 +910,11 @@
   "who": "A Muslim man"
  },
  {
+  "id": "salaam-alaikum-my-sister-how-is-your-day",
+  "line": "Salaam alaikum, my sister. How is your day?",
+  "who": "A Muslim man"
+ },
+ {
   "id": "welcome-take-your-time-you-will-know-accra-small-small",
   "line": "Welcome. Take your time, you will know Accra small small.",
   "who": "A Muslim man"
@@ -950,6 +1005,11 @@
   "who": "A kayayo (woman carrying loads)"
  },
  {
+  "id": "ei-sorry-be-careful-at-the-station-my-sister",
+  "line": "Ei, sorry! Be careful at the station, my sister.",
+  "who": "A kayayo (woman carrying loads)"
+ },
+ {
   "id": "small-small-depends-on-the-load-and-where-you-are-going",
   "line": "Small, small. Depends on the load and where you are going.",
   "who": "A kayayo (woman carrying loads)"
@@ -1000,8 +1060,18 @@
   "who": "A phone seller"
  },
  {
+  "id": "madam-phones-chargers-power-bank-what-do-you-need",
+  "line": "Madam! Phones, chargers, power bank! What do you need?",
+  "who": "A phone seller"
+ },
+ {
   "id": "sorry-boss-small-phones-start-from-three-hundred-cedis-you-w",
   "line": "Sorry, boss! Small phones start from three hundred cedis. You want to see?",
+  "who": "A phone seller"
+ },
+ {
+  "id": "sorry-madam-small-phones-start-from-three-hundred-cedis-you",
+  "line": "Sorry, madam! Small phones start from three hundred cedis. You want to see?",
   "who": "A phone seller"
  },
  {
@@ -1017,6 +1087,11 @@
  {
   "id": "look-well-boss-original-stuff-only",
   "line": "Look well, boss! Original stuff only.",
+  "who": "A phone seller"
+ },
+ {
+  "id": "look-well-madam-original-stuff-only",
+  "line": "Look well, madam! Original stuff only.",
   "who": "A phone seller"
  },
  {
@@ -1100,6 +1175,11 @@
   "who": "Auntie Dede"
  },
  {
+  "id": "my-daughter-are-you-fine-come-and-buy-kelewele-i-have-the-ho",
+  "line": "My daughter! Are you fine? Come and buy kelewele, I have the hot one now.",
+  "who": "Auntie Dede"
+ },
+ {
   "id": "good-accra-will-not-swallow-you-greet-your-uncle-for-me",
   "line": "Good. Accra will not swallow you. Greet your uncle for me.",
   "who": "Auntie Dede"
@@ -1107,6 +1187,11 @@
  {
   "id": "check-your-map-my-son-look-for-the-pump-they-are-everywhere",
   "line": "Check your map, my son. Look for the pump. They are everywhere.",
+  "who": "Auntie Dede"
+ },
+ {
+  "id": "check-your-map-my-daughter-look-for-the-pump-they-are-everyw",
+  "line": "Check your map, my daughter. Look for the pump. They are everywhere.",
   "who": "Auntie Dede"
  },
  {

@@ -20,6 +20,8 @@ export type PhoneHooks = {
   waypoint: () => Destination | null;
   feed: () => { who: string; text: string; time: string; gold?: boolean }[];
   say: (text: string, who: Speaker) => Promise<void>;
+  /** The line in the form for the player ("my son" or "my daughter"). */
+  toMe: (text: string) => string;
   stopTalking: () => void;
   nickname: () => string;
   storyDone: (step: string) => boolean;
@@ -329,12 +331,13 @@ export class Phone {
       );
     };
     const speak = async (line: CallLine) => {
-      draw('On the line', line.say);
-      await this.hooks.say(line.say, c.who);
+      const said = this.hooks.toMe(line.say);
+      draw('On the line', said);
+      await this.hooks.say(said, c.who);
       if (id !== this.calling) return;
-      if (line.choices?.length) draw('Your answer', line.say, line.choices);
+      if (line.choices?.length) draw('Your answer', said, line.choices);
       else {
-        draw('Call ended', line.say);
+        draw('Call ended', said);
         setTimeout(() => id === this.calling && this.app === 'call' && this.show('calls'), 2200);
       }
     };

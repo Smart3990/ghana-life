@@ -11,6 +11,8 @@ Every line the game speaks, grouped by who says it. Made from the game's code by
 5. Put the files in `apps/web/public/voices/`, then run `node scripts/voice-script.mjs --index` in `apps/web`. The game then plays your recording instead of the phone's own voice. Lines you have not recorded yet keep the phone's voice.
 6. Only record people who agree, and keep their written OK (name, date, "you may use my voice in Ghanaverse"). Record the voice actors in `apps/web/public/models/LICENSES.md`.
 
+Lines said to the player come twice when it matters: once for a man ("my son", "my brother", "Massa", "Bra") and once for a woman ("my daughter", "my sister", "Madam", "Sista"). Record both.
+
 Lines with `{...}` in them say a name the game fills in (your hometown, a place): the phone's voice says those for now.
 
 ## Story: Grandma
@@ -76,11 +78,15 @@ Lines with `{...}` in them say a name the game fills in (your hometown, a place)
 | --- | --- |
 | `chale-comot-for-road.mp3` | Chale, comot for road! |
 | `massa-move-you-no-see-the-car.mp3` | Massa, move! You no see the car? |
+| `madam-move-you-no-see-the-car.mp3` | Madam, move! You no see the car? |
 | `herh-give-way-my-brother.mp3` | Herh! Give way, my brother! |
+| `herh-give-way-my-sister.mp3` | Herh! Give way, my sister! |
 | `charley-wait-ooo-make-i-pass.mp3` | Charley, wait ooo! Make I pass! |
 | `ei-you-want-make-car-jam-you.mp3` | Ei! You want make car jam you? |
 | `bra-abeg-shift-small.mp3` | Bra, abeg shift small! |
+| `sista-abeg-shift-small.mp3` | Sista, abeg shift small! |
 | `jimmy-move-from-the-road.mp3` | Jimmy! Move from the road! |
+| `sister-move-from-the-road.mp3` | Sister! Move from the road! |
 | `mepa-wo-kyew-twe-wo-ho.mp3` | Mepa wo kyew, twe wo ho! |
 | `make-way-make-way-we-dey-go.mp3` | Make way, make way! We dey go! |
 | `ah-you-no-hear-horn-move.mp3` | Ah! You no hear horn? Move! |
@@ -91,7 +97,8 @@ Lines with `{...}` in them say a name the game fills in (your hometown, a place)
 
 | File | Line |
 | --- | --- |
-| `ah-sister-brother-move-passengers-dey-wait.mp3` | Ah! Sister, brother, move! Passengers dey wait! |
+| `ah-my-brother-move-passengers-dey-wait.mp3` | Ah! My brother, move! Passengers dey wait! |
+| `ah-my-sister-move-passengers-dey-wait.mp3` | Ah! My sister, move! Passengers dey wait! |
 | `circle-circle-move-we-dey-go-circle.mp3` | Circle, Circle! Move, we dey go Circle! |
 | `chale-you-go-pay-our-time-move.mp3` | Chale, you go pay our time? Move! |
 
@@ -102,6 +109,7 @@ Lines with `{...}` in them say a name the game fills in (your hometown, a place)
 | File | Line |
 | --- | --- |
 | `massa-i-beg-go-side.mp3` | Massa, I beg, go side! |
+| `madam-i-beg-go-side.mp3` | Madam, I beg, go side! |
 | `chale-the-road-no-be-your-room.mp3` | Chale, the road no be your room! |
 | `herh-go-the-pavement.mp3` | Herh, go the pavement! |
 
@@ -124,6 +132,7 @@ Lines with `{...}` in them say a name the game fills in (your hometown, a place)
 | `ei-look-at-that-one.mp3` | Ei, look at that one! |
 | `tomorrow-we-go-to-kaneshie-market.mp3` | Tomorrow we go to Kaneshie market. |
 | `my-brother-how-far.mp3` | My brother, how far? |
+| `my-sister-how-far.mp3` | My sister, how far? |
 | `i-will-call-you-back.mp3` | I will call you back. |
 | `ah-see-this-price.mp3` | Ah, see this price! |
 
@@ -138,9 +147,12 @@ Lines with `{...}` in them say a name the game fills in (your hometown, a place)
 | `how-far.mp3` | How far? |
 | `akwaaba.mp3` | Akwaaba! |
 | `boss-come-and-buy.mp3` | Boss, come and buy! |
+| `madam-come-and-buy.mp3` | Madam, come and buy! |
 | `charley-how-be.mp3` (same as above) | Charley, how be? |
 | `bra-you-dey.mp3` | Bra, you dey? |
+| `sista-you-dey.mp3` | Sista, you dey? |
 | `sister-come.mp3` | Sister, come! |
+| `brother-come.mp3` | Brother, come! |
 | `ete-sen.mp3` | Ete sen? |
 | `wo-ho-te-sen.mp3` | Wo ho te sen? |
 
@@ -333,6 +345,7 @@ Lines with `{...}` in them say a name the game fills in (your hometown, a place)
 | File | Line |
 | --- | --- |
 | `salaam-alaikum-my-brother-how-is-your-day.mp3` | Salaam alaikum, my brother. How is your day? |
+| `salaam-alaikum-my-sister-how-is-your-day.mp3` | Salaam alaikum, my sister. How is your day? |
 | `welcome-take-your-time-you-will-know-accra-small-small.mp3` | Welcome. Take your time, you will know Accra small small. |
 | `alhamdulillah-go-well.mp3` | Alhamdulillah. Go well. |
 
@@ -386,6 +399,7 @@ Lines with `{...}` in them say a name the game fills in (your hometown, a place)
 | --- | --- |
 | `please-you-want-somebody-to-carry-your-load.mp3` | Please, you want somebody to carry your load? |
 | `ei-sorry-be-careful-at-the-station-my-brother.mp3` | Ei, sorry! Be careful at the station, my brother. |
+| `ei-sorry-be-careful-at-the-station-my-sister.mp3` | Ei, sorry! Be careful at the station, my sister. |
 | `small-small-depends-on-the-load-and-where-you-are-going.mp3` | Small, small. Depends on the load and where you are going. |
 
 ## Talk: A hawker
@@ -417,10 +431,13 @@ Lines with `{...}` in them say a name the game fills in (your hometown, a place)
 | File | Line |
 | --- | --- |
 | `boss-phones-chargers-power-bank-what-do-you-need.mp3` | Boss! Phones, chargers, power bank! What do you need? |
+| `madam-phones-chargers-power-bank-what-do-you-need.mp3` | Madam! Phones, chargers, power bank! What do you need? |
 | `sorry-boss-small-phones-start-from-three-hundred-cedis-you-w.mp3` | Sorry, boss! Small phones start from three hundred cedis. You want to see? |
+| `sorry-madam-small-phones-start-from-three-hundred-cedis-you.mp3` | Sorry, madam! Small phones start from three hundred cedis. You want to see? |
 | `no-wahala-when-you-get-money-come-here-first-i-will-do-you-g.mp3` | No wahala. When you get money, come here first, I will do you good price. |
 | `this-one-strong-battery-dual-sim-come-back-with-the-money-eh.mp3` | This one! Strong battery, dual SIM. Come back with the money, eh. |
 | `look-well-boss-original-stuff-only.mp3` | Look well, boss! Original stuff only. |
+| `look-well-madam-original-stuff-only.mp3` | Look well, madam! Original stuff only. |
 
 ## Talk: A bus mate
 
@@ -466,8 +483,10 @@ Lines with `{...}` in them say a name the game fills in (your hometown, a place)
 | File | Line |
 | --- | --- |
 | `my-son-are-you-fine-come-and-buy-kelewele-i-have-the-hot-one.mp3` | My son! Are you fine? Come and buy kelewele, I have the hot one now. |
+| `my-daughter-are-you-fine-come-and-buy-kelewele-i-have-the-ho.mp3` | My daughter! Are you fine? Come and buy kelewele, I have the hot one now. |
 | `good-accra-will-not-swallow-you-greet-your-uncle-for-me.mp3` | Good. Accra will not swallow you. Greet your uncle for me. |
 | `check-your-map-my-son-look-for-the-pump-they-are-everywhere.mp3` | Check your map, my son. Look for the pump. They are everywhere. |
+| `check-your-map-my-daughter-look-for-the-pump-they-are-everyw.mp3` | Check your map, my daughter. Look for the pump. They are everywhere. |
 | `hello-i-don-t-know-this-number-oo-who-is-calling.mp3` | Hello? I don’t know this number oo. Who is calling? |
 
 ## Phone: Grandma
@@ -490,4 +509,4 @@ Lines with `{...}` in them say a name the game fills in (your hometown, a place)
 
 ---
 
-227 lines to record.
+244 lines to record.

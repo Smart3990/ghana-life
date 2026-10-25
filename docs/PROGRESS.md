@@ -262,6 +262,10 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
   - **Voice script** (`docs/VOICE_SCRIPT.md`, made by `npm run voices` in `apps/web`): all 227 spoken lines grouped by who says them, each with its file name. Recordings named that way go in `apps/web/public/voices/`; `npm run voices:index` lists them and the game plays them instead of the phone's voice.
   - The phone stays open for testing; later it unlocks when Uncle Kwame buys you one (Mission 2, "Get Connected").
 
+  - **New billboards** (`src/game/adPosters.ts`): a wide 16:9 screen (7.2 x 4.05 m) in a thick dark frame on two strong legs, lower so it reads from the street, two-sided, bright like a screen, still sliding to a new advert every few seconds. The adverts look like real campaigns: a photo (our own, made with ImagineArt: a woman with her phone for Sika Mobile Money, Auntie Dede's kelewele, a dancer for Ghanaverse FM, a market woman with sachet water; 104 KB in all) or a bold graphic, the brand badge, a big headline, a line, a button, an AD tag and the kente strip. Fictional brands only. Smaller advert sheet on Light phones.
+  - **Billboards on the big map:** each shows its advert on two little legs; a few spread out on "All", every one under the new 📺 Ads filter.
+  - **Lines said to you fit you:** a woman player hears "my daughter", "my sister", "Madam", "Sista"; a man hears "my son", "my brother", "Massa", "Bra" (`src/game/address.ts`), in the street, in talks, from drivers and on phone calls. The voice script lists both versions (244 lines).
+
 ## Waiting on the owner
 
 - Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.

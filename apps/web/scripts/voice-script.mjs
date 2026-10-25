@@ -195,6 +195,27 @@ Every line the game speaks, grouped by who says it. Made from the game's code by
 Lines with \`{...}\` in them say a name the game fills in (your hometown, a place): the phone's voice says those for now.
 
 `;
+// Lines said TO the player come in a man's and a woman's form ("my son" / "my daughter").
+// Same pairs as src/game/address.ts.
+const ADDRESS = [['my son', 'my daughter'], ['my boy', 'my girl'], ['my brother', 'my sister'], ['young man', 'young lady'], ['brother', 'sister'], ['massa', 'madam'], ['jimmy', 'sister'], ['bra', 'sista'], ['boss', 'madam']];
+const forPlayer = (text, body) => {
+  const pairs = body === 'female' ? ADDRESS : ADDRESS.filter(([m]) => m !== 'jimmy' && m !== 'boss').map(([m, f]) => [f, m]);
+  const re = new RegExp(`\\b(${pairs.map(([a]) => a).join('|')})\\b`, 'gi');
+  return text.replace(re, (w) => {
+    const hit = pairs.find(([a]) => a === w.toLowerCase());
+    if (!hit) return w;
+    return w[0] === w[0].toUpperCase() ? hit[1][0].toUpperCase() + hit[1].slice(1) : hit[1];
+  });
+};
+for (const [title, s] of sections) {
+  // The player's own lines are not changed; everyone else's are said to a man or a woman.
+  if (!/^You/.test(s.who)) {
+    const both = [];
+    for (const line of s.lines) for (const v of [line, forPlayer(line, 'male'), forPlayer(line, 'female')]) if (!both.includes(v)) both.push(v);
+    s.lines = new Set(both);
+  }
+}
+md = md.replace('Lines with `{...}`', 'Lines said to the player come twice when it matters: once for a man ("my son", "my brother", "Massa", "Bra") and once for a woman ("my daughter", "my sister", "Madam", "Sista"). Record both.\n\nLines with `{...}`');
 for (const [title, s] of sections) {
   md += `## ${title}\n\n*Who:* ${s.who}\n\n| File | Line |\n| --- | --- |\n`;
   for (const line of s.lines) {

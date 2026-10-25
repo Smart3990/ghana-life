@@ -20,6 +20,9 @@ type View = {
   areas: { name: string; lng: number; lat: number }[];
   cars: () => MapCar[];
   here: string;
+  /** Billboards: where they stand and which advert they show (its picture, from adThumb). */
+  boards: { lng: number; lat: number; ad: number }[];
+  adPicture: (ad: number) => string;
 };
 
 const GROUPS: Group[] = [
@@ -32,6 +35,7 @@ const GROUPS: Group[] = [
   { name: 'School', icon: '🏫', kinds: ['SCHOOL'] },
   { name: 'Shops', icon: '🛍️', kinds: ['PHONES & ELECTRONICS', 'FASHION HOUSE', 'BARBERING & SALON', 'HARDWARE', 'PRINTING & BOOKS', 'LOTTO KIOSK', 'FITTING SHOP'] },
   { name: 'Safety', icon: '👮', kinds: ['POLICE STATION', 'FIRE STATION', 'POST OFFICE', 'HOTEL'] },
+  { name: 'Ads', icon: '📺', kinds: [] },
 ];
 const ICON: Record<string, string> = {
   'FILLING STATION': '⛽', 'BUS STOP': '🚏', 'BUS TERMINAL': '🚌', 'LORRY STATION': '🚐', 'CHOP BAR': '🍲', MARKET: '🧺', SUPERMARKET: '🛒',
@@ -261,6 +265,7 @@ export class FullMap {
     // Nearest first, so the pins drop in rippling out from you.
     const list = view.places
       .filter((p) => !group || group.kinds.includes(p.kind))
+      .filter(() => this.filter !== 'Ads')
       .map((p) => ({ p, d: metres(p, view.you) }))
       .sort((a, b) => a.d - b.d)
       .slice(0, 260);
@@ -278,6 +283,26 @@ export class FullMap {
       });
       this.markers.push(new maplibregl.Marker({ element: el, anchor: 'bottom' }).setLngLat([p.lng, p.lat]).addTo(this.map!));
     });
+    // The billboards, each with a small picture of its advert, standing on two legs.
+    if (this.filter === 'All' || this.filter === 'Ads') {
+      const pics = new Map<number, string>();
+      // On "All" only a few, spread out (at least 90 m apart), so the map stays clear; all of them under Ads.
+      const gap = this.filter === 'Ads' ? 25 : 90;
+      const boards: { b: (typeof view.boards)[number] }[] = [];
+      for (const b of view.boards.map((b) => ({ b, d: metres(b, view.you) })).sort((a, b) => a.d - b.d)) {
+        if (boards.length >= (this.filter === 'Ads' ? 40 : 12)) break;
+        if (boards.some((o) => metres(o.b, b.b) < gap)) continue;
+        boards.push(b);
+      }
+      boards.forEach(({ b }, i) => {
+        const el = document.createElement('div');
+        el.className = 'fm-board';
+        if (animate) el.style.animationDelay = `${Math.min(1.6, 0.3 + i * 0.03)}s`;
+        if (!pics.has(b.ad)) pics.set(b.ad, view.adPicture(b.ad));
+        el.innerHTML = `<img alt="" src="${pics.get(b.ad)}"><i></i>`;
+        this.markers.push(new maplibregl.Marker({ element: el, anchor: 'bottom' }).setLngLat([b.lng, b.lat]).addTo(this.map!));
+      });
+    }
     for (const a of view.areas) {
       const el = document.createElement('div');
       el.className = 'fm-area';

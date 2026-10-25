@@ -7,6 +7,7 @@
 import type { Arm, Junction } from './signals';
 import * as THREE from 'three';
 import { slidingAdMaterial, twoSidedFace } from './adScreens';
+import { AD_COUNT, adSheet } from './adPosters';
 import { box, merge, paint, shadowTexture } from './vehicles3d';
 import type { Roof, StreetLine } from './streetBuildings';
 import { CrowdBatch, lookFor, MIX, type Clip, type CrowdBody, type Kind as PersonKind, type Look } from './crowd';
@@ -72,17 +73,22 @@ function powerPole(): Part {
   ]);
 }
 
-// A billboard on two legs: the frame and legs (the poster is a separate picture).
+// A billboard: a wide screen (16:9, 7.2 x 4.05 m) in a thick dark frame on two strong legs, low
+// enough to read from the street, with a small gold maker's tag on top. The adverts are separate
+// pictures on both faces.
 function billboardFrame(): Part {
   return merge([
-    paint(box(0.25, 6, 0.25, -2.6, 3, -0.2), '#5d5a55'),
-    paint(box(0.25, 6, 0.25, 2.6, 3, -0.2), '#5d5a55'),
-    paint(box(8.4, 4.4, 0.18, 0, 7.2, -0.12), '#3e3c39'),
-    paint(box(8.4, 0.12, 0.6, 0, 4.95, 0.1), '#5d5a55'), // the walkway under the poster
+    paint(box(0.36, 3.2, 0.36, -2.3, 1.6, -0.12), '#3a3b3e'),
+    paint(box(0.36, 3.2, 0.36, 2.3, 1.6, -0.12), '#3a3b3e'),
+    paint(box(0.9, 0.12, 0.9, -2.3, 0.06, -0.12), '#2a2b2e'), // the feet
+    paint(box(0.9, 0.12, 0.9, 2.3, 0.06, -0.12), '#2a2b2e'),
+    paint(box(7.7, 4.55, 0.3, 0, 5.0, -0.12), '#16171a'), // the frame
+    paint(box(7.8, 0.14, 0.42, 0, 2.7, -0.12), '#2a2b2e'), // its bottom rail
+    paint(box(1.1, 0.3, 0.34, 2.9, 7.4, -0.12), '#e3a92b'), // the tag on top
   ]);
 }
 
-const POSTERS = 8;
+const POSTERS = AD_COUNT;
 // A rooftop billboard: steel legs and a walkway on the roof, the poster above.
 function roofFrame(): Part {
   return merge([
@@ -100,49 +106,6 @@ function bannerPole(): Part {
 
 // Posters for the game's own made-up brands (painted in code; no real brands in the city). These are
 // the in-world ad spaces of design brief 18.1: real advertisers' posters can replace them later.
-function poster(n: number): THREE.CanvasTexture {
-  const c = document.createElement('canvas');
-  c.width = 512;
-  c.height = 256;
-  const g = c.getContext('2d')!;
-  const designs = [
-    { bg: ['#0f6b3a', '#1c9b57'], big: 'SIKA MOBILE MONEY', small: 'Send money home in seconds', accent: '#f2c21a' },
-    { bg: ['#c2410c', '#f08a24'], big: 'KELEWELE AT CIRCLE', small: 'Hot and spicy, every evening', accent: '#fff3c4' },
-    { bg: ['#4a1d6e', '#7a3fb0'], big: 'GHANAVERSE FM', small: 'The sound of the city · 24/7', accent: '#ffd25a' },
-    { bg: ['#121a14', '#2a3a2e'], big: 'GHANAVERSE', small: 'Your Accra. Your story.', accent: '#e3a92b' },
-    { bg: ['#0b4f8a', '#2a86d1'], big: 'COOL SACHET WATER', small: 'Clean water, ice cold', accent: '#ffffff' },
-    { bg: ['#f2efe6', '#d9d2c2'], big: 'YOUR AD HERE', small: 'Advertise in Ghanaverse from ₵35 a week', accent: '#c8442e', ink: '#121a14' },
-    { bg: ['#8e1b1b', '#c8442e'], big: 'GHANAVERSE NEWS', small: 'Tonight at 8 · the city’s biggest stories', accent: '#ffffff' },
-    { bg: ['#1f4f8a', '#121a14'], big: 'TONIGHT IN GHANAVERSE', small: 'Highlife night at Osu · free entry', accent: '#e3a92b' },
-  ];
-  const d = designs[n % designs.length];
-  const grad = g.createLinearGradient(0, 0, 512, 256);
-  grad.addColorStop(0, d.bg[0]);
-  grad.addColorStop(1, d.bg[1]);
-  g.fillStyle = grad;
-  g.fillRect(0, 0, 512, 256);
-  // A kente strip along the bottom on every poster.
-  const kente = ['#e3a92b', '#121a14', '#c8442e', '#121a14', '#2f8f57', '#121a14', '#1f5fa8', '#121a14'];
-  for (let x = 0, i = 0; x < 512; x += 16, i++) {
-    g.fillStyle = kente[i % kente.length];
-    g.fillRect(x, 232, 16, 24);
-  }
-  g.fillStyle = d.accent;
-  g.beginPath();
-  g.arc(440, 96, 58, 0, Math.PI * 2);
-  g.fill();
-  g.fillStyle = (d as { ink?: string }).ink ?? '#ffffff';
-  g.font = '900 46px system-ui, sans-serif';
-  g.fillText(d.big, 28, 108, 380);
-  g.fillStyle = d.accent;
-  g.font = '700 26px system-ui, sans-serif';
-  g.fillText(d.small, 30, 160, 380);
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 4;
-  return t;
-}
-
 function streetLight(): Part {
   return merge([
     paint(new THREE.CylinderGeometry(0.07, 0.1, 7.5, 6).translate(0, 3.75, 0), '#7d8287'),
@@ -327,15 +290,12 @@ export class StreetLife {
     this.banners = make(bannerPole(), false);
     // Advert faces: every billboard is two-sided and changes advert every few seconds (sliding),
     // all from one picture of the adverts (one draw for all the billboards of each kind).
-    const atlas = document.createElement('canvas');
-    atlas.width = 512;
-    atlas.height = 256 * POSTERS;
-    const ag = atlas.getContext('2d')!;
-    for (let n = 0; n < POSTERS; n++) ag.drawImage(poster(n).image as HTMLCanvasElement, 0, (POSTERS - 1 - n) * 256);
+    // The advert sheet: photos and graphics like real campaigns (adPosters.ts); smaller on Light phones.
+    const atlas = adSheet(opts.people < 150 ? 512 : 768, () => (atlasTex.needsUpdate = true));
     const atlasTex = new THREE.CanvasTexture(atlas);
     atlasTex.colorSpace = THREE.SRGBColorSpace;
     atlasTex.anisotropy = 4;
-    const adMat = slidingAdMaterial(atlasTex, POSTERS, 7);
+    const adMat = slidingAdMaterial(atlasTex, POSTERS, 7, true); // bright, like a screen
     const face = (g: THREE.BufferGeometry, n: number) => {
       g.setAttribute('aAd', new THREE.InstancedBufferAttribute(new Float32Array(n), 1));
       const mesh = new THREE.InstancedMesh(g, adMat, n);
@@ -344,8 +304,8 @@ export class StreetLife {
       this.group.add(mesh);
       return mesh;
     };
-    this.posterMesh = face(twoSidedFace(8, 4, 7.2, -0.12, 0.11), 320);
-    this.roofMesh = face(twoSidedFace(9, 4.5, 5.6, -0.12, 0.1), 60);
+    this.posterMesh = face(twoSidedFace(7.2, 4.05, 5.0, -0.12, 0.17), 320);
+    this.roofMesh = face(twoSidedFace(8.6, 4.84, 5.6, -0.12, 0.1), 60);
     this.bannerMesh = face(twoSidedFace(1.0, 0.5, 0, 0, 0.02).rotateZ(Math.PI / 2).translate(0, 2.35, 0), 160);
     this.wires = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0x1d1d1d, transparent: true, opacity: 0.85 }));
     this.wires.frustumCulled = false;
@@ -380,7 +340,7 @@ export class StreetLife {
   private tanks: Batch;
   private phones!: Batch;
   private poles!: Batch;
-  private boards!: Batch;
+  boards!: Batch;
   private posterMesh!: THREE.InstancedMesh;
   private roofMesh!: THREE.InstancedMesh;
   private bannerMesh!: THREE.InstancedMesh;
