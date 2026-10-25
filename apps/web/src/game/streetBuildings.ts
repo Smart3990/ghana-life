@@ -22,7 +22,8 @@ type LngLat = [number, number];
 type ToLocal = (lng: number, lat: number) => [number, number];
 type Footprint = { ring: Float32Array; minX: number; maxX: number; minZ: number; maxZ: number };
 /** A road from the tiles, in local metres: kind is the map's road kind (major_road, minor_road, ...). */
-export type StreetLine = { kind: string; pts: Float32Array };
+// edge: a lane, service road or flyover. It only keeps stalls and trees off its tarmac (no traffic, no pavements).
+export type StreetLine = { kind: string; pts: Float32Array; edge?: boolean };
 /** The middle of a roof: where tanks and signs can go. */
 export type Roof = { x: number; z: number; top: number; id: number };
 export type StreetsListener = (roads: StreetLine[], roofs: Roof[]) => void;
@@ -206,12 +207,13 @@ export class StreetBuildings {
         for (let i = 0; i < roadsLayer.length; i++) {
           const f = roadsLayer.feature(i);
           const kind = String(f.properties.kind);
-          if (!['highway', 'major_road', 'minor_road'].includes(kind) || f.properties.is_bridge || f.properties.is_tunnel) continue;
+          if (!['highway', 'major_road', 'minor_road', 'other'].includes(kind) || f.properties.is_tunnel) continue;
+          const edge = kind === 'other' || !!f.properties.is_bridge;
           for (const line of f.loadGeometry()) {
             // Only the part inside this tile (the border is repeated in the next tile).
             let run: number[] = [];
             const flush = () => {
-              if (run.length >= 4) roads.push({ kind, pts: new Float32Array(run) });
+              if (run.length >= 4) roads.push({ kind, pts: new Float32Array(run), edge });
               run = [];
             };
             for (const p of line) {

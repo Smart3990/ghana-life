@@ -19,6 +19,7 @@ const HALF: Record<string, { half: number; walk: number }> = {
   highway: { half: 7, walk: 2.5 },
   major_road: { half: 5, walk: 2.5 },
   minor_road: { half: 3.25, walk: 1.8 },
+  other: { half: 2.4, walk: 0 }, // lanes and service roads (only kept clear, nothing placed along them)
 };
 const GUTTER = 0.55;
 
@@ -119,6 +120,9 @@ type Agent = {
   // Waiting for a vehicle to pass: how many seconds they are behind their own timetable.
   held?: number;
   waiting?: boolean;
+  talkUntil?: number; // talking with the player until this time
+  faceX?: number;
+  faceZ?: number;
   lastX?: number;
   lastZ?: number;
 };
@@ -243,6 +247,7 @@ export class StreetLife {
       female.mesh.setMatrixAt(i, hidden);
     }
     this.scenes = new StreetScenes({ male, female }, freeSlots, this.opts.scenes);
+    this.scenes.clear = (x, z) => !this.onRoad(x, z, 0.25) && !this.blocked(x, z, 0.2);
     this.group.add(this.scenes.group);
     const total = MIX.reduce((n, [, w]) => n + w, 0);
     for (let i = 0; i < this.opts.people; i++) {
@@ -310,7 +315,8 @@ export class StreetLife {
   }
 
   /** New roads and roofs from a tile: place things along them. */
-  add(roads: StreetLine[], roofs: Roof[]) {
+  add(allRoads: StreetLine[], roofs: Roof[]) {
+    let roads = allRoads;
     for (const road of roads) {
       const size = HALF[road.kind];
       if (!size) continue;
@@ -325,6 +331,9 @@ export class StreetLife {
     this.palms.all = clear(this.palms.all, 0.5);
     this.gatherings = this.gatherings.filter((g) => !this.onRoad(g.x, g.z, 0.9));
     this.footballSpots = this.footballSpots.filter((g) => !this.onRoad(g.x, g.z, 2));
+    // Lanes, service roads and flyovers only keep the tarmac clear; everything else is placed along
+    // the ground-level streets.
+    roads = roads.filter((r) => !r.edge);
     this.findJunctions(roads);
     for (const road of roads) {
       const size = HALF[road.kind];
@@ -615,6 +624,29 @@ export class StreetLife {
   /** How many walkers are within 25 m of the player (for the crowd's sound). */
   nearCount = 0;
 
+  /** The nearest person walking or standing on the pavement, within reach (for greeting them). */
+  nearestWalker(px: number, pz: number, reach: number) {
+    let best: { i: number; x: number; z: number; kind: PersonKind; height: number } | null = null;
+    let bestD = reach;
+    for (const [i, a] of this.agents.entries()) {
+      if (a.lastX === undefined || a.spot) continue;
+      const batch = this.crowds[a.batch];
+      if (!batch || a.slot >= batch.mesh.count) continue;
+      const d = Math.hypot(a.lastX - px, a.lastZ! - pz);
+      if (d < bestD) [best, bestD] = [{ i, x: a.lastX, z: a.lastZ!, kind: a.kind, height: (a.look.body === 'female' ? 1.85 : 1.95) * a.look.scale }, d];
+    }
+    return best;
+  }
+
+  /** Someone on the pavement stops and talks with the player for a few seconds. */
+  holdWalker(i: number, seconds: number, faceX: number, faceZ: number) {
+    const a = this.agents[i];
+    if (!a) return;
+    a.talkUntil = this.time.value + seconds;
+    a.faceX = faceX;
+    a.faceZ = faceZ;
+  }
+
   /** Is a vehicle at this point? (Set by the street test, so people wait instead of walking through cars.) */
   vehicleAt: ((x: number, z: number, room: number) => { x: number; z: number; fx: number; fz: number; half: number; halfW: number } | null) | null = null;
 
@@ -661,8 +693,18 @@ export class StreetLife {
         px = qx + Math.cos(dir) * side;
         pz = qz + Math.sin(dir) * side;
         if (a.still) heading = dir + (a.lateral > 0 ? Math.PI / 2 : -Math.PI / 2);
+        // Talking with the player: stand still, face them, talk with the hands.
+        if ((a.talkUntil ?? 0) > t) {
+          if (!a.still) a.held = (a.held ?? 0) + dt;
+          if (a.lastX !== undefined) [px, pz] = [a.lastX, a.lastZ!];
+          heading = Math.atan2(a.faceX! - px, -(a.faceZ! - pz));
+          if (!a.waiting) {
+            a.waiting = true;
+            batch.setLook(a.slot, a.look, 'talk', t);
+          }
+        }
         // A vehicle in the way: wait where you are (standing, not walking on the spot) until it moves.
-        else if (this.vehicleAt && Math.abs(px - x) < 60 && Math.abs(pz - z) < 60 && this.vehicleAt(px, pz, 0.35)) {
+        else if (!a.still && this.vehicleAt && Math.abs(px - x) < 60 && Math.abs(pz - z) < 60 && this.vehicleAt(px, pz, 0.35)) {
           if (!leader) a.held = (a.held ?? 0) + dt;
           if (a.lastX !== undefined) [px, pz] = [a.lastX, a.lastZ!];
           // If the vehicle comes right up to where they stand, they step aside out of its way.
@@ -679,7 +721,8 @@ export class StreetLife {
           }
         } else if (a.waiting) {
           a.waiting = false;
-          batch.setLook(a.slot, a.look, 'walk', t, a.speed / (1.35 * a.look.scale));
+          if (a.still) batch.setLook(a.slot, a.look, hash(i, 5) < 0.6 ? 'talk' : 'idle', t);
+          else batch.setLook(a.slot, a.look, 'walk', t, a.speed / (1.35 * a.look.scale));
         }
         a.lastX = px;
         a.lastZ = pz;

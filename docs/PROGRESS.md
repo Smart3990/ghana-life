@@ -192,6 +192,12 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
   - **Sellers beside the road, never on it:** hawkers no longer walk down the middle of the road, and kiosks, stalls and trees placed before a road had loaded are removed when that road arrives.
   - **Done when:** after the film you stand beside a zebra; the light turns red and the cars stop; after the chase the mission card appears; you cross at the zebra, the auntie calls you, TALK plays the conversation, and AYEKOO! shows Mission 1 complete.
 
+- **Nobody stands in the road, and anyone you meet talks with you (2026-10-25):**
+  - Lanes, service roads and flyovers are now known to street life too (they only keep the tarmac clear: no traffic or pavements on them), so stalls, kiosks and trees are never on them.
+  - People at places (sellers, customers, people on chairs, dancers) are never put on a road or in a wall; chairs too. Dancers and the music spot stand closer to the kiosk. Check: 17 people at places, 0 on a road; 0 umbrella stalls on a road.
+  - **Talk with anyone:** GREET works on everyone on the pavement as well as people at places. They stop, turn to you and talk (the walk turns into a talking pose), and you have a short conversation in bubbles over your heads. What they say depends on who they are: Muslims ("Salaam alaikum" / "Alaikum salaam"), church people ("God bless you"), school children, kayayei, hawkers, sellers, and everyday Accra chat ("Chale, how far?", directions, "hold your pocket well"). Walking away ends it.
+  - The player is never moved for them once they have started moving (the start-on-the-pavement check stops then).
+
 ## Waiting on the owner
 
 - Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.

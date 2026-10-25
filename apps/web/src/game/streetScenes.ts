@@ -28,6 +28,7 @@ type Member = {
   // Children chasing the ball move about a centre.
   orbit: { cx: number; cz: number; r: number; speed: number; phase: number } | null;
   greeted: number;
+  kind: Kind;
 };
 
 const hash = (a: number, b: number) => {
@@ -99,12 +100,16 @@ export class StreetScenes {
   }
 
   // Put a person into a scene: take a spare slot in the right batch and give them a look and a move.
+  /** Is this spot clear of roads and walls? (Set by street life: people at places never stand on the road.) */
+  clear: ((x: number, z: number) => boolean) | null = null;
+
   private add(kind: Kind, seed: number, x: number, z: number, face: number, clip: Clip, cycle: Clip[] | null = null, t = 0): Member | null {
+    if (this.clear && !this.clear(x, z)) return null;
     const look = lookFor(kind, (k) => hash(seed, 60 + k));
     const slot = this.free[look.body].pop();
     if (slot === undefined) return null;
     this.crowds[look.body].setLook(slot, look, clip, hash(seed, 3) * 10);
-    const member: Member = { body: look.body, slot, look, x, z, face, clip, cycle, every: 4 + hash(seed, 5) * 5, nextChange: t + hash(seed, 6) * 5, orbit: null, greeted: 0 };
+    const member: Member = { body: look.body, slot, look, x, z, face, clip, cycle, every: 4 + hash(seed, 5) * 5, nextChange: t + hash(seed, 6) * 5, orbit: null, greeted: 0, kind };
     this.members.push(member);
     return member;
   }
@@ -131,12 +136,12 @@ export class StreetScenes {
       this.add(hash(seed, 2) < 0.6 ? 'woman' : 'man', seed, k.x + fx * 1.55, k.z + fz * 1.55, k.angle, 'sell', ['sell', 'call', 'serve', 'hand', 'sell'], t);
       if (music) {
         // A kiosk playing music: people dancing in front of it.
-        this.musicSpots.push({ x: k.x + fx * 3, z: k.z + fz * 3 });
+        this.musicSpots.push({ x: k.x + fx * 2.4, z: k.z + fz * 2.4 });
         const dancers = 3 + Math.floor(hash(seed, 4) * 3);
         for (let d = 0; d < dancers; d++) {
           const a = (d / dancers) * Math.PI * 2 + hash(seed, d) * 0.5;
-          const dx = k.x + fx * 3.6 + Math.sin(a) * 1.3;
-          const dz = k.z + fz * 3.6 - Math.cos(a) * 1.3;
+          const dx = k.x + fx * 2.7 + Math.sin(a) * 1.0;
+          const dz = k.z + fz * 2.7 - Math.cos(a) * 1.0;
           this.add(hash(seed, 10 + d) < 0.5 ? 'woman' : 'man', seed + d * 13, dx, dz, a + Math.PI, 'dance', null, t);
         }
       } else {
@@ -164,6 +169,7 @@ export class StreetScenes {
         const cx = u.x + Math.sin(a) * 1.25;
         const cz = u.z - Math.cos(a) * 1.25;
         const face = a + Math.PI; // facing the table
+        if (this.clear && !this.clear(cx, cz)) continue; // no chairs on the road
         this.q.setFromAxisAngle(this.up, Math.PI - face);
         this.m.compose(this.p.set(cx, 0, cz), this.q, this.sc.setScalar(1));
         this.chairs.setMatrixAt(chairs, this.m);
@@ -221,6 +227,17 @@ export class StreetScenes {
   /** Where the sellers are; umbrella-stall sellers (food) are marked, for the story's kelewele auntie. */
   sellers(): { x: number; z: number; face: number; food: boolean }[] {
     return this.members.filter((m) => m.cycle?.includes('sell')).map((m) => ({ x: m.x, z: m.z, face: m.face, food: !!m.cycle?.includes('pick') }));
+  }
+
+  /** Someone at a place turns to the player and talks for a few seconds (a conversation). */
+  converse(who: number, t: number, seconds: number) {
+    const m = this.members[who];
+    if (!m) return null;
+    m.greeted = t;
+    this.lastSpoke = t;
+    this.switchTo(m, 'talk', t);
+    m.nextChange = t + seconds;
+    return { x: m.x, z: m.z, height: 1.95 * m.look.scale, seller: !!m.cycle?.includes('sell'), kind: m.kind };
   }
 
   /** The player greets someone: they answer with a word and a nod or a wave. */

@@ -537,10 +537,11 @@ function step(player: Player, dt: number, t: number) {
     input.sprint = input.brake = false;
     tapped.clear();
   }
+  if (!story.frozen && Math.hypot(input.x, input.y) > 0.2) playerMoved = true; // after this, never move the player for them
   if (!startPlaced) startPlaced = placeOnPavement();
   // Streets keep loading for a while: if the start turns out to be on a road after all, step onto
   // the pavement again (only while standing still near the start).
-  else if (life && performance.now() - startedAt < 30000 && ++placeCheck % 20 === 0 && !state.onOkada && Math.abs(state.speed) < 0.1 && life.roadAt(state.x, state.z, 0.4)) placeOnPavement();
+  else if (life && !playerMoved && performance.now() - startedAt < 30000 && ++placeCheck % 20 === 0 && !state.onOkada && Math.abs(state.speed) < 0.1 && life.roadAt(state.x, state.z, 0.4)) placeOnPavement();
 
   // The action button: what it does depends on what is next to you.
   const nearOkada = hasOkada && !state.onOkada && Math.hypot(state.x - state.okadaX, state.z - state.okadaZ) < MOUNT_DISTANCE_M;
@@ -814,6 +815,53 @@ function bump() {
   state.lean = 0.15;
 }
 
+
+// ---------- Talking with people ----------
+// Anyone you meet can talk with you: tap GREET (or CHAT with a seller) and you have a short
+// conversation, in bubbles over your heads. What they say depends on who they are. Moving the
+// stick walks away and ends it.
+type Line = [who: 'me' | 'them', text: string];
+const TALKS: Record<string, Line[][]> = {
+  any: [
+    [['me', 'Good afternoon!'], ['them', 'Afternoon oo! You are new here?'], ['me', 'Yes, I just came to Accra.'], ['them', 'Akwaaba! Accra is sweet, but hold your pocket well.']],
+    [['me', 'Hello, how are you?'], ['them', 'I dey, by His grace. And you?'], ['me', 'I’m fine. Is Circle always this busy?'], ['them', 'Ha! This one is small. Come back at closing time.']],
+    [['me', 'Chale, how far?'], ['them', 'Charley, I dey kraa! You?'], ['me', 'I’m trying to find my way.'], ['them', 'Ask anybody. Accra people go help you.']],
+    [['me', 'Please, is this the way to the station?'], ['them', 'Yes, go straight, then cross at the zebra.'], ['me', 'Thank you!'], ['them', 'You’re welcome. Safe journey!']],
+  ],
+  muslimMan: [[['me', 'Salaam alaikum.'], ['them', 'Alaikum salaam, my brother. Welcome.'], ['me', 'Thank you. Accra is very big.'], ['them', 'Take your time. You will know it small small.']]],
+  muslimWoman: [[['me', 'Salaam alaikum.'], ['them', 'Alaikum salaam. How is your day?'], ['me', 'Long! I just arrived.'], ['them', 'Ah, welcome. Rest a little, eh.']]],
+  church: [[['me', 'Good afternoon.'], ['them', 'God bless you, my dear!'], ['me', 'Amen. Are you going to church?'], ['them', 'Yes, choir practice. Come and visit on Sunday!']]],
+  child: [[['me', 'Hello!'], ['them', 'Good afternoon, please!'], ['me', 'What is your name?'], ['them', 'Kofi! I’m going home to eat.']]],
+  pupil: [
+    [['me', 'Hello! School is over?'], ['them', 'Yes, please! We are going home.'], ['me', 'Did you learn well?'], ['them', 'We did maths. It was hard!']],
+    [['me', 'Good afternoon.'], ['them', 'Good afternoon, please!'], ['me', 'Which school?'], ['them', 'The one behind the market!']],
+  ],
+  kayayo: [[['me', 'Hello, auntie.'], ['them', 'You want somebody to carry your load?'], ['me', 'No load today. They took my bag.'], ['them', 'Ei, sorry! Be careful at the station.']]],
+  hawker: [[['me', 'What are you selling?'], ['them', 'Pure water, ice cold! Gari biscuit too!'], ['me', 'Not today, thank you.'], ['them', 'No problem. Next time, my customer!']]],
+  seller: [
+    [['me', 'Good afternoon, auntie.'], ['them', 'My customer! What do you want?'], ['me', 'Just looking for now.'], ['them', 'Look well. Everything is fresh!']],
+    [['me', 'How much for this?'], ['them', 'For you, special price!'], ['me', 'I have no money now.'], ['them', 'Ah. Come back when you have, eh.']],
+  ],
+};
+let chatting = false;
+async function chat(who: { x: number; z: number; height: number; kind: string; seller: boolean }, t: number) {
+  const sets = TALKS[who.seller ? 'seller' : who.kind] ?? TALKS.any;
+  const pick = Math.random() < 0.35 && TALKS[who.kind] && !who.seller ? TALKS.any : sets;
+  const lines = pick[Math.floor(Math.random() * pick.length)];
+  chatting = true;
+  me.doing = 'greet';
+  me.until = t + 30;
+  const start = { x: state.x, z: state.z };
+  for (const [speaker, text] of lines) {
+    // Walking away ends the conversation.
+    if (Math.hypot(state.x - start.x, state.z - start.z) > 1.2 || me.doing !== 'greet') break;
+    if (speaker === 'me') life?.scenes?.onSpeak?.(state.x, state.z, 1.95, text);
+    else life?.scenes?.onSpeak?.(who.x, who.z, who.height, text);
+    await new Promise((r) => setTimeout(r, Math.max(1700, 900 + text.length * 45)));
+  }
+  if (me.doing === 'greet') me.doing = 'none';
+  chatting = false;
+}
 // ---------- The action button, energy, vibe and the first goals ----------
 // One gold button does the thing that makes sense where you stand, like a person would: get on the
 // okada, get off, greet someone, chat to a seller, sit on a chop bar chair to rest, dance where music
@@ -821,7 +869,7 @@ function bump() {
 
 const me = { energy: 100, vibe: 0, doing: 'none' as 'none' | 'sit' | 'dance' | 'greet', until: 0, seat: null as { x: number; z: number; face: number } | null, tiredSaid: false };
 type ActionId = 'ride' | 'off' | 'sit' | 'stand' | 'dance' | 'stop' | 'greet' | 'chat' | 'talk';
-type Action = { id: ActionId; target?: Nearby };
+type Action = { id: ActionId; target?: Nearby; walker?: { i: number; x: number; z: number; kind: string; height: number } };
 const ACTIONS: Record<ActionId, { label: string; icon: string }> = {
   ride: { label: 'RIDE', icon: '<circle cx="5.5" cy="16.5" r="3.5"/><circle cx="18.5" cy="16.5" r="3.5"/><path d="M5.5 16.5L9 10h6l3.5 6.5"/><path d="M15 10l-1.5-3H16"/><path d="M9 10l2.5 6.5h3"/>' },
   off: { label: 'GET OFF', icon: '<path d="M14 4h4a2 2 0 012 2v12a2 2 0 01-2 2h-4"/><path d="M10 8l-4 4 4 4"/><path d="M6 12h10"/>' },
@@ -849,6 +897,11 @@ function chooseAction(nearOkada: boolean, near: Nearby | null): Action | null {
   if (story.auntie && Math.hypot(story.auntie.x - state.x, story.auntie.z - state.z) < 2.8) return { id: 'talk' };
   if (me.doing === 'dance') return { id: 'stop' };
   if (nearOkada && state.y === 0) return { id: 'ride' };
+  // People on the pavement can be greeted too: whoever is nearer, them or someone at a place.
+  const walker = me.doing === 'none' && !chatting ? life?.nearestWalker(state.x, state.z, 2.4) : null;
+  if (walker && (!near || Math.hypot(walker.x - state.x, walker.z - state.z) < near.d)) {
+    return { id: 'greet', target: { kind: 'person', x: walker.x, z: walker.z, face: 0, d: 0, who: -1 }, walker };
+  }
   if (!near) return null;
   const id = ({ seat: 'sit', music: 'dance', seller: 'chat', person: 'greet' } as const)[near.kind];
   return { id, target: near };
@@ -920,9 +973,16 @@ function doAction(a: Action | null, t: number) {
       const target = a.target!;
       state.heading = Math.atan2(target.x - state.x, -(target.z - state.z));
       state.speed = 0;
-      me.doing = 'greet';
-      me.until = t + 1.6;
-      life?.scenes?.answer(target.who, performance.now() / 1000, a.id === 'chat');
+      // A short conversation: they stop, turn to you and talk.
+      let who: { x: number; z: number; height: number; kind: string; seller: boolean } | null = null;
+      if (a.walker) {
+        life?.holdWalker(a.walker.i, 11, state.x, state.z);
+        who = { x: a.walker.x, z: a.walker.z, height: a.walker.height, kind: a.walker.kind, seller: a.walker.kind === 'hawker' };
+      } else {
+        const c = life?.scenes?.converse(target.who, performance.now() / 1000, 11);
+        if (c) who = c;
+      }
+      if (who) void chat(who, t);
       // Saying hello lifts your vibe (not more than once every few seconds).
       if (t - lastGreet > 4) me.vibe += 1;
       lastGreet = t;
@@ -1196,6 +1256,7 @@ function storyGoal(text: string) {
 // around the start have loaded.
 let startPlaced = false;
 let placeCheck = 0;
+let playerMoved = false;
 function placeOnPavement() {
   if (!life || performance.now() - startedAt < 1500) return false;
   let roads = false;
@@ -1465,7 +1526,7 @@ const buildings = new StreetBuildings(
     // Every street the map loads gets traffic too: two lanes each way on main roads, one on others.
     const toLngLat = (x: number, z: number): [number, number] => [START[0] + x / M_LON, START[1] - z / M_LAT];
     pendingRoads.push(
-      ...roads.map((r) => ({
+      ...roads.filter((r) => !r.edge).map((r) => ({
         pts: Array.from({ length: r.pts.length / 2 }, (_, i) => toLngLat(r.pts[i * 2], r.pts[i * 2 + 1])),
         lanes: (r.kind === 'minor_road' ? 1 : 2) as 1 | 2,
       })),
