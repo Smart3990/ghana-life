@@ -13,6 +13,10 @@ export type AdDesign = {
   accent: string;
   ink?: string;
   photo?: string;
+  /** 'cover' fills the board with the photo; 'contain' shows the whole photo (a product) beside the words. */
+  photoFit?: 'cover' | 'contain';
+  /** Contact line on the advert: phone, WhatsApp, website. */
+  contact?: string;
 };
 
 export const BOARD_ADS: AdDesign[] = [
@@ -55,7 +59,7 @@ function roundRect(g: CanvasRenderingContext2D, x: number, y: number, w: number,
 }
 
 /** Draw one advert into a W x H box at (0, top). */
-export function drawAd(g: CanvasRenderingContext2D, d: AdDesign, top: number, W: number, H: number, photo?: HTMLImageElement | null) {
+export function drawAd(g: CanvasRenderingContext2D, d: AdDesign, top: number, W: number, H: number, photo?: HTMLImageElement | HTMLCanvasElement | null) {
   g.save();
   g.translate(0, top);
   g.beginPath();
@@ -69,7 +73,17 @@ export function drawAd(g: CanvasRenderingContext2D, d: AdDesign, top: number, W:
   g.fillRect(0, 0, W, H);
   let textX = W * 0.06;
   let textW = W * 0.56;
-  if (photo) {
+  if (photo && d.photoFit === 'contain') {
+    // The whole photo (a product), nothing cut off, on a soft panel on the left; words on the right.
+    g.fillStyle = 'rgba(255,255,255,.16)';
+    const ph = d.contact ? 0.74 : 0.84; // leave room for the contact strip
+    roundRect(g, W * 0.03, H * 0.06, W * 0.46, H * ph, H * 0.04);
+    g.fill();
+    const s = Math.min((W * 0.42) / photo.width, (H * (ph - 0.08)) / photo.height);
+    g.drawImage(photo, W * 0.26 - (photo.width * s) / 2, H * (0.06 + ph / 2) - (photo.height * s) / 2, photo.width * s, photo.height * s);
+    textX = W * 0.53;
+    textW = W * 0.43;
+  } else if (photo) {
     // The photo fills the board; the brand's colour fades in on the right, under the words.
     const s = Math.max(W / photo.width, H / photo.height);
     g.drawImage(photo, (W - photo.width * s) / 2, (H - photo.height * s) / 2, photo.width * s, photo.height * s);
@@ -108,14 +122,20 @@ export function drawAd(g: CanvasRenderingContext2D, d: AdDesign, top: number, W:
   g.fillStyle = d.accent === '#ffffff' || d.accent === '#fff3c4' || d.accent === '#ffd25a' || d.accent === '#f2c21a' || d.accent === '#e3a92b' ? '#121a14' : '#ffffff';
   g.textBaseline = 'middle';
   g.fillText(d.brand, textX + 2.5 * u, 15.7 * u);
-  // The headline: as big as fits in three lines.
+  // The words: the headline as big as it can be while everything (headline, small words, button,
+  // and the contact strip if there is one) fits on the board without overlapping.
+  const bottom = H - (d.contact ? 17 : 7) * u;
+  g.font = `600 ${6 * u}px system-ui, sans-serif`;
+  let small = wrap(g, d.line, textW).slice(0, 2);
   let size = 15 * u;
   let lines: string[] = [];
-  for (; size > 6 * u; size -= u * 0.5) {
+  const needs = () => 26 * u + size + (lines.length - 1) * size * 1.05 + small.length * 7.5 * u + 18 * u;
+  for (; size > 5.5 * u; size -= u * 0.5) {
     g.font = `900 ${size}px system-ui, sans-serif`;
     lines = wrap(g, d.head, textW);
-    if (lines.length <= 3 && lines.every((l) => g.measureText(l).width <= textW)) break;
+    if (lines.length <= 3 && lines.every((l) => g.measureText(l).width <= textW) && needs() <= bottom) break;
   }
+  if (needs() > bottom) small = small.slice(0, 1);
   g.fillStyle = ink;
   g.textBaseline = 'alphabetic';
   let y = 26 * u + size;
@@ -125,7 +145,7 @@ export function drawAd(g: CanvasRenderingContext2D, d: AdDesign, top: number, W:
   }
   g.font = `600 ${6 * u}px system-ui, sans-serif`;
   g.globalAlpha = 0.92;
-  for (const l of wrap(g, d.line, textW).slice(0, 2)) {
+  for (const l of small) {
     g.fillText(l, textX, y + 2 * u);
     y += 7.5 * u;
   }
@@ -133,13 +153,29 @@ export function drawAd(g: CanvasRenderingContext2D, d: AdDesign, top: number, W:
   // The button.
   g.font = `800 ${6 * u}px system-ui, sans-serif`;
   const cw = g.measureText(d.cta).width + 9 * u;
-  const cy = Math.min(H - 21 * u, y + 5 * u);
+  const cy = Math.min(bottom - 12 * u, y + 5 * u);
   g.fillStyle = d.accent;
   roundRect(g, textX, cy, cw, 11 * u, 5.5 * u);
   g.fill();
-  g.fillStyle = g.fillStyle = d.accent === '#c8442e' ? '#ffffff' : '#121a14';
+  g.fillStyle = d.accent === '#c8442e' ? '#ffffff' : '#121a14';
   g.textBaseline = 'middle';
   g.fillText(`${d.cta}  ›`, textX + 4.5 * u, cy + 5.7 * u);
+  // The contact strip right across the bottom: phone, WhatsApp, website.
+  if (d.contact) {
+    g.fillStyle = 'rgba(0,0,0,.42)';
+    g.fillRect(0, H - 15.5 * u, W, 12 * u);
+    let fs = 5.6 * u;
+    g.font = `700 ${fs}px system-ui, sans-serif`;
+    while (fs > 3.6 * u && g.measureText(d.contact).width > W * 0.92) {
+      fs -= 0.3 * u;
+      g.font = `700 ${fs}px system-ui, sans-serif`;
+    }
+    g.fillStyle = '#ffffff';
+    g.textBaseline = 'middle';
+    g.textAlign = 'center';
+    g.fillText(d.contact, W / 2, H - 9.5 * u, W * 0.94);
+    g.textAlign = 'left';
+  }
   // The small AD tag, and the kente strip along the bottom.
   g.font = `800 ${4 * u}px system-ui, sans-serif`;
   g.fillStyle = 'rgba(0,0,0,.45)';
@@ -152,6 +188,37 @@ export function drawAd(g: CanvasRenderingContext2D, d: AdDesign, top: number, W:
     g.fillStyle = KENTE[i % KENTE.length];
     g.fillRect(x, H - 3.5 * u, k, 3.5 * u);
   }
+  g.restore();
+}
+
+/**
+ * An advertiser's own finished flyer on the whole board. 'contain' shows all of it (the rest of the
+ * board filled with a soft, darkened copy of it); 'cover' fills the board edge to edge.
+ */
+export function drawFlyer(g: CanvasRenderingContext2D, img: HTMLImageElement | HTMLCanvasElement, top: number, W: number, H: number, fit: 'cover' | 'contain') {
+  g.save();
+  g.translate(0, top);
+  g.beginPath();
+  g.rect(0, 0, W, H);
+  g.clip();
+  const iw = img.width;
+  const ih = img.height;
+  const cover = Math.max(W / iw, H / ih);
+  // Behind: the flyer itself, stretched to fill and darkened (a soft backdrop).
+  g.globalAlpha = 1;
+  g.drawImage(img, (W - iw * cover * 1.2) / 2, (H - ih * cover * 1.2) / 2, iw * cover * 1.2, ih * cover * 1.2);
+  g.fillStyle = 'rgba(10,12,14,.62)';
+  g.fillRect(0, 0, W, H);
+  const s = fit === 'cover' ? cover : Math.min(W / iw, H / ih);
+  g.drawImage(img, (W - iw * s) / 2, (H - ih * s) / 2, iw * s, ih * s);
+  const u = H / 100;
+  g.font = `800 ${4 * u}px system-ui, sans-serif`;
+  g.fillStyle = 'rgba(0,0,0,.45)';
+  roundRect(g, W - 12 * u, 3 * u, 9 * u, 6 * u, 1.5 * u);
+  g.fill();
+  g.fillStyle = '#ffffff';
+  g.textBaseline = 'middle';
+  g.fillText('AD', W - 10.6 * u, 6.2 * u);
   g.restore();
 }
 

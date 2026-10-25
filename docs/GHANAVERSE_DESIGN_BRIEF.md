@@ -728,7 +728,7 @@ Shared billboards rotate several businesses at a lower price. Launch offer: firs
 ### 18.3 The advertiser page (separate web page, shareable link or QR code)
 
 1. Pick a spot on a small map (price and typical traffic shown).
-2. Upload the image, business name and a link (WhatsApp, website or Instagram).
+2. Upload a finished flyer (shown whole on the space) or use the Ghanaverse design (business name, words, product photo shown whole or filling the space, colours); add contact details: phone, WhatsApp, website or Instagram. Adverts may show phone numbers and links (chat still blocks them). Tapping an advert in the city gives Call, WhatsApp and Website buttons.
 3. Pay (manual mobile money at first; Paystack later).
 4. Review within a few hours (no scams, betting, adult content or politics), then live.
 

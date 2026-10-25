@@ -282,6 +282,8 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
   - **The player card on the map:** your day name and hometown, where you are, energy, Vibe and Sika, the nearest filling station, bus stop, chop bar and bank.
   - **Who the mission sends you to:** the target on the map is the person (Auntie Dede, kelewele seller at Circle; Uncle Kwame at his compound house) with her picture-sign, name, role and pulsing rings; the card says "MISSION 1 · Meet Auntie Dede, 120 m away"; the red route runs along the roads to her; the minimap shows her too.
 
+  - **Advertiser steps** (tap a billboard on the map or a vehicle with an advert, then "Put your advert here"): 1 Space (how many weeks, launch offer: first week free for small Ghanaian businesses, the total), 2 Design (upload your own finished flyer, shown whole or edge to edge; or the Ghanaverse design with your words, your product photo shown whole or filling the board, and colours), 3 Contact (phone, WhatsApp, website or Instagram; phone shown on the advert if you choose), 4 Check and pay (summary, Mobile Money or card). Phone numbers and links are allowed on adverts. "Preview it in the city" shows it on that space for you at any step. Tapping your advert later gives Call, WhatsApp and Website buttons. Pictures are made smaller on the phone before use. Paying is not switched on yet: the request is kept on the phone with a reference (GV-…) and the card says so plainly; payments and going live for everyone need the server and a payment account.
+
 ## Waiting on the owner
 
 - Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.
@@ -290,6 +292,7 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
 - Phone checks: map load time and smoothness, tap to walk, chat.
 - Test 1b result from the cheapest Android available (/char-test.html).
 - Test phone memory and cores (/device.html), and the mobile network for R3.
+- For advert payments: a business Mobile Money number or a Paystack account in the business's name (only the owner can open one), then the server takes the payments.
 - Record the voice script (docs/VOICE_SCRIPT.md) with Ghanaian speakers who agree in writing.
 - Native-speaker check of the Twi and Fante greetings, and the Pidgin, Twi, Ga and Ewe word lists.
 - GitHub repository visibility: make it private.

@@ -30,7 +30,7 @@ import { StreetSound } from '../game/streetSound';
 import { createPerson, type Move, type Person } from '../game/person';
 import { Minimap } from '../hud/minimap';
 import { FullMap } from '../hud/fullMap';
-import { AdCard } from '../hud/adCard';
+import { AdCard, type AdContact } from '../hud/adCard';
 import { forPlayer } from '../game/address';
 import { COMPOUND, compoundHouse, compoundSolid } from '../game/compound';
 import { AD_COUNT, adThumb } from '../game/adPosters';
@@ -2506,6 +2506,8 @@ async function runAutoTest() {
 let minimap: Minimap | null = null;
 // ---------- Adverts: tap a vehicle in the street, or a billboard on the big map ----------
 const adCard = new AdCard();
+// The player's own adverts (previews): their contact buttons, and their pictures for the cards.
+const ownAds = { board: new Map<number, AdContact>(), vehicle: new Map<number, AdContact>(), boardPictures: new Map<number, string>() };
 const KIND_NAME: Record<string, string> = { trotro: 'Trotro', bus: 'City bus', truck: 'Truck', taxi: 'Taxi', car: 'Car', pickup: 'Pickup', suv: 'SUV', tricycle: 'Tricycle', okada: 'Okada' };
 const tapPoint = new THREE.Vector4();
 function tapVehicle(sx: number, sy: number) {
@@ -2541,9 +2543,14 @@ function tapVehicle(sx: number, sy: number) {
     kind: 'vehicle',
     title: `${name} · advert on both sides and the back`,
     picture: streetTraffic.vehicleAdPicture(row),
-    price: best.p.v.kind === 'bus' ? '₵900 a week (citywide fleet)' : '₵250 a week (trotro route pack)',
+    price: best.p.v.kind === 'bus' ? 900 : 250,
+    priceNote: best.p.v.kind === 'bus' ? 'citywide fleet' : 'trotro route pack',
     note: 'It drives its real route all day, past everyone on the road. The advert changes every few seconds.',
-    preview: (d) => streetTraffic?.previewAd(row, { title: d.brand, line: d.head, bg: d.bg, accent: d.accent }),
+    own: ownAds.vehicle.get(row) ?? null,
+    preview: (draw, contact) => {
+      streetTraffic?.previewAd(row, draw);
+      ownAds.vehicle.set(row, contact);
+    },
     onClose: () => streetTraffic?.hold.delete(id),
   });
   setTimeout(() => streetTraffic?.hold.delete(id), 30000); // never held for long
@@ -2553,10 +2560,20 @@ function openBoardCard(ad: number, place: string) {
   adCard.open({
     kind: 'billboard',
     title: `Billboard · ${place || 'Accra'}`,
-    picture: adThumb(ad, 512),
-    price: '₵350 a week (big billboard at a busy spot)',
+    picture: ownAds.boardPictures.get(ad) ?? adThumb(ad, 512),
+    price: 350,
+    priceNote: 'big billboard at a busy spot',
     note: `Shared with ${AD_COUNT - 1} other adverts: each shows for 7 seconds, then slides to the next. Seen from both sides of the road.`,
-    preview: (d, photo) => life?.previewAd(ad, d, photo),
+    own: ownAds.board.get(ad) ?? null,
+    preview: (draw, contact) => {
+      life?.previewAd(ad, draw);
+      ownAds.board.set(ad, contact);
+      const c = document.createElement('canvas');
+      c.width = 512;
+      c.height = 288;
+      draw(c.getContext('2d')!, 0, 512, 288);
+      ownAds.boardPictures.set(ad, c.toDataURL('image/webp', 0.85));
+    },
   });
 }
 

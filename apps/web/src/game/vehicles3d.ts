@@ -727,11 +727,9 @@ export class StreetTraffic {
     return c.toDataURL('image/webp', 0.85);
   }
   /** Show the player's own advert on every vehicle that carries this row (a preview, only for them). */
-  previewAd(row: number, ad: VehicleAd) {
-    const g = document.createElement('canvas');
-    adAtlas([ad], g);
+  previewAd(row: number, draw: (g: CanvasRenderingContext2D, top: number, W: number, H: number) => void) {
     const h = this.adCanvas.height / AD_ROWS;
-    this.adCanvas.getContext('2d')!.drawImage(g, 0, (AD_ROWS - 1) * (g.height / AD_ROWS), g.width, g.height / AD_ROWS, 0, (AD_ROWS - 1 - row) * h, this.adCanvas.width, h);
+    draw(this.adCanvas.getContext('2d')!, (AD_ROWS - 1 - row) * h, this.adCanvas.width, h);
     for (const m of Object.values(this.ads)) if (m) ((m.material as THREE.MeshStandardMaterial).map as THREE.Texture).needsUpdate = true;
   }
   /** Vehicles told to stay where they are (a driver who got out). */

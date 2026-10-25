@@ -1,18 +1,29 @@
-// The advert card (design brief 18): tap a billboard on the big map, or a passing trotro, bus or taxi
-// in the street, and this card shows its advert, what the space costs a week, and "Put your advert
-// here": your business name, words and picture, previewed live on that space in the city (only you
-// see the preview). Paying and going live for everyone come with the Ghanaverse server and the
-// advertiser page; every advert is checked first (no scams, betting, adult content or politics, no
-// real brands without permission, no phone numbers in the words).
-import { drawAd, type AdDesign } from '../game/adPosters';
+// The advert card and the advertiser steps (design brief 18). Tap a billboard on the big map, or a
+// passing trotro, bus or taxi in the street: the card shows its advert and price, and "Put your advert
+// here" walks you through it:
+//   1. The space: the advert there now, the price a week, how many weeks.
+//   2. The design: upload your own finished flyer (shown whole on the board), or use the Ghanaverse
+//      design with your words and your product photo (shown whole, or filling the board).
+//   3. Contact: phone, WhatsApp, website or Instagram, shown on the advert; tapping your advert in the
+//      city gives Call, WhatsApp and Website buttons.
+//   4. Review and pay: the summary, the launch offer, and payment (Mobile Money or card).
+// The preview shows on that space in the city straight away, for you. Payments go through the
+// Ghanaverse server (money is only ever handled there); every advert is checked before it goes live
+// for everyone (no scams, betting, adult content or politics, no brands that are not yours).
+import { drawAd, drawFlyer, type AdDesign } from '../game/adPosters';
 
+export type AdContact = { phone: string; whatsapp: string; link: string };
 export type AdSpace = {
   kind: 'billboard' | 'vehicle';
   title: string; // "Billboard · Ring Road" or "Trotro · advert on both sides"
   picture: string; // the advert now (data URL)
-  price: string; // "₵350 a week"
-  note: string; // "Shared with 7 other adverts: one shows every 7 seconds"
-  preview: (d: AdDesign, photo: HTMLImageElement | null) => void;
+  price: number; // cedis a week
+  priceNote: string; // "big billboard at a busy spot"
+  note: string;
+  /** The player's own advert already shown here (from an earlier preview): its contact buttons. */
+  own?: AdContact | null;
+  /** Draw an advert into the space (preview, for this player only). */
+  preview: (draw: (g: CanvasRenderingContext2D, top: number, W: number, H: number) => void, contact: AdContact) => void;
   onClose?: () => void;
 };
 
@@ -22,25 +33,85 @@ const COLOURS: [string, string, string][] = [
   ['#10265a', '#1f5fa8', '#e3a92b'],
   ['#121a14', '#2a3a2e', '#e3a92b'],
   ['#4a1d6e', '#7a3fb0', '#ffd25a'],
+  ['#f2efe6', '#d9d2c2', '#c8442e'],
 ];
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
-// No phone numbers or links in the words (brief 14.5): long runs of digits are taken out.
-const clean = (s: string, max: number) => s.replace(/\+?\d[\d\s-]{5,}\d/g, '').replace(/https?:\/\/\S+|www\.\S+/gi, '').slice(0, max).trim();
+/** A safe web link from what was typed ("mamaesi.com" -> "https://mamaesi.com"); only http(s). */
+export function webLink(text: string) {
+  const t = text.trim();
+  if (!t) return '';
+  if (/^@[\w.]+$/.test(t)) return `https://instagram.com/${t.slice(1)}`;
+  const url = /^https?:\/\//i.test(t) ? t : `https://${t}`;
+  try {
+    const u = new URL(url);
+    return u.protocol === 'https:' || u.protocol === 'http:' ? u.toString() : '';
+  } catch {
+    return '';
+  }
+}
+/** A Ghana phone number for links: "024 412 3456" -> "233244123456". */
+export function phoneDigits(text: string) {
+  const d = text.replace(/\D/g, '');
+  if (!d) return '';
+  if (d.startsWith('233')) return d;
+  if (d.startsWith('0')) return `233${d.slice(1)}`;
+  return d;
+}
+
+type Draft = {
+  weeks: number;
+  small: boolean;
+  mode: 'flyer' | 'design';
+  flyer: HTMLCanvasElement | null;
+  flyerFit: 'contain' | 'cover';
+  brand: string;
+  head: string;
+  line: string;
+  cta: string;
+  photo: HTMLCanvasElement | null;
+  photoFit: 'contain' | 'cover';
+  colour: number;
+  phone: string;
+  whatsapp: string;
+  link: string;
+  showPhone: boolean;
+  pay: 'momo' | 'card';
+};
+
+/** Read a picture the person picked, made smaller if it is huge (so phones cope), as a canvas. */
+function readPicture(file: File, max = 1600): Promise<HTMLCanvasElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const s = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * s);
+      c.height = Math.round(img.height * s);
+      c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(img.src);
+      resolve(c);
+    };
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
+}
 
 export class AdCard {
   private root: HTMLElement | null = null;
   private space: AdSpace | null = null;
-  private photo: HTMLImageElement | null = null;
-  private colour = 0;
+  private d: Draft = AdCard.fresh();
   isOpen = false;
+
+  private static fresh(): Draft {
+    return { weeks: 1, small: true, mode: 'flyer', flyer: null, flyerFit: 'contain', brand: '', head: '', line: '', cta: '', photo: null, photoFit: 'contain', colour: 0, phone: '', whatsapp: '', link: '', showPhone: true, pay: 'momo' };
+  }
 
   open(space: AdSpace) {
     this.space = space;
-    this.photo = null;
     this.build();
     this.isOpen = true;
     this.root!.classList.remove('hidden');
-    this.showInfo();
+    this.step0();
   }
 
   close() {
@@ -58,7 +129,7 @@ export class AdCard {
     r.className = 'hidden';
     r.innerHTML = '<div class="ac-body"><button type="button" class="ac-x" aria-label="Close">✕</button><div class="ac-in"></div></div>';
     document.body.append(r);
-    for (const ev of ['pointerdown', 'pointermove', 'touchstart', 'touchmove', 'wheel', 'keydown']) r.addEventListener(ev, (e) => e.stopPropagation(), { passive: true });
+    for (const ev of ['pointerdown', 'pointermove', 'touchstart', 'touchmove', 'wheel', 'keydown', 'keyup']) r.addEventListener(ev, (e) => e.stopPropagation(), { passive: true });
     r.querySelector('.ac-x')!.addEventListener('click', () => this.close());
     this.root = r;
   }
@@ -66,71 +137,254 @@ export class AdCard {
   private get inner() {
     return this.root!.querySelector('.ac-in') as HTMLElement;
   }
-
-  private showInfo() {
+  private get aspect() {
+    return this.space?.kind === 'vehicle' ? 4 : 16 / 9;
+  }
+  private total() {
     const s = this.space!;
+    const weeks = this.d.weeks - (this.d.small ? 1 : 0); // launch offer: the first week free (brief 18.2)
+    return Math.max(0, weeks) * s.price;
+  }
+  private contact(): AdContact {
+    return { phone: this.d.phone.trim(), whatsapp: this.d.whatsapp.trim(), link: webLink(this.d.link) };
+  }
+  private contactLine() {
+    const parts: string[] = [];
+    if (this.d.showPhone && this.d.phone.trim()) parts.push(`📞 ${this.d.phone.trim()}`);
+    if (this.d.whatsapp.trim() && this.d.whatsapp.trim() !== this.d.phone.trim()) parts.push(`💬 ${this.d.whatsapp.trim()}`);
+    const link = webLink(this.d.link);
+    if (link) parts.push(`🌐 ${link.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}`);
+    return parts.join('   ');
+  }
+  /** Draws the advert as it is now (for the preview canvas and for the city). */
+  private drawer() {
+    const d = this.d;
+    return (g: CanvasRenderingContext2D, top: number, W: number, H: number) => {
+      if (d.mode === 'flyer' && d.flyer) return drawFlyer(g, d.flyer, top, W, H, d.flyerFit);
+      const c = COLOURS[d.colour];
+      const design: AdDesign = {
+        brand: (d.brand.trim() || 'YOUR BUSINESS').toUpperCase().slice(0, 28),
+        head: d.head.trim() || 'Your big words here',
+        line: d.line.trim() || 'What you sell and where to find you',
+        cta: d.cta.trim() || 'Call us today',
+        bg: [c[0], c[1]],
+        accent: c[2],
+        ink: d.colour === 5 ? '#121a14' : undefined,
+        photoFit: d.photoFit,
+        contact: this.contactLine() || undefined,
+      };
+      drawAd(g, design, top, W, H, d.photo);
+    };
+  }
+  private head(step: number, title: string) {
+    const names = ['Space', 'Design', 'Contact', 'Pay'];
+    return `<small class="ac-kind">${this.space!.kind === 'billboard' ? '📺 BILLBOARD' : '🚐 MOVING ADVERT'} · STEP ${step} OF 4</small>
+      <div class="ac-steps">${names.map((n, i) => `<span class="${i + 1 < step ? 'done' : i + 1 === step ? 'on' : ''}">${i + 1}. ${n}</span>`).join('')}</div>
+      <h3>${esc(title)}</h3>`;
+  }
+  private previewBox() {
+    const W = 512;
+    return `<canvas class="ac-preview" width="${W}" height="${Math.round(W / this.aspect)}"></canvas>`;
+  }
+  private redraw() {
+    const c = this.inner.querySelector('.ac-preview') as HTMLCanvasElement | null;
+    if (c) this.drawer()(c.getContext('2d')!, 0, c.width, c.height);
+  }
+  private nav(back: (() => void) | null, next: (() => void) | null, nextText = 'Next ›') {
+    return { back, next, html: `<div class="ac-nav">${back ? '<button type="button" class="ac-back">‹ Back</button>' : '<span></span>'}${next ? `<button type="button" class="ac-go ac-next">${nextText}</button>` : ''}</div>` };
+  }
+  private wire(n: ReturnType<AdCard['nav']>) {
+    this.inner.querySelector('.ac-back')?.addEventListener('click', () => n.back?.());
+    this.inner.querySelector('.ac-next')?.addEventListener('click', () => n.next?.());
+  }
+  private bindInputs() {
+    this.inner.querySelectorAll<HTMLInputElement>('input[data-k]').forEach((i) => {
+      const k = i.dataset.k as keyof Draft;
+      if (i.type === 'checkbox') i.checked = !!this.d[k];
+      else i.value = String(this.d[k] ?? '');
+      i.addEventListener(i.type === 'checkbox' ? 'change' : 'input', () => {
+        (this.d as Record<string, unknown>)[k] = i.type === 'checkbox' ? i.checked : i.value;
+        this.redraw();
+        this.inner.querySelectorAll('[data-total]').forEach((t) => (t.textContent = `₵${this.total().toLocaleString('en-GH')}`));
+      });
+    });
+    this.inner.querySelectorAll<HTMLElement>('[data-pick]').forEach((b) =>
+      b.addEventListener('click', () => {
+        const [k, v] = b.dataset.pick!.split('=');
+        (this.d as Record<string, unknown>)[k] = /^\d+$/.test(v) ? Number(v) : v;
+        this.inner.querySelectorAll(`[data-pick^="${k}="]`).forEach((x) => x.classList.toggle('on', x === b));
+        if (k === 'mode') this.step2();
+        else {
+          this.redraw();
+          this.inner.querySelectorAll('[data-total]').forEach((t) => (t.textContent = `₵${this.total().toLocaleString('en-GH')}`));
+        }
+      }),
+    );
+    this.inner.querySelectorAll<HTMLInputElement>('input[type=file][data-file]').forEach((f) =>
+      f.addEventListener('change', async () => {
+        const file = f.files?.[0];
+        if (!file) return;
+        const pic = await readPicture(file).catch(() => null);
+        if (!pic) return;
+        if (f.dataset.file === 'flyer') this.d.flyer = pic;
+        else this.d.photo = pic;
+        const label = f.closest('label');
+        if (label) label.classList.add('has');
+        this.redraw();
+      }),
+    );
+  }
+  private pick(key: keyof Draft, value: string | number, text: string) {
+    return `<button type="button" data-pick="${key}=${value}" class="${String(this.d[key]) === String(value) ? 'on' : ''}">${text}</button>`;
+  }
+
+  // ---------- Step 0: the space as it is ----------
+  private step0() {
+    const s = this.space!;
+    const own = s.own;
     this.inner.innerHTML = `
       <small class="ac-kind">${s.kind === 'billboard' ? '📺 BILLBOARD' : '🚐 MOVING ADVERT'}</small>
       <h3>${esc(s.title)}</h3>
       <div class="ac-pic ${s.kind}"><img alt="The advert here now" src="${s.picture}"><span>● LIVE</span></div>
+      ${own ? this.contactButtons(own) : ''}
       <p class="ac-note">${esc(s.note)}</p>
-      <div class="ac-price"><b>${esc(s.price)}</b><span>Small Ghanaian businesses: first week free</span></div>
+      <div class="ac-price"><b>₵${s.price.toLocaleString('en-GH')} a week</b><span>${esc(s.priceNote)} · small Ghanaian businesses: first week free</span></div>
       <button type="button" class="ac-go">Put your advert here</button>`;
-    this.inner.querySelector('.ac-go')!.addEventListener('click', () => this.showForm());
+    this.inner.querySelector('.ac-go')!.addEventListener('click', () => this.step1());
+    this.bindContactButtons();
+  }
+  private contactButtons(c: AdContact) {
+    const btns: string[] = [];
+    if (c.phone) btns.push(`<a class="ac-cbtn" href="tel:${esc(c.phone.replace(/[^\d+]/g, ''))}">📞 Call</a>`);
+    if (c.whatsapp || c.phone) btns.push(`<a class="ac-cbtn" target="_blank" rel="noopener" href="https://wa.me/${phoneDigits(c.whatsapp || c.phone)}">💬 WhatsApp</a>`);
+    if (c.link) btns.push(`<a class="ac-cbtn" target="_blank" rel="noopener noreferrer" href="${esc(c.link)}">🌐 Website</a>`);
+    return btns.length ? `<div class="ac-contact">${btns.join('')}</div>` : '';
+  }
+  private bindContactButtons() {
+    // Leaving the game for a link: make sure it is what the advertiser gave (never javascript: etc.).
+    this.inner.querySelectorAll<HTMLAnchorElement>('.ac-cbtn').forEach((a) => a.addEventListener('click', (e) => e.stopPropagation()));
   }
 
-  private showForm() {
+  // ---------- Step 1: the space and how long ----------
+  private step1() {
     const s = this.space!;
+    const n = this.nav(() => this.step0(), () => this.step2());
+    this.inner.innerHTML = `${this.head(1, s.title)}
+      <div class="ac-pic ${s.kind}"><img alt="" src="${s.picture}"></div>
+      <div class="ac-label">How long?</div>
+      <div class="ac-choice">${this.pick('weeks', 1, '1 week')}${this.pick('weeks', 2, '2 weeks')}${this.pick('weeks', 4, '4 weeks')}${this.pick('weeks', 8, '8 weeks')}</div>
+      <label class="ac-check"><input type="checkbox" data-k="small"> I am a small Ghanaian business (first week free)</label>
+      <div class="ac-price"><b data-total>₵${this.total().toLocaleString('en-GH')}</b><span>₵${s.price.toLocaleString('en-GH')} a week · ${esc(s.priceNote)}</span></div>
+      ${n.html}`;
+    this.bindInputs();
+    this.wire(n);
+  }
+
+  // ---------- Step 2: the design ----------
+  private step2() {
+    const s = this.space!;
+    const d = this.d;
+    const n = this.nav(() => this.step1(), () => this.step3());
+    const flyer = `
+      <label class="ac-file ${d.flyer ? 'has' : ''}">📄 Upload your flyer or banner (JPG or PNG)<input type="file" accept="image/*" data-file="flyer" hidden></label>
+      <div class="ac-label">On the ${s.kind === 'billboard' ? 'board' : 'vehicle'}</div>
+      <div class="ac-choice">${this.pick('flyerFit', 'contain', 'Show all of it')}${this.pick('flyerFit', 'cover', 'Fill edge to edge')}</div>
+      <p class="ac-note">Best size: ${s.kind === 'billboard' ? '1600 × 900 (wide, 16:9)' : '1600 × 400 (long, 4:1)'}. "Show all of it" never cuts anything off.</p>`;
+    const design = `
+      <label>Business name<input data-k="brand" maxlength="28" placeholder="Mama Esi Fabrics"></label>
+      <label>Big words<input data-k="head" maxlength="48" placeholder="New wax prints every week"></label>
+      <label>Small words<input data-k="line" maxlength="70" placeholder="Makola Market, row 4 · open Monday to Saturday"></label>
+      <label>Button<input data-k="cta" maxlength="22" placeholder="Come and see"></label>
+      <label class="ac-file ${d.photo ? 'has' : ''}">📷 Add your product or shop photo<input type="file" accept="image/*" data-file="photo" hidden></label>
+      <div class="ac-choice">${this.pick('photoFit', 'contain', 'Show the whole photo')}${this.pick('photoFit', 'cover', 'Photo fills the board')}</div>
+      <div class="ac-label">Colours</div>
+      <div class="ac-colours">${COLOURS.map((c, i) => `<button type="button" data-pick="colour=${i}" style="background:linear-gradient(135deg,${c[0]},${c[1]})" class="${i === d.colour ? 'on' : ''}" aria-label="Colour ${i + 1}"></button>`).join('')}</div>`;
+    this.inner.innerHTML = `${this.head(2, 'Your advert')}
+      <div class="ac-choice ac-mode">${this.pick('mode', 'flyer', '📄 My own flyer')}${this.pick('mode', 'design', '✏️ Ghanaverse design')}</div>
+      ${this.previewBox()}
+      ${d.mode === 'flyer' ? flyer : design}
+      <button type="button" class="ac-try">👀 Preview it in the city</button>
+      ${n.html}`;
+    this.bindInputs();
+    this.wire(n);
+    this.inner.querySelector('.ac-try')!.addEventListener('click', () => this.tryIt());
+    this.redraw();
+  }
+
+  // ---------- Step 3: contact ----------
+  private step3() {
+    const n = this.nav(() => this.step2(), () => this.step4());
+    this.inner.innerHTML = `${this.head(3, 'How customers reach you')}
+      ${this.previewBox()}
+      <label>Phone number<input data-k="phone" type="tel" maxlength="20" placeholder="024 412 3456"></label>
+      <label>WhatsApp (if different)<input data-k="whatsapp" type="tel" maxlength="20" placeholder="020 555 1234"></label>
+      <label>Website, Instagram or Facebook<input data-k="link" maxlength="120" placeholder="mamaesifabrics.com or @mamaesi"></label>
+      <label class="ac-check"><input type="checkbox" data-k="showPhone"> Show my phone number on the advert</label>
+      <p class="ac-note">${this.d.mode === 'flyer' ? 'Your flyer is shown as you made it; these details go on the buttons when players tap your advert.' : 'These details go on the advert, and on the Call, WhatsApp and Website buttons when players tap it.'}</p>
+      <button type="button" class="ac-try">👀 Preview it in the city</button>
+      ${n.html}`;
+    this.bindInputs();
+    this.wire(n);
+    this.inner.querySelector('.ac-try')!.addEventListener('click', () => this.tryIt());
+    this.redraw();
+  }
+
+  // ---------- Step 4: review and pay ----------
+  private step4() {
+    const s = this.space!;
+    const d = this.d;
+    const c = this.contact();
+    const ready = (d.mode === 'flyer' ? !!d.flyer : !!d.brand.trim()) && (!!c.phone || !!c.whatsapp || !!c.link);
+    const n = this.nav(() => this.step3(), null);
+    this.inner.innerHTML = `${this.head(4, 'Check and pay')}
+      ${this.previewBox()}
+      <div class="ac-summary">
+        <span>Space</span><b>${esc(s.title)}</b>
+        <span>Time</span><b>${d.weeks} week${d.weeks > 1 ? 's' : ''}${d.small ? ' (first week free)' : ''}</b>
+        <span>Contact</span><b>${esc([c.phone, c.whatsapp, c.link.replace(/^https?:\/\//, '')].filter(Boolean).join(' · ') || '—')}</b>
+        <span>Total</span><b class="ac-total" data-total>₵${this.total().toLocaleString('en-GH')}</b>
+      </div>
+      <div class="ac-label">Pay with</div>
+      <div class="ac-choice">${this.pick('pay', 'momo', '📱 Mobile Money')}${this.pick('pay', 'card', '💳 Card')}</div>
+      ${ready ? '' : '<p class="ac-warn">Add your flyer (or your business name) and at least one way to reach you first.</p>'}
+      <button type="button" class="ac-go ac-pay" ${ready ? '' : 'disabled'}>Pay <span data-total>₵${this.total().toLocaleString('en-GH')}</span> and send for review</button>
+      <p class="ac-note">Every advert is checked before it goes live for everyone, usually within a few hours: no scams, betting, adult content or politics, and no brands that are not yours. You get a private link with your daily views and taps.</p>
+      ${n.html}`;
+    this.bindInputs();
+    this.wire(n);
+    this.redraw();
+    this.inner.querySelector('.ac-pay')?.addEventListener('click', () => this.pay());
+  }
+
+  private tryIt() {
+    this.space!.preview(this.drawer(), this.contact());
+    const b = this.inner.querySelector('.ac-try') as HTMLButtonElement | null;
+    if (b) {
+      b.textContent = '✓ Showing in the city now (only you see it)';
+      setTimeout(() => (b.textContent = '👀 Preview it in the city'), 2600);
+    }
+  }
+
+  private pay() {
+    // Show it in the city for the player, and keep the request on this phone. Taking the money and
+    // publishing for everyone happen on the Ghanaverse server (brief 18.3, master plan: money only on
+    // the server), which is not switched on yet: say so plainly.
+    this.space!.preview(this.drawer(), this.contact());
+    const ref = `GV-${Date.now().toString(36).toUpperCase().slice(-6)}`;
+    try {
+      const list = JSON.parse(localStorage.getItem('gv-ad-requests') ?? '[]') as unknown[];
+      list.push({ ref, space: this.space!.title, weeks: this.d.weeks, total: this.total(), contact: this.contact(), mode: this.d.mode, made: new Date().toISOString() });
+      localStorage.setItem('gv-ad-requests', JSON.stringify(list.slice(-20)));
+    } catch {
+      // No storage (private window): the preview still works.
+    }
     this.inner.innerHTML = `
-      <small class="ac-kind">YOUR ADVERT</small>
-      <h3>${esc(s.title)}</h3>
-      <canvas class="ac-preview" width="512" height="288"></canvas>
-      <label>Business name<input name="brand" maxlength="24" placeholder="Mama Esi Fabrics"></label>
-      <label>Big words<input name="head" maxlength="40" placeholder="New wax prints every week"></label>
-      <label>Small words<input name="line" maxlength="60" placeholder="Makola Market, row 4"></label>
-      <label>Button<input name="cta" maxlength="18" placeholder="Come and see"></label>
-      <div class="ac-row"><label class="ac-file">📷 Add a picture<input type="file" accept="image/*" hidden></label><div class="ac-colours">${COLOURS.map((c, i) => `<button type="button" data-c="${i}" style="background:linear-gradient(135deg,${c[0]},${c[1]})" class="${i === this.colour ? 'on' : ''}" aria-label="Colour ${i + 1}"></button>`).join('')}</div></div>
-      <button type="button" class="ac-go">Preview it in the city</button>
-      <button type="button" class="ac-send" disabled>Send for review and pay</button>
-      <p class="ac-note">Only you see the preview. Paying and going live for everyone open soon on the Ghanaverse advertiser page (money is handled only by the server). Every advert is checked first: no scams, betting, adult content or politics, no real brands without permission, no phone numbers.</p>`;
-    const get = (n: string) => (this.inner.querySelector(`[name="${n}"]`) as HTMLInputElement).value;
-    const design = (): AdDesign => {
-      const c = COLOURS[this.colour];
-      return {
-        brand: clean(get('brand'), 24).toUpperCase() || 'YOUR BUSINESS',
-        head: clean(get('head'), 40) || 'Your big words here',
-        line: clean(get('line'), 60) || 'Where to find you',
-        cta: clean(get('cta'), 18) || 'Come and see',
-        bg: [c[0], c[1]],
-        accent: c[2],
-      };
-    };
-    const canvas = this.inner.querySelector('.ac-preview') as HTMLCanvasElement;
-    const draw = () => drawAd(canvas.getContext('2d')!, design(), 0, 512, 288, this.photo);
-    this.inner.querySelectorAll('input:not([type=file])').forEach((i) => i.addEventListener('input', draw));
-    this.inner.querySelectorAll<HTMLElement>('[data-c]').forEach((b) =>
-      b.addEventListener('click', () => {
-        this.colour = Number(b.dataset.c);
-        this.inner.querySelectorAll('[data-c]').forEach((x) => x.classList.toggle('on', x === b));
-        draw();
-      }),
-    );
-    (this.inner.querySelector('input[type=file]') as HTMLInputElement).addEventListener('change', (e) => {
-      const f = (e.target as HTMLInputElement).files?.[0];
-      if (!f) return;
-      const img = new Image();
-      img.onload = () => {
-        this.photo = img;
-        draw();
-      };
-      img.src = URL.createObjectURL(f);
-    });
-    this.inner.querySelector('.ac-go')!.addEventListener('click', () => {
-      s.preview(design(), this.photo);
-      const b = this.inner.querySelector('.ac-go') as HTMLButtonElement;
-      b.textContent = '✓ Showing in the city now';
-      setTimeout(() => (b.textContent = 'Preview it in the city'), 2500);
-    });
-    draw();
+      <small class="ac-kind">✓ ADVERT SAVED · ${ref}</small>
+      <h3>Your advert is ready</h3>
+      ${this.previewBox()}
+      <p class="ac-note">It is showing on this ${this.space!.kind === 'billboard' ? 'billboard' : 'vehicle'} for you now. <b>Payments are not switched on yet</b>: when the Ghanaverse advertiser page opens, you pay ₵${this.total().toLocaleString('en-GH')} by ${this.d.pay === 'momo' ? 'Mobile Money' : 'card'} with this reference, we check the advert, and it goes live for every player.</p>
+      <button type="button" class="ac-go ac-done">Done</button>`;
+    this.redraw();
+    this.inner.querySelector('.ac-done')!.addEventListener('click', () => this.close());
   }
 }

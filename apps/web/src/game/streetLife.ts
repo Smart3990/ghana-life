@@ -7,7 +7,7 @@
 import type { Arm, Junction } from './signals';
 import * as THREE from 'three';
 import { slidingAdMaterial, twoSidedFace } from './adScreens';
-import { AD_COUNT, adSheet, drawAd, type AdDesign } from './adPosters';
+import { AD_COUNT, adSheet } from './adPosters';
 import { box, merge, paint, shadowTexture } from './vehicles3d';
 import type { Roof, StreetLine } from './streetBuildings';
 import { CrowdBatch, lookFor, MIX, type Clip, type CrowdBody, type Kind as PersonKind, type Look } from './crowd';
@@ -347,10 +347,10 @@ export class StreetLife {
   private adSheetCanvas!: HTMLCanvasElement;
   private adTex!: THREE.CanvasTexture;
   /** Show the player's own advert in one of the advert places on the billboards (a preview, only for them). */
-  previewAd(row: number, design: AdDesign, photo: HTMLImageElement | null) {
+  previewAd(row: number, draw: (g: CanvasRenderingContext2D, top: number, W: number, H: number) => void) {
     const W = this.adSheetCanvas.width;
     const H = Math.round((W * 9) / 16);
-    drawAd(this.adSheetCanvas.getContext('2d')!, design, (POSTERS - 1 - row) * H, W, H, photo);
+    draw(this.adSheetCanvas.getContext('2d')!, (POSTERS - 1 - row) * H, W, H);
     this.adTex.needsUpdate = true;
   }
   private roofMesh!: THREE.InstancedMesh;

@@ -383,6 +383,31 @@
       #adcard .ac-row { display: flex; align-items: center; gap: 10px; justify-content: space-between; }
       #adcard .ac-file { flex-direction: row; align-items: center; background: #1c2620; border: 1px dashed #e3a92b; border-radius: 10px; padding: 8px 10px; color: #f2efe6; font-size: 12px; cursor: pointer; }
       #adcard .ac-colours { display: flex; gap: 5px; }
+      #adcard .ac-steps { display: flex; gap: 4px; }
+      #adcard .ac-steps span { flex: 1; text-align: center; font-size: 9.5px; font-weight: 700; padding: 4px 0; border-radius: 6px; background: #1c2620; color: #8a968d; }
+      #adcard .ac-steps span.on { background: #e3a92b; color: #121a14; }
+      #adcard .ac-steps span.done { background: #2f8f57; color: #fff; }
+      #adcard .ac-label { font-size: 11px; color: #c9d3cb; font-weight: 700; margin-top: 2px; }
+      #adcard .ac-choice { display: flex; gap: 6px; flex-wrap: wrap; }
+      #adcard .ac-choice button { flex: 1; min-width: 70px; border: 1px solid #2e3a32; background: #1c2620; color: #f2efe6; border-radius: 10px; padding: 9px 6px; font: 700 12px system-ui, sans-serif; }
+      #adcard .ac-choice button.on { border-color: #e3a92b; background: rgba(227,169,43,.18); color: #f2c21a; }
+      #adcard .ac-mode button { padding: 11px 6px; font-size: 13px; }
+      #adcard .ac-check { flex-direction: row; align-items: center; gap: 8px; font-size: 12px; color: #f2efe6; }
+      #adcard .ac-check input { width: 18px; height: 18px; accent-color: #e3a92b; }
+      #adcard .ac-file.has { border-style: solid; border-color: #2f8f57; }
+      #adcard .ac-file.has::after { content: '✓'; margin-left: auto; color: #4ade80; font-weight: 800; }
+      #adcard .ac-try { border: 1px solid #e3a92b; background: none; color: #f2c21a; border-radius: 12px; padding: 10px; font: 700 13px system-ui, sans-serif; }
+      #adcard .ac-nav { display: flex; justify-content: space-between; gap: 8px; margin-top: 4px; }
+      #adcard .ac-nav .ac-go { flex: 1; }
+      #adcard .ac-back { border: 0; background: #2e3a32; color: #f2efe6; border-radius: 12px; padding: 12px 14px; font: 700 13px system-ui, sans-serif; }
+      #adcard .ac-summary { display: grid; grid-template-columns: auto 1fr; gap: 5px 12px; background: #1c2620; border: 1px solid #2e3a32; border-radius: 12px; padding: 10px 12px; font-size: 12px; }
+      #adcard .ac-summary span { color: #8a968d; }
+      #adcard .ac-summary b { color: #f2efe6; word-break: break-word; }
+      #adcard .ac-summary .ac-total { color: #f2c21a; font-size: 17px; }
+      #adcard .ac-warn { margin: 0; color: #f87171; font-size: 12px; }
+      #adcard .ac-go:disabled { background: #2e3a32; color: #8a968d; }
+      #adcard .ac-contact { display: flex; gap: 6px; }
+      #adcard .ac-cbtn { flex: 1; text-align: center; text-decoration: none; background: #2f8f57; color: #fff; border-radius: 10px; padding: 9px 4px; font: 700 12px system-ui, sans-serif; }
       #adcard .ac-colours button { width: 24px; height: 24px; border-radius: 50%; border: 2px solid transparent; }
       #adcard .ac-colours button.on { border-color: #f2efe6; }
     </style>
