@@ -374,6 +374,16 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
 
   - **Fix: street lights faced the pavement** (owner, 27 Oct night): the road lamps' arms pointed away from the road, so their light fell on the pavements and shops and the roads stayed dark (the pavement lamps had the opposite mistake). All lamps now face the road: arms over the lanes, light on the tarmac from the kerb to past the middle; pavement lamps light their walkway. Under the flyovers, lights fixed under the deck now light the road below (it was the darkest place at night).
 
+  - **Epic City pack, step 4: the pack's vehicles, crowded roads, rush hours** (owner, 27 Oct night):
+    - The pack's vehicles on Accra's roads (`vehicles3d.ts`, PACK): saloon cars in many paint colours (also for the small cars and SUVs), the taxi in Accra taxi colours (its body in the vehicle's colour, orange-yellow corners), the pickup, the van as the trotro (white roof, yellow stripe, the lower body in its colour, adverts on both sides), the city bus (with its stripes and adverts), the box truck (adverts on the box), the old motorbike as the okada, and the pack's ambulance for the story's ambulance (with its flashing light bar). The pragya and motor-king tricycles stay our own (the pack has none).
+    - Each pack vehicle is split by colour into its paintwork (repainted per vehicle) and the rest (glass, tyres, lights, trim in the pack's colours). The vehicles keep the pack's day glow at night, so their windows stay glass, not pink.
+    - Beyond 38 m each vehicle is drawn with a simpler copy of its shape (about a third of the triangles, made when it loads), where the difference can't be seen: the vehicles cost about 80,000 triangles at rush hour on Light instead of 147,000.
+    - Crowded roads: vehicles packed much closer (Light: one place every 7 to 12 m on each road, up to 130 vehicles near you; Standard 280; Ultra 360). Vehicle lengths for spacing and collisions are the pack's.
+    - Rush hours (`roadFill` in dayNight.ts): the share of places filled follows the clock: packed in the morning rush (7:30) and the evening rush (16:30 to 20:00, the fullest), busy by day, thinner late at night; it changes smoothly, so the roads fill up and empty out gradually. In the test spot within 80 m: 24 vehicles at 3 am, 62 at 1 pm, 77 to 86 at 6 pm (the slow test machine thins it a little; a smooth phone shows the full rush).
+    - Traffic rules kept and checked with the new sizes: vehicles follow the one ahead, stop at red lights at the line, wait for anything in their way (people, the story's vehicles), climb the flyovers.
+    - Scene on Light at the evening rush: about 300,000 to 316,000 triangles.
+    - **Done when:** at the evening rush on the test site the roads round Circle are full of the pack's cars, taxis, trotros and buses, the junctions are jammed, and the game stays smooth on the cheap Android.
+
 ## Waiting on the owner
 
 - Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.

@@ -130,3 +130,20 @@ export function forTheHour(text: string, hour: number) {
   if (hour >= 18.3 || hour < 6) t = t.replace('Ei, the sun is hot oo!', 'Ei, the night is warm oo!').replace('the sun is hot today', 'the night is warm').replace('this afternoon', 'tonight');
   return t;
 }
+
+/**
+ * How full Accra's roads are at this hour (0-1 of the vehicles that can be on them): packed in the
+ * morning rush (6:30-9:30) and the evening rush (16:30-20:00, the worst), busy in the day, thinner
+ * late at night. It changes smoothly, so traffic fills up and empties out gradually.
+ */
+export function roadFill(hour: number) {
+  const keys: [number, number][] = [[0, 0.5], [4.5, 0.45], [6, 0.75], [7.5, 1], [9.5, 0.9], [11, 0.75], [14, 0.75], [16.5, 0.92], [18, 1], [20, 0.95], [21.5, 0.75], [23, 0.55], [24, 0.5]];
+  for (let i = 1; i < keys.length; i++) {
+    if (hour <= keys[i][0]) {
+      const [h0, f0] = keys[i - 1], [h1, f1] = keys[i];
+      const t = (hour - h0) / (h1 - h0);
+      return f0 + (f1 - f0) * (t * t * (3 - 2 * t));
+    }
+  }
+  return 0.5;
+}

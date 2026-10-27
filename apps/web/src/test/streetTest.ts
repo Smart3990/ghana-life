@@ -18,7 +18,7 @@ import type { Nearby } from '../game/streetScenes';
 import { Signals, lightFor } from '../game/signals';
 import { Flyovers } from '../game/flyovers';
 import { EpicRoads } from '../game/epicRoads';
-import { GameTime, dayLook, forTheHour, type DayLook } from '../game/dayNight';
+import { GameTime, dayLook, forTheHour, roadFill, type DayLook } from '../game/dayNight';
 import { setEpicNight } from '../game/epicKit';
 import { BigScreen } from '../game/bigScreen';
 import { RoadSigns } from '../game/roadSigns';
@@ -1701,17 +1701,14 @@ function ambulanceLook() {
   const blue = new THREE.MeshBasicMaterial({ color: '#2a6bff' });
   const stripe = new THREE.MeshStandardMaterial({ color: '#c8102e', roughness: 0.6 });
   const bar = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.16, 0.34), new THREE.MeshStandardMaterial({ color: '#222', roughness: 0.5 }));
-  bar.position.set(0, 2.62, -1.8);
+  // On the pack's ambulance (its own red stripes): a flashing light bar on the front of the box roof.
+  void stripe;
+  bar.position.set(0, 2.72, 0.55);
   g.add(bar);
   for (const [x, m] of [[-0.42, red], [0.42, blue]] as const) {
     const l = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.18, 0.3), m);
-    l.position.set(x, 2.74, -1.8);
+    l.position.set(x, 2.84, 0.55);
     g.add(l);
-  }
-  for (const x of [-1.02, 1.02]) {
-    const st = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.22, 5.2), stripe);
-    st.position.set(x, 1.15, 0);
-    g.add(st);
   }
   ambulance.lights = [red, blue];
   return g;
@@ -1768,7 +1765,7 @@ function updateAmbulance(t: number) {
   a.s = pick.s + back;
   a.until = t + 20;
   a.last = t;
-  a.car = { key: 'sprinter', kind: 'trotro', id: ambulanceId(), x: 0, z: 0, heading: 0, colour: '#f6f6f2', shown: true, moving: true };
+  a.car = { key: 'ambulance', kind: 'trotro', id: ambulanceId(), x: 0, z: 0, heading: 0, colour: '#f6f6f2', shown: true, moving: true };
   streetTraffic.story.push(a.car);
   a.group ??= ambulanceLook();
   scene.add(a.group);
@@ -3928,12 +3925,13 @@ async function start() {
   {
     // Spacing and drawing distance are set so the vehicles near you stay well under the limit:
     // nothing pops in or out close by (it only happens far away, out of sight).
-    const traffic = createStreetNetwork({ light: 4.2, standard: 3, ultra: 2.3 }[tier]);
+    // (Closer spacing than before: the hour of the day decides how many of the places are filled, roadFill.)
+    const traffic = createStreetNetwork({ light: 1.9, standard: 1.5, ultra: 1.2 }[tier]);
     trafficModel = traffic;
     for (const b of pendingBatches.splice(0)) traffic.addRoads(b);
     // Busy roads (raised from the first budget of 15 / 40 / 100: they are drawn in batches, so they cost little).
-    const limit = { light: 100, standard: 240, ultra: 320 }[tier];
-    streetTraffic = new StreetTraffic(traffic, (lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT], limit, { light: 120, standard: 180, ultra: 230 }[tier]);
+    const limit = { light: 130, standard: 280, ultra: 360 }[tier];
+    streetTraffic = new StreetTraffic(traffic, (lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT], limit, { light: 105, standard: 170, ultra: 220 }[tier]);
     scene.add(streetTraffic.group);
     streetTraffic.deckHeight = (x, z) => flyovers.heightAt(x, z);
     streetTraffic.groundDip = groundDip;
@@ -4014,7 +4012,8 @@ async function start() {
       else if (fps > cap * 0.9 && density < 1) density = Math.min(1, density * 1.15);
       life?.setDensity(density);
       // Vehicles are cheap to draw (a few batches): the roads always stay at least three-quarters full.
-      if (streetTraffic) streetTraffic.density = Math.max(0.75, density);
+      // Rush hours fill the roads; a struggling phone thins them a little (never below three-quarters).
+      if (streetTraffic) streetTraffic.density = roadFill(day.hour) * Math.max(0.75, density);
       void baseLimit;
       if (debug) debugLine.textContent = `${tier} (${reason}) · ${Math.round(fps)} fps · ${renderer.info.render.triangles} tris · busy ${Math.round(density * 100)}%`;
     }

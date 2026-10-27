@@ -32,7 +32,8 @@ test, and goes live only after the owner has seen it work. Agreed with the owner
      Accra colours.
    - The pack's traffic rules: follow the car ahead, stop at red lights, give way, go round
      roundabouts, climb the flyovers.
-   - Crowded roads everywhere; the main roads jammed in the evening rush hour.
+   - Crowded roads everywhere; the main roads jammed in the evening rush hour. (Done; the pack's
+     traffic rules: following, red lights and waiting are ours, kept.)
 5. **People, the story characters included.**
    - The whole crowd from the pack's people, with Ghanaian skin tones and Accra clothes colours.
    - The player, Auntie Dede, Uncle Kwame, the thief and everyone in the story rebuilt from pack

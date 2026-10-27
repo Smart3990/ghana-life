@@ -3,11 +3,13 @@
 // else in fixed colours), plus one shared batch of soft shadows, so 100 vehicles still cost about
 // ten draw calls. Positions come from the shared traffic clock (traffic.ts), the same on every phone.
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { MeshoptSimplifier } from 'three/examples/jsm/libs/meshopt_simplifier.module.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import type { Kind, Placed, Traffic } from './traffic';
 import { slidingAdMaterial } from './adScreens';
+import { epicGeometry, epicMaterial } from './epicKit';
 
 // Modern vehicles (public/models/vehicles): small models of today's Accra traffic (Corolla-size
 // sedans, Vitz-size hatchbacks, RAV4-size SUVs, Hilux-size pickups, Hiace-size trotros, buses and
@@ -15,7 +17,30 @@ import { slidingAdMaterial } from './adScreens';
 // scripts/vehicles. Each file has a "paint" part (repainted per vehicle) and a "fixed" part (glass,
 // lights, tyres). Until they have downloaded, the shapes built in code below are shown.
 // Batches: each kind, plus a second car model so the streets mix sedans and hatchbacks.
-export type BatchKey = Kind | 'hatch' | 'motorking' | 'sprinter';
+export type BatchKey = Kind | 'hatch' | 'motorking' | 'sprinter' | 'ambulance';
+// The Low Poly Epic City pack's vehicles (public/models/epic/vehicles, step 4 of the Epic City plan):
+// which pack model plays each Accra vehicle, and which of its colours is the paintwork (repainted per
+// vehicle); `white` colours are made white (the trotro's roof). The tricycles stay our own.
+const PACK: Partial<Record<BatchKey, { file: string; paint: string[]; white?: string[] }>> = {
+  car: { file: 'car-passenger', paint: ['dbdbda'] },
+  hatch: { file: 'car-passenger', paint: ['dbdbda'] },
+  suv: { file: 'car-passenger', paint: ['dbdbda'] },
+  taxi: { file: 'car-taxi', paint: ['fdcf24'] },
+  pickup: { file: 'car-baywatch', paint: ['fdcf24'] },
+  trotro: { file: 'car-hippie-van', paint: ['35ccdd'], white: ['b7f0f2'] },
+  sprinter: { file: 'car-hippie-van', paint: ['35ccdd'], white: ['b7f0f2'] },
+  bus: { file: 'bus-passenger', paint: ['dbdbda'] },
+  truck: { file: 'truck', paint: ['e44935'] },
+  okada: { file: 'motorbike-old', paint: ['ca3038'] },
+  ambulance: { file: 'car-ambulance-pickup', paint: [] },
+};
+// Advert wraps on the pack's vehicles: [half width, bottom, top, back end, front end, back face].
+const PACK_PANELS: Partial<Record<BatchKey, [number, number, number, number, number, number]>> = {
+  trotro: [0.9, 0.58, 1.6, -1.95, 1.15, -2.08],
+  sprinter: [0.9, 0.58, 1.6, -1.95, 1.15, -2.08],
+  bus: [1.425, 0.95, 2.9, -5.3, 3.6, -5.5],
+  truck: [1.05, 1.0, 2.75, -3.0, 1.35, -3.1],
+};
 const MODERN: Partial<Record<BatchKey, string>> = {
   // Our own models shaped after the real vehicles at Circle (scripts/vehicles/build_ghana.py).
   car: 'saloon', // Corolla-type saloon
@@ -279,10 +304,10 @@ export function merge(parts: Part[]): Part {
 }
 
 // Vehicle lengths (metres), for keeping a gap.
-const KIND_LENGTH: Record<Kind, number> = { car: 4.5, taxi: 4.5, trotro: 5.7, tricycle: 3, okada: 2, bus: 11, truck: 8, pickup: 5.2, suv: 4.8 };
+const KIND_LENGTH: Record<Kind, number> = { car: 4.7, taxi: 5.35, trotro: 4.4, tricycle: 3, okada: 2.2, bus: 11.3, truck: 6.3, pickup: 5.3, suv: 4.7 }; // (the pack's vehicles)
 
 // Widths (metres), for crossings and for not walking through vehicles.
-const KIND_WIDTH: Record<Kind, number> = { car: 1.8, taxi: 1.8, trotro: 2.0, tricycle: 1.4, okada: 0.8, bus: 2.5, truck: 2.4, pickup: 1.9, suv: 1.9 };
+const KIND_WIDTH: Record<Kind, number> = { car: 2.1, taxi: 2.2, trotro: 1.85, tricycle: 1.4, okada: 0.85, bus: 2.85, truck: 2.3, pickup: 2.0, suv: 2.1 };
 
 export type VehicleBox = { x: number; z: number; fx: number; fz: number; half: number; halfW: number };
 
@@ -552,6 +577,8 @@ export function shadowTexture() {
 export class StreetTraffic {
   readonly group = new THREE.Group();
   private batches: Record<BatchKey, { body: THREE.InstancedMesh; fixed: THREE.InstancedMesh; shadow: [number, number] }>;
+  /** The same vehicles drawn simpler (fewer triangles) beyond FAR_M, where the difference can't be seen. */
+  private far: Partial<Record<BatchKey, { body: THREE.InstancedMesh; fixed: THREE.InstancedMesh }>> = {};
   private shadows: THREE.InstancedMesh;
   private m = new THREE.Matrix4();
   private q = new THREE.Quaternion();
@@ -569,7 +596,7 @@ export class StreetTraffic {
   ) {
     const paintMat = new THREE.MeshStandardMaterial({ roughness: 0.38, metalness: 0.25 });
     const fixedMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, metalness: 0.1 });
-    const models: Record<BatchKey, Model> = { car: car(false), hatch: car(false), sprinter: trotro(), motorking: motorKing(), taxi: car(true), trotro: trotro(), tricycle: pragya(), okada: okada(), bus: bus(), truck: truck(), pickup: pickup(), suv: suv() };
+    const models: Record<BatchKey, Model> = { car: car(false), hatch: car(false), sprinter: trotro(), motorking: motorKing(), taxi: car(true), trotro: trotro(), tricycle: pragya(), okada: okada(), bus: bus(), truck: truck(), pickup: pickup(), suv: suv(), ambulance: trotro() };
     this.batches = {} as typeof this.batches;
     const adCanvas = this.adCanvas;
     const adMat = adMaterial(adAtlas(DEFAULT_ADS, adCanvas));
@@ -626,6 +653,19 @@ export class StreetTraffic {
       }
       body.setColorAt(0, this.c.set('#ffffff'));
       this.batches[kind] = { body, fixed, shadow: model.shadow };
+      if (PACK[kind]) {
+        const fb = new THREE.InstancedMesh(model.body, look, limit);
+        const ff = new THREE.InstancedMesh(model.fixed, fixedMat, limit);
+        for (const mesh of [fb, ff]) {
+          mesh.count = 0;
+          mesh.frustumCulled = false;
+          mesh.castShadow = true;
+          mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+          this.group.add(mesh);
+        }
+        fb.setColorAt(0, this.c.set('#ffffff'));
+        this.far[kind] = { body: fb, fixed: ff };
+      }
       const panel = AD_PANELS[kind];
       if (panel) {
         const geo = adPanels(panel);
@@ -648,7 +688,42 @@ export class StreetTraffic {
     this.shadows.frustumCulled = false;
     this.shadows.renderOrder = -1;
     this.group.add(this.shadows);
-    void this.loadModern();
+    void this.loadPack(); // (the earlier downloaded models, loadModern, are no longer used)
+  }
+
+  private packTaxi = false;
+  /** The pack's vehicles in place of ours, as each one arrives. */
+  private async loadPack() {
+    const atlas = await atlasPixels();
+    if (!atlas) return;
+    const fixedMat = epicMaterial().clone(); // (its own copy: it keeps the day glow at night, so windows stay glass)
+    for (const [key, spec] of Object.entries(PACK) as [BatchKey, NonNullable<(typeof PACK)[BatchKey]>][]) {
+      let geo: THREE.BufferGeometry;
+      try {
+        geo = await epicGeometry(`vehicles/${spec.file}.glb`);
+      } catch {
+        continue;
+      }
+      const { paint, fixed } = splitPaint(geo, atlas, spec.paint, spec.white ?? []);
+      const b = this.batches[key];
+      b.body.geometry = paint;
+      b.fixed.geometry = fixed;
+      b.fixed.material = fixedMat;
+      const f = this.far[key];
+      if (f) {
+        f.body.geometry = await simpler(paint, 0.35);
+        f.fixed.geometry = await simpler(fixed, 0.3, true);
+        f.fixed.material = fixedMat;
+      }
+      const panel = PACK_PANELS[key];
+      const ads = this.ads[key];
+      if (panel && ads) {
+        const g = adPanels(panel);
+        g.setAttribute('aAd', ads.geometry.getAttribute('aAd'));
+        ads.geometry = g;
+      }
+      if (key === 'taxi') this.packTaxi = true;
+    }
   }
 
   private async loadModern() {
@@ -982,7 +1057,7 @@ export class StreetTraffic {
     for (const q of this.story) if (q.shown) this.boxes.push({ x: q.x, z: q.z, fx: Math.sin(q.heading), fz: -Math.cos(q.heading), half: KIND_LENGTH[q.kind] / 2, halfW: KIND_WIDTH[q.kind] / 2 });
     const adCount: Partial<Record<BatchKey, number>> = {};
     let signs = 0;
-    const counts: Record<BatchKey, number> = { car: 0, hatch: 0, sprinter: 0, motorking: 0, taxi: 0, trotro: 0, tricycle: 0, okada: 0, bus: 0, truck: 0, pickup: 0, suv: 0 };
+    const counts: Record<BatchKey, number> = { car: 0, hatch: 0, sprinter: 0, motorking: 0, taxi: 0, trotro: 0, tricycle: 0, okada: 0, bus: 0, truck: 0, pickup: 0, suv: 0, ambulance: 0 };
     let shadowCount = 0;
     type Draw = { key: BatchKey; id: number; x: number; z: number; ground: number; heading: number; colour: string; bounce: boolean };
     const draws: Draw[] = [];
@@ -1004,10 +1079,17 @@ export class StreetTraffic {
     for (const q of this.parked) draws.push({ ...q, ground: -(this.groundDip?.(q.x, q.z) ?? 0), bounce: false });
     // The story's own vehicles first, so they are always drawn even when a batch is full.
     for (const q of this.story) if (q.shown) draws.unshift({ key: q.key, id: q.id, x: q.x, z: q.z, heading: q.heading, colour: q.colour, ground: -(this.groundDip?.(q.x, q.z) ?? 0), bounce: q.moving });
+    const [px, pz] = this.toLocal(lon, lat);
+    const farCounts: Partial<Record<BatchKey, number>> = {};
     for (const d of draws) {
-      const b = this.batches[d.key];
-      if (counts[d.key] >= b.body.instanceMatrix.count) continue;
-      const i = counts[d.key]++;
+      const near = this.batches[d.key];
+      const isFar = !!this.far[d.key] && (d.x - px) ** 2 + (d.z - pz) ** 2 > FAR_M * FAR_M;
+      const b = isFar ? this.far[d.key]! : near;
+      const used = isFar ? (farCounts[d.key] ?? 0) : counts[d.key];
+      if (used >= b.body.instanceMatrix.count) continue;
+      const i = used;
+      if (isFar) farCounts[d.key] = used + 1;
+      else counts[d.key]++;
       // A gentle bounce, different for each moving vehicle.
       this.v.set(d.x, d.ground + (d.bounce ? Math.sin(t * 9 + d.id) * 0.012 : 0), d.z);
       this.q.setFromAxisAngle(this.up, Math.PI - d.heading);
@@ -1024,22 +1106,28 @@ export class StreetTraffic {
         ads.setMatrixAt(n, this.m);
         (ads.geometry.getAttribute('aAd') as THREE.InstancedBufferAttribute).setX(n, Math.floor(r * 1.25 * AD_ROWS) % AD_ROWS);
       }
-      if (d.key === 'taxi') this.taxiSigns.setMatrixAt(signs++, this.m);
+      if (d.key === 'taxi' && !this.packTaxi) this.taxiSigns.setMatrixAt(signs++, this.m);
       if (this.night > 0.02) {
         // Lights at the front and back, sized to the vehicle (its model's front is +z).
-        const kind: Kind = d.key === 'hatch' ? 'car' : d.key === 'sprinter' ? 'trotro' : d.key === 'motorking' ? 'tricycle' : d.key;
+        const kind: Kind = d.key === 'hatch' ? 'car' : d.key === 'sprinter' || d.key === 'ambulance' ? 'trotro' : d.key === 'motorking' ? 'tricycle' : d.key;
         const half = KIND_LENGTH[kind] / 2, halfW = KIND_WIDTH[kind] / 2;
         this.headlights.setMatrixAt(lit, this.lamp.makeScale(halfW, 1, 1).setPosition(0, 0, half - 0.05).premultiply(this.m));
         this.taillights.setMatrixAt(lit++, this.lamp.makeScale(halfW, 1, 1).setPosition(0, 0, -half + 0.05).premultiply(this.m));
       }
       this.v.y = d.ground + 0.03;
-      this.m.compose(this.v, this.q, this.shadowScale.set(b.shadow[0], 1, b.shadow[1]));
+      this.m.compose(this.v, this.q, this.shadowScale.set(near.shadow[0], 1, near.shadow[1]));
       this.shadows.setMatrixAt(shadowCount++, this.m);
     }
     for (const [kind, b] of Object.entries(this.batches) as [BatchKey, (typeof this.batches)[BatchKey]][]) {
       b.body.count = b.fixed.count = counts[kind];
       b.body.instanceMatrix.needsUpdate = b.fixed.instanceMatrix.needsUpdate = true;
       if (b.body.instanceColor) b.body.instanceColor.needsUpdate = true;
+      const f = this.far[kind];
+      if (f) {
+        f.body.count = f.fixed.count = farCounts[kind] ?? 0;
+        f.body.instanceMatrix.needsUpdate = f.fixed.instanceMatrix.needsUpdate = true;
+        if (f.body.instanceColor) f.body.instanceColor.needsUpdate = true;
+      }
     }
     this.shadows.count = shadowCount;
     this.shadows.instanceMatrix.needsUpdate = true;
@@ -1084,4 +1172,81 @@ function taillightShape() {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   return g;
+}
+
+/** The pack's texture sheet as pixels (to tell which parts of a model are which colour). */
+async function atlasPixels(): Promise<{ w: number; h: number; data: Uint8ClampedArray } | null> {
+  try {
+    const img = new Image();
+    img.src = '/models/epic/tex/albedo.png';
+    await img.decode();
+    const c = document.createElement('canvas');
+    c.width = img.width;
+    c.height = img.height;
+    const g = c.getContext('2d', { willReadFrequently: true })!;
+    g.drawImage(img, 0, 0);
+    return { w: c.width, h: c.height, data: g.getImageData(0, 0, c.width, c.height).data };
+  } catch {
+    return null;
+  }
+}
+const WHITE_UV = [0.8241, 0.6677]; // a white cell of the pack's texture sheet
+const FAR_M = 38; // beyond this, vehicles are drawn with their simpler shape
+/** A simpler copy of a shape (about `ratio` of its triangles), keeping its outline and colour edges. */
+async function simpler(g: THREE.BufferGeometry, ratio: number, uv = false): Promise<THREE.BufferGeometry> {
+  try {
+    await MeshoptSimplifier.ready;
+    const keep = uv ? ['position', 'uv'] : ['position'];
+    const src = new THREE.BufferGeometry();
+    for (const k of keep) src.setAttribute(k, g.getAttribute(k));
+    const w = mergeVertices(src, 1e-3);
+    const index = new Uint32Array(w.index!.array as ArrayLike<number>);
+    const pos = w.getAttribute('position').array as Float32Array;
+    const target = Math.max(3, Math.floor((index.length * ratio) / 3) * 3);
+    const [out] = MeshoptSimplifier.simplify(index, pos, 3, target, 0.03, ['LockBorder']);
+    w.setIndex(new THREE.BufferAttribute(out, 1));
+    const flat = w.toNonIndexed();
+    flat.computeVertexNormals(); // (flat faces, as the pack's low-poly look)
+    flat.computeBoundingSphere();
+    return flat;
+  } catch {
+    return g;
+  }
+}
+/**
+ * Splits a pack vehicle into its paintwork (the triangles of the `paint` colours: no texture, painted
+ * per vehicle) and everything else (glass, tyres, lights, trim: the pack's own colours).
+ */
+function splitPaint(geo: THREE.BufferGeometry, atlas: { w: number; h: number; data: Uint8ClampedArray }, paint: string[], white: string[]) {
+  const pos = geo.getAttribute('position'), nor = geo.getAttribute('normal'), uv = geo.getAttribute('uv');
+  const index = geo.index;
+  const count = index ? index.count : pos.count;
+  const out = { paint: { p: [] as number[], n: [] as number[] }, fixed: { p: [] as number[], n: [] as number[], u: [] as number[] } };
+  const hex = (u: number, v: number) => {
+    const x = Math.min(atlas.w - 1, Math.max(0, Math.floor(u * atlas.w)));
+    const y = Math.min(atlas.h - 1, Math.max(0, Math.floor((1 - v) * atlas.h)));
+    const i = (y * atlas.w + x) * 4;
+    return ((atlas.data[i] << 16) | (atlas.data[i + 1] << 8) | atlas.data[i + 2]).toString(16).padStart(6, '0');
+  };
+  for (let t = 0; t < count; t += 3) {
+    const ids = [0, 1, 2].map((k) => (index ? index.getX(t + k) : t + k));
+    const colour = hex(uv.getX(ids[0]), uv.getY(ids[0]));
+    const isPaint = paint.includes(colour);
+    const makeWhite = white.includes(colour);
+    for (const i of ids) {
+      const dst = isPaint ? out.paint : out.fixed;
+      dst.p.push(pos.getX(i), pos.getY(i), pos.getZ(i));
+      dst.n.push(nor.getX(i), nor.getY(i), nor.getZ(i));
+      if (!isPaint) out.fixed.u.push(makeWhite ? WHITE_UV[0] : uv.getX(i), makeWhite ? WHITE_UV[1] : uv.getY(i));
+    }
+  }
+  const make = (p: number[], n: number[], u?: number[]) => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(p.length ? p : [0, 0, 0, 0, 0, 0, 0, 0, 0], 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(n.length ? n : [0, 1, 0, 0, 1, 0, 0, 1, 0], 3));
+    if (u) g.setAttribute('uv', new THREE.Float32BufferAttribute(u.length ? u : [0, 0, 0, 0, 0, 0], 2));
+    g.computeBoundingSphere();
+    return g;
+  };
+  return { paint: make(out.paint.p, out.paint.n), fixed: make(out.fixed.p, out.fixed.n, out.fixed.u) };
 }

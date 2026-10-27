@@ -18,7 +18,7 @@ const M_LON = 111320 * Math.cos((5.56 * Math.PI) / 180);
 const SPACING_M: [number, number] = [3.8, 6.2]; // crowded like Accra: a vehicle every 3.8 to 6.2 m (every 7.6 to 12.4 m in each lane)
 const END_HIDE_M = 7; // vehicles are not shown this close to the start or end of an open route
 /** Body lengths (metres), for leaving room between vehicles in packed lanes. */
-const BODY_M: Record<Kind, number> = { car: 4.5, taxi: 4.5, trotro: 6.3, tricycle: 3, okada: 2, bus: 11, truck: 8, pickup: 5.2, suv: 4.8 };
+const BODY_M: Record<Kind, number> = { car: 4.7, taxi: 5.35, trotro: 4.4, tricycle: 3, okada: 2.2, bus: 11.3, truck: 6.3, pickup: 5.3, suv: 4.7 }; // (the Epic City pack's vehicles)
 
 type Route = {
   key: number;
