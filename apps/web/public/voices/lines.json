@@ -20,6 +20,16 @@
   "who": "You and Auntie Dede (in the street)"
  },
  {
+  "id": "circle-circle-last-stop-everybody-down-down",
+  "line": "Circle! Circle! Last stop! Everybody down, down!",
+  "who": "Bus mate (young man, loud)"
+ },
+ {
+  "id": "accra-accra-accra-last-seat-come-come",
+  "line": "Accra! Accra! Accra! Last seat, come, come!",
+  "who": "Bus mate (young man, loud)"
+ },
+ {
   "id": "my-child-go-and-make-us-proud",
   "line": "My child, go and make us proud.",
   "who": "Grandma (old woman, warm, slow)"
@@ -28,11 +38,6 @@
   "id": "go-and-make-us-proud",
   "line": "Go and make us proud.",
   "who": "Grandma (old woman, warm, slow)"
- },
- {
-  "id": "accra-accra-accra-last-seat-come-come",
-  "line": "Accra! Accra! Accra! Last seat, come, come!",
-  "who": "Bus mate (young man, loud)"
  },
  {
   "id": "ei-sit-down-my-child-what-happened",

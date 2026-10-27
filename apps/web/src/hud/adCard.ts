@@ -1,24 +1,26 @@
 // The advert card and the advertiser steps (design brief 18). Tap a billboard on the big map, or a
 // passing trotro, bus or taxi in the street: the card shows its advert and price, and "Put your advert
 // here" walks you through it:
-//   1. The space: the advert there now, the price a week, how many weeks.
+//   1. The space: where (prices by place: side street, main road, busy station, airport, or on a
+//      moving taxi, trotro or bus, the most), and how many weeks. Everybody pays the same.
 //   2. The design: upload your own finished flyer (shown whole on the board), or use the Ghanaverse
 //      design with your words and your product photo (shown whole, or filling the board).
 //   3. Contact: phone, WhatsApp, website or Instagram, shown on the advert; tapping your advert in the
 //      city gives Call, WhatsApp and Website buttons.
-//   4. Review and pay: the summary, the launch offer, and payment (Mobile Money or card).
+//   4. Review and pay: the summary and payment (Mobile Money or card).
 // The preview shows on that space in the city straight away, for you. Payments go through the
 // Ghanaverse server (money is only ever handled there); every advert is checked before it goes live
 // for everyone (no scams, betting, adult content or politics, no brands that are not yours).
 import { drawAd, drawFlyer, type AdDesign } from '../game/adPosters';
+import { AD_PLACES, adPlace, type AdPlaceKey } from '../game/adPrices';
 
 export type AdContact = { phone: string; whatsapp: string; link: string };
 export type AdSpace = {
   kind: 'billboard' | 'vehicle';
   title: string; // "Billboard · Ring Road" or "Trotro · advert on both sides"
   picture: string; // the advert now (data URL)
-  price: number; // cedis a week
-  priceNote: string; // "big billboard at a busy spot"
+  /** What kind of place this space is (its price comes from the price list, adPrices.ts). */
+  place: AdPlaceKey;
   note: string;
   /** The player's own advert already shown here (from an earlier preview): its contact buttons. */
   own?: AdContact | null;
@@ -60,16 +62,16 @@ export function phoneDigits(text: string) {
 
 type Draft = {
   weeks: number;
-  small: boolean;
+  where: AdPlaceKey;
   mode: 'flyer' | 'design';
   flyer: HTMLCanvasElement | null;
-  flyerFit: 'contain' | 'cover';
+  flyerFit: 'auto' | 'contain' | 'cover';
   brand: string;
   head: string;
   line: string;
   cta: string;
   photo: HTMLCanvasElement | null;
-  photoFit: 'contain' | 'cover';
+  photoFit: 'auto' | 'contain' | 'cover';
   colour: number;
   phone: string;
   whatsapp: string;
@@ -103,11 +105,12 @@ export class AdCard {
   isOpen = false;
 
   private static fresh(): Draft {
-    return { weeks: 1, small: true, mode: 'flyer', flyer: null, flyerFit: 'contain', brand: '', head: '', line: '', cta: '', photo: null, photoFit: 'contain', colour: 0, phone: '', whatsapp: '', link: '', showPhone: true, pay: 'momo' };
+    return { weeks: 1, where: 'street', mode: 'flyer', flyer: null, flyerFit: 'auto', brand: '', head: '', line: '', cta: '', photo: null, photoFit: 'auto', colour: 0, phone: '', whatsapp: '', link: '', showPhone: true, pay: 'momo' };
   }
 
   open(space: AdSpace) {
     this.space = space;
+    this.d.where = space.place;
     this.build();
     this.isOpen = true;
     this.root!.classList.remove('hidden');
@@ -137,13 +140,16 @@ export class AdCard {
   private get inner() {
     return this.root!.querySelector('.ac-in') as HTMLElement;
   }
-  private get aspect() {
-    return this.space?.kind === 'vehicle' ? 4 : 16 / 9;
+  /** Billboard or vehicle: the place chosen (it can differ from the space you tapped). */
+  private get kind() {
+    return adPlace(this.d.where).kind;
   }
+  private get aspect() {
+    return this.kind === 'vehicle' ? 4 : 16 / 9;
+  }
+  /** The same price for everybody: the place's price a week, times the weeks. */
   private total() {
-    const s = this.space!;
-    const weeks = this.d.weeks - (this.d.small ? 1 : 0); // launch offer: the first week free (brief 18.2)
-    return Math.max(0, weeks) * s.price;
+    return this.d.weeks * adPlace(this.d.where).price;
   }
   private contact(): AdContact {
     return { phone: this.d.phone.trim(), whatsapp: this.d.whatsapp.trim(), link: webLink(this.d.link) };
@@ -160,7 +166,7 @@ export class AdCard {
   private drawer() {
     const d = this.d;
     return (g: CanvasRenderingContext2D, top: number, W: number, H: number) => {
-      if (d.mode === 'flyer' && d.flyer) return drawFlyer(g, d.flyer, top, W, H, d.flyerFit);
+      if (d.mode === 'flyer' && d.flyer) return drawFlyer(g, d.flyer, top, W, H, d.flyerFit, d.cta.trim() || undefined);
       const c = COLOURS[d.colour];
       const design: AdDesign = {
         brand: (d.brand.trim() || 'YOUR BUSINESS').toUpperCase().slice(0, 28),
@@ -170,7 +176,7 @@ export class AdCard {
         bg: [c[0], c[1]],
         accent: c[2],
         ink: d.colour === 5 ? '#121a14' : undefined,
-        photoFit: d.photoFit,
+        photoFit: d.photoFit === 'auto' ? (d.photo && Math.abs(Math.log(d.photo.width / d.photo.height / (W / H))) < 0.25 ? 'cover' : 'contain') : d.photoFit,
         contact: this.contactLine() || undefined,
       };
       drawAd(g, design, top, W, H, d.photo);
@@ -178,7 +184,7 @@ export class AdCard {
   }
   private head(step: number, title: string) {
     const names = ['Space', 'Design', 'Contact', 'Pay'];
-    return `<small class="ac-kind">${this.space!.kind === 'billboard' ? '📺 BILLBOARD' : '🚐 MOVING ADVERT'} · STEP ${step} OF 4</small>
+    return `<small class="ac-kind">${this.kind === 'billboard' ? '📺 BILLBOARD' : '🚐 MOVING ADVERT'} · STEP ${step} OF 4</small>
       <div class="ac-steps">${names.map((n, i) => `<span class="${i + 1 < step ? 'done' : i + 1 === step ? 'on' : ''}">${i + 1}. ${n}</span>`).join('')}</div>
       <h3>${esc(title)}</h3>`;
   }
@@ -248,7 +254,7 @@ export class AdCard {
       <div class="ac-pic ${s.kind}"><img alt="The advert here now" src="${s.picture}"><span>● LIVE</span></div>
       ${own ? this.contactButtons(own) : ''}
       <p class="ac-note">${esc(s.note)}</p>
-      <div class="ac-price"><b>₵${s.price.toLocaleString('en-GH')} a week</b><span>${esc(s.priceNote)} · small Ghanaian businesses: first week free</span></div>
+      <div class="ac-price"><b>₵${adPlace(s.place).price.toLocaleString('en-GH')} a week</b><span>${esc(adPlace(s.place).name)} · ${esc(adPlace(s.place).note)}</span></div>
       <button type="button" class="ac-go">Put your advert here</button>`;
     this.inner.querySelector('.ac-go')!.addEventListener('click', () => this.step1());
     this.bindContactButtons();
@@ -265,19 +271,29 @@ export class AdCard {
     this.inner.querySelectorAll<HTMLAnchorElement>('.ac-cbtn').forEach((a) => a.addEventListener('click', (e) => e.stopPropagation()));
   }
 
-  // ---------- Step 1: the space and how long ----------
+  // ---------- Step 1: where and how long ----------
   private step1() {
     const s = this.space!;
     const n = this.nav(() => this.step0(), () => this.step2());
-    this.inner.innerHTML = `${this.head(1, s.title)}
-      <div class="ac-pic ${s.kind}"><img alt="" src="${s.picture}"></div>
+    const here = adPlace(s.place);
+    const rows = AD_PLACES.map((p) => `<button type="button" data-where="${p.key}" class="ac-where ${p.key === this.d.where ? 'on' : ''}">
+        <i>${p.icon}</i><span><b>${esc(p.name)}${p.key === s.place ? ' · this one' : ''}</b><small>${esc(p.note)}</small></span><em>₵${p.price.toLocaleString('en-GH')}<small>a week</small></em></button>`).join('');
+    this.inner.innerHTML = `${this.head(1, 'Where should your advert go?')}
+      <div class="ac-label">Busier places cost more; moving vehicles cost the most</div>
+      <div class="ac-wheres">${rows}</div>
+      <p class="ac-note" data-where-note>${this.d.where === s.place ? `Your advert goes on the ${here.kind === 'billboard' ? 'billboard' : 'vehicle'} you tapped.` : 'We put your advert on a free space of that kind for you.'}</p>
       <div class="ac-label">How long?</div>
       <div class="ac-choice">${this.pick('weeks', 1, '1 week')}${this.pick('weeks', 2, '2 weeks')}${this.pick('weeks', 4, '4 weeks')}${this.pick('weeks', 8, '8 weeks')}</div>
-      <label class="ac-check"><input type="checkbox" data-k="small"> I am a small Ghanaian business (first week free)</label>
-      <div class="ac-price"><b data-total>₵${this.total().toLocaleString('en-GH')}</b><span>₵${s.price.toLocaleString('en-GH')} a week · ${esc(s.priceNote)}</span></div>
+      <div class="ac-price"><b data-total>₵${this.total().toLocaleString('en-GH')}</b><span data-rate>₵${adPlace(this.d.where).price.toLocaleString('en-GH')} a week · the same price for everybody</span></div>
       ${n.html}`;
     this.bindInputs();
     this.wire(n);
+    this.inner.querySelectorAll<HTMLElement>('[data-where]').forEach((b) =>
+      b.addEventListener('click', () => {
+        this.d.where = b.dataset.where as AdPlaceKey;
+        this.step1();
+      }),
+    );
   }
 
   // ---------- Step 2: the design ----------
@@ -287,16 +303,17 @@ export class AdCard {
     const n = this.nav(() => this.step1(), () => this.step3());
     const flyer = `
       <label class="ac-file ${d.flyer ? 'has' : ''}">📄 Upload your flyer or banner (JPG or PNG)<input type="file" accept="image/*" data-file="flyer" hidden></label>
-      <div class="ac-label">On the ${s.kind === 'billboard' ? 'board' : 'vehicle'}</div>
-      <div class="ac-choice">${this.pick('flyerFit', 'contain', 'Show all of it')}${this.pick('flyerFit', 'cover', 'Fill edge to edge')}</div>
-      <p class="ac-note">Best size: ${s.kind === 'billboard' ? '1600 × 900 (wide, 16:9)' : '1600 × 400 (long, 4:1)'}. "Show all of it" never cuts anything off.</p>`;
+      <div class="ac-label">On the ${this.kind === 'billboard' ? 'board' : 'vehicle'}</div>
+      <div class="ac-choice">${this.pick('flyerFit', 'auto', '✨ Automatic')}${this.pick('flyerFit', 'contain', 'Show all of it')}${this.pick('flyerFit', 'cover', 'Fill edge to edge')}</div>
+      <p class="ac-note">Never stretched. Automatic fills the ${this.kind === 'billboard' ? 'board' : 'space'} when your flyer is about its shape (${this.kind === 'billboard' ? '1600 × 900, wide 16:9' : '1600 × 400, long 4:1'}), and otherwise shows all of it on a soft blurred copy of itself.</p>
+      <label>Button on your flyer (optional)<input data-k="cta" maxlength="22" placeholder="Call now · Order today"></label>`;
     const design = `
       <label>Business name<input data-k="brand" maxlength="28" placeholder="Mama Esi Fabrics"></label>
       <label>Big words<input data-k="head" maxlength="48" placeholder="New wax prints every week"></label>
       <label>Small words<input data-k="line" maxlength="70" placeholder="Makola Market, row 4 · open Monday to Saturday"></label>
       <label>Button<input data-k="cta" maxlength="22" placeholder="Come and see"></label>
       <label class="ac-file ${d.photo ? 'has' : ''}">📷 Add your product or shop photo<input type="file" accept="image/*" data-file="photo" hidden></label>
-      <div class="ac-choice">${this.pick('photoFit', 'contain', 'Show the whole photo')}${this.pick('photoFit', 'cover', 'Photo fills the board')}</div>
+      <div class="ac-choice">${this.pick('photoFit', 'auto', '✨ Automatic')}${this.pick('photoFit', 'contain', 'Show the whole photo')}${this.pick('photoFit', 'cover', 'Photo fills the board')}</div>
       <div class="ac-label">Colours</div>
       <div class="ac-colours">${COLOURS.map((c, i) => `<button type="button" data-pick="colour=${i}" style="background:linear-gradient(135deg,${c[0]},${c[1]})" class="${i === d.colour ? 'on' : ''}" aria-label="Colour ${i + 1}"></button>`).join('')}</div>`;
     this.inner.innerHTML = `${this.head(2, 'Your advert')}
@@ -339,8 +356,8 @@ export class AdCard {
     this.inner.innerHTML = `${this.head(4, 'Check and pay')}
       ${this.previewBox()}
       <div class="ac-summary">
-        <span>Space</span><b>${esc(s.title)}</b>
-        <span>Time</span><b>${d.weeks} week${d.weeks > 1 ? 's' : ''}${d.small ? ' (first week free)' : ''}</b>
+        <span>Where</span><b>${esc(adPlace(d.where).name)}${d.where === s.place ? ` (${esc(s.title)})` : ''}</b>
+        <span>Time</span><b>${d.weeks} week${d.weeks > 1 ? 's' : ''} × ₵${adPlace(d.where).price.toLocaleString('en-GH')}</b>
         <span>Contact</span><b>${esc([c.phone, c.whatsapp, c.link.replace(/^https?:\/\//, '')].filter(Boolean).join(' · ') || '—')}</b>
         <span>Total</span><b class="ac-total" data-total>₵${this.total().toLocaleString('en-GH')}</b>
       </div>
@@ -373,7 +390,7 @@ export class AdCard {
     const ref = `GV-${Date.now().toString(36).toUpperCase().slice(-6)}`;
     try {
       const list = JSON.parse(localStorage.getItem('gv-ad-requests') ?? '[]') as unknown[];
-      list.push({ ref, space: this.space!.title, weeks: this.d.weeks, total: this.total(), contact: this.contact(), mode: this.d.mode, made: new Date().toISOString() });
+      list.push({ ref, space: this.space!.title, where: this.d.where, weeks: this.d.weeks, total: this.total(), contact: this.contact(), mode: this.d.mode, made: new Date().toISOString() });
       localStorage.setItem('gv-ad-requests', JSON.stringify(list.slice(-20)));
     } catch {
       // No storage (private window): the preview still works.
@@ -382,7 +399,7 @@ export class AdCard {
       <small class="ac-kind">✓ ADVERT SAVED · ${ref}</small>
       <h3>Your advert is ready</h3>
       ${this.previewBox()}
-      <p class="ac-note">It is showing on this ${this.space!.kind === 'billboard' ? 'billboard' : 'vehicle'} for you now. <b>Payments are not switched on yet</b>: when the Ghanaverse advertiser page opens, you pay ₵${this.total().toLocaleString('en-GH')} by ${this.d.pay === 'momo' ? 'Mobile Money' : 'card'} with this reference, we check the advert, and it goes live for every player.</p>
+      <p class="ac-note">It is showing on ${this.d.where === this.space!.place ? `this ${this.space!.kind === 'billboard' ? 'billboard' : 'vehicle'}` : `the ${this.space!.kind === 'billboard' ? 'billboard' : 'vehicle'} you tapped`} for you now. <b>Payments are not switched on yet</b>: when the Ghanaverse advertiser page opens, you pay ₵${this.total().toLocaleString('en-GH')} by ${this.d.pay === 'momo' ? 'Mobile Money' : 'card'} with this reference, we check the advert, and it goes live for every player.</p>
       <button type="button" class="ac-go ac-done">Done</button>`;
     this.redraw();
     this.inner.querySelector('.ac-done')!.addEventListener('click', () => this.close());

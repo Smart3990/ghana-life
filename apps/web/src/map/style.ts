@@ -112,6 +112,14 @@ const roofs3d: LayerSpecification = {
   },
 };
 
+/** The city's 3D blocks with their own ids (the street test shows them during the ride, even on Light). */
+export function cityBlocks3d(): LayerSpecification[] {
+  return [
+    { ...buildings3d, id: 'ride-buildings' } as LayerSpecification,
+    { ...roofs3d, id: 'ride-roofs' } as LayerSpecification,
+  ];
+}
+
 const buildingsFlat: LayerSpecification = {
   id: 'buildings',
   type: 'fill',

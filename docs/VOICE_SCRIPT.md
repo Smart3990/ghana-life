@@ -26,6 +26,15 @@ Lines with `{...}` in them say a name the game fills in (your hometown, a place)
 | `hey-my-daughter-come-come-here.mp3` | Hey! My daughter! Come, come here! |
 | `hey-my-son-come-come-here.mp3` | Hey! My son! Come, come here! |
 
+## Story: Bus mate
+
+*Who:* Bus mate (young man, loud)
+
+| File | Line |
+| --- | --- |
+| `circle-circle-last-stop-everybody-down-down.mp3` | Circle! Circle! Last stop! Everybody down, down! |
+| `accra-accra-accra-last-seat-come-come.mp3` | Accra! Accra! Accra! Last seat, come, come! |
+
 ## Story: Grandma
 
 *Who:* Grandma (old woman, warm, slow)
@@ -34,14 +43,6 @@ Lines with `{...}` in them say a name the game fills in (your hometown, a place)
 | --- | --- |
 | `my-child-go-and-make-us-proud.mp3` | My child, go and make us proud. |
 | `go-and-make-us-proud.mp3` | Go and make us proud. |
-
-## Story: Bus mate
-
-*Who:* Bus mate (young man, loud)
-
-| File | Line |
-| --- | --- |
-| `accra-accra-accra-last-seat-come-come.mp3` | Accra! Accra! Accra! Last seat, come, come! |
 
 ## Story: Auntie Dede
 
@@ -537,4 +538,4 @@ Lines with `{...}` in them say a name the game fills in (your hometown, a place)
 
 ---
 
-264 lines to record.
+265 lines to record.

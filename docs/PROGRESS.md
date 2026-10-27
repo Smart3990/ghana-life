@@ -295,6 +295,21 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
   - **Big fix, the 3D world now sits exactly on the map:** our metres used the true earth size, but the map draws on a slightly smaller round earth, so the 3D streets, cars and houses slid off the map's own streets by about 8 m at Nima (and less near Circle). Now both use the map's metres and line up to under a pixel.
   - **Fix, roads at the edge of a map square:** a long straight road piece that crossed the edge of a map square was lost from both squares, so the game did not know about that bit of road (Uncle's house once landed on one). Pieces are now cut exactly at the edge. Before the house is placed, every map square within 250 m is loaded first.
 
+  - **Arriving at Circle by trotro:** after the opening film, the trotro from home pulls in at the kerb (filmed from along the kerb, the kiosks there stand back so nothing blocks the view), the mate calls "Circle! Circle! Last stop!", you step down and walk onto the pavement, the trotro pulls away, you turn to face the road, and the boy snatches your bag.
+  - **Film music:** our own highlife tune (made entirely in code, `scripts/music/highlife.mjs`, no samples) fades in as the bus leaves for Accra in the opening film, plays through Circle, the snatch and the chase, and fades away as the thief gets away. The Sound button mutes it too. The owner's chosen song can replace `public/music/arrival.mp3` once the artist and label give written permission.
+  - **The taxi now blocks you from the front:** you pull up at the kerb, the taxi screeches in right in front of you, you put your hands on your head, look left and right for a way round, then dodge round its back, and he is gone.
+  - **Auntie Dede's kelewele:** you stay in your chair and eat, the hand going up to the mouth bite after bite.
+  - **Uncle Kwame parks off the road:** he drives in along the lane and pulls off onto the pavement by the stall (the kiosks there make room), so the traffic flows on past; he walks round the front of his car (never through it), pays Auntie, and you both walk to your doors and get in. He pulls back out into the lane and away.
+  - **The ride, a short film (about 15 s):** the car pulling away at Circle, then six close shots of Uncle's car driving at a normal speed through real places on the real way (Circle, Kokomlemle, Asylum Down, Al-Waleed Bin Talal Highway, Nima Roundabout, Nima), each with its road, area and landmark signs, quick fades between shots, the city in 3D on every phone for these seconds. No views out of the windows any more.
+  - **Home in Nima:** a bigger compound (24 x 20 m) on a quieter street (not on a main road), open ground round it with no sellers crowding it, flower pots, bougainvillea over the wall and a carport inside the gate. The screen fades, and Uncle's car comes along the road, turns in through the middle of the gate and parks under the carport (never through a wall).
+  - **You walk to your room yourself:** after "Welcome home", the controls are yours ("Follow Uncle Kwame to your room"); Uncle walks ahead and waits by your door, steps in as you come up, and you follow him in. The doorway is now 1.2 m wide (it was so narrow that you could get stuck, and a low strip of wall ran across it). As you come to the door the tin roof lifts away, and inside the camera looks down into the room (it showed the wall before); walk out and the roof comes back.
+  - **Tap any vehicle with an advert:** it works on both halves of a phone screen now (the left half is also the walking stick), whenever you are walking, also during the story.
+  - **Advert prices by place, the same for everybody** (no small-business discount for now): side street ₵300, main road ₵450, busy station or market ₵600, airport ₵900, moving taxi ₵1,000, trotro ₵1,200, city bus ₵1,500 a week. Step 1 is now "Where should your advert go?" with the whole list. A billboard's own price comes from where it stands.
+  - **Your flyer is never stretched:** "Automatic" (the new default) fills the board when the picture is about its shape and otherwise shows all of it on a soft blurred copy of itself (no empty bars); an optional button on the flyer ("Call now") as the call to action.
+  - **More billboards:** about every 30 m on main roads and every 60 m on side streets (they were 40 m and 110 m); drawn out to 250 m on Light phones, 320 m on others; advert faces always match their frames when there are many.
+  - **The big map's locked areas** look washed out: pale and grey like a faded photo, deepening gently over the first 300 m past the gold edge.
+  - Tests can start straight at the Nima arrival (`?scene=nima`) or at the ride (`?scene=ride`).
+
 ## Waiting on the owner
 
 - Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.
@@ -305,5 +320,7 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
 - Test phone memory and cores (/device.html), and the mobile network for R3.
 - For advert payments: a business Mobile Money number or a Paystack account in the business's name (only the owner can open one), then the server takes the payments.
 - Record the voice script (docs/VOICE_SCRIPT.md) with Ghanaian speakers who agree in writing.
+- The song for the opening: written permission from the artist and label to use it in the game (until then our own highlife tune plays).
+- Share the picture of the advert banner style you like, so ours can match its feel (our own design).
 - Native-speaker check of the Twi and Fante greetings, and the Pidgin, Twi, Ga and Ewe word lists.
 - GitHub repository visibility: make it private.

@@ -717,13 +717,17 @@ Billboards, building walls and rooftop signs, bus stops, stadium boards, contain
 | --- | --- | --- |
 | Kiosk or umbrella | ₵25 | No equivalent |
 | Small street sign or poster | ₵35 | Billboards from ₦5,000 (about ₵42) |
-| Big billboard at a busy spot | ₵350 | Billboards up to ₦250,000 (about ₵2,100); airport ₦500,000 (about ₵4,250) |
+| Billboard on a side street | ₵300 | Billboards from ₦5,000 (about ₵42) |
+| Billboard on a main road | ₵450 | |
+| Billboard at a busy station (lorry station, market, bus terminal) | ₵600 | Billboards up to ₦250,000 (about ₵2,100) |
+| Billboard at the airport | ₵900 | Airport ₦500,000 (about ₵4,250) |
 | Building wall or rooftop | ₵450 | |
-| Trotro route pack | ₵250 | No equivalent |
-| Citywide fleet | ₵900 | No equivalent |
+| On a moving taxi | ₵1,000 | No equivalent |
+| On a moving trotro | ₵1,200 | No equivalent |
+| On a moving city bus | ₵1,500 | No equivalent |
 | Event takeover | ₵600 per event | |
 
-Shared billboards rotate several businesses at a lower price. Launch offer: first week free or half price for small Ghanaian businesses. Re-check exchange rates before setting final prices.
+Moving vehicles cost the most (they pass everyone, all day). Everybody pays the same price: no discounts for now (owner, 27 Oct 2026; small-business offers may come back later). Shared billboards rotate several businesses. The advertiser picks where (the list above, with prices) and how many weeks. Re-check exchange rates before setting final prices. Prices shown in the game are a guide; the server decides what is charged.
 
 ### 18.3 The advertiser page (separate web page, shareable link or QR code)
 

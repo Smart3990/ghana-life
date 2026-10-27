@@ -33,3 +33,8 @@ The plastic chairs and football (`src/game/streetScenes.ts`) are built in code. 
 ## Billboard advert photos (public/ads/)
 
 wallet.webp, kelewele.webp, radio.webp, water.webp: made for Ghanaverse with ImagineArt (Seedream v5 lite) on 2026-10-25, from our own prompts (fictional people, no text or logos). Resized to 768 x 432 WebP. Before launch, check that ImagineArt's plan allows commercial use of these images. The brands on the adverts (Sika Mobile Money, Ghanaverse FM, Cool Sachet Water, Adinkra Bank and so on) are the game's own, fictional.
+
+## Film music (public/music/)
+
+- `arrival.mp3`: our own highlife tune (palm-wine guitars, bass, bell, shaker and drums), made entirely in code by `apps/web/scripts/music/highlife.mjs` (no samples, no recordings). Ours to use.
+- A commercial song may replace it only with the artist's and label's written permission for use in the game (recorded here when we have it).

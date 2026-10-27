@@ -528,14 +528,14 @@ export class StreetLife {
             const [nx, nz] = [x - dz * off * side, z + dx * off * side];
             if (this.free(nx, nz, 0.2)) this.namePlates.push({ x: nx, z: nz, angle: angle + Math.PI / 2, name: road.name });
           }
-          if (Math.round(s / spacing) % (road.kind === 'minor_road' ? 12 : 4) === 2) {
-            // Billboards all over the city (design brief 18.1): about every 65 m along the main roads,
-            // now and then on side streets, set back behind the pavement and facing the traffic.
+          if (Math.round(s / spacing) % (road.kind === 'minor_road' ? 7 : 3) === 2) {
+            // Billboards all over the city (design brief 18.1): about every 30 m along the main roads
+            // and every 60 m on side streets, set back behind the pavement and facing the traffic.
             // Tried at a few distances back, so one still fits where buildings are close.
             for (const extra of [2.2, 3.6, 5.2]) {
               const back = size.half + GUTTER + size.walk + extra;
               const [bx, bz] = [x - dz * back * side, z + dx * back * side];
-              if (this.free(bx, bz, 2.4) && !this.boards.all.some((o) => Math.abs(o.x - bx) < 30 && Math.abs(o.z - bz) < 30)) {
+              if (this.free(bx, bz, 2.4) && !this.boards.all.some((o) => Math.abs(o.x - bx) < 22 && Math.abs(o.z - bz) < 22)) {
                 // Turned a little towards the traffic coming along this side, so drivers see it face on.
                 this.boards.all.push({ x: bx, z: bz, angle: facing + side * 0.45, scale: 1, colour: Math.floor(hash(bx, bz) * POSTERS) });
                 break;
@@ -710,7 +710,7 @@ export class StreetLife {
     }
     const r2 = this.opts.radiusM ** 2;
     let shadows = 0;
-    const boardR2 = Math.max(r2, 320 ** 2);
+    const boardR2 = Math.max(r2, (this.opts.people < 150 ? 250 : 320) ** 2); // (a little nearer on Light phones)
     for (const b of this.batches) {
       let n = 0;
       // The nearest ones first, so a full batch never leaves gaps close to the player.
@@ -741,9 +741,11 @@ export class StreetLife {
     const fill = (spots: Spot[], mesh: THREE.InstancedMesh, range2: number) => {
       const ads = mesh.geometry.getAttribute('aAd') as THREE.InstancedBufferAttribute;
       let n = 0;
-      for (const sp of spots) {
+      // The nearest first (the same ones as the frames when there are more than fit).
+      let list = spots.filter((sp) => (sp.x - x) ** 2 + (sp.z - z) ** 2 <= range2);
+      if (list.length > mesh.instanceMatrix.count) list = list.sort((a, c) => (a.x - x) ** 2 + (a.z - z) ** 2 - ((c.x - x) ** 2 + (c.z - z) ** 2));
+      for (const sp of list) {
         if (n >= mesh.instanceMatrix.count) break;
-        if ((sp.x - x) ** 2 + (sp.z - z) ** 2 > range2) continue;
         this.q.setFromAxisAngle(this.up, Math.PI - sp.angle);
         this.m.compose(this.p.set(sp.x, (sp as Spot & { y?: number }).y ?? 0, sp.z), this.q, this.sc.setScalar(1));
         mesh.setMatrixAt(n, this.m);

@@ -195,7 +195,13 @@ export function drawAd(g: CanvasRenderingContext2D, d: AdDesign, top: number, W:
  * An advertiser's own finished flyer on the whole board. 'contain' shows all of it (the rest of the
  * board filled with a soft, darkened copy of it); 'cover' fills the board edge to edge.
  */
-export function drawFlyer(g: CanvasRenderingContext2D, img: HTMLImageElement | HTMLCanvasElement, top: number, W: number, H: number, fit: 'cover' | 'contain') {
+/**
+ * The advertiser's own finished flyer on a board, never stretched. "auto" picks for them: a picture
+ * of about the board's shape fills it edge to edge (hardly anything trimmed); any other shape is
+ * shown whole, on a soft blurred copy of itself so there are no empty bars. With `cta`, a call to
+ * action button sits in the bottom corner.
+ */
+export function drawFlyer(g: CanvasRenderingContext2D, img: HTMLImageElement | HTMLCanvasElement, top: number, W: number, H: number, fit: 'cover' | 'contain' | 'auto', cta?: string) {
   g.save();
   g.translate(0, top);
   g.beginPath();
@@ -204,13 +210,21 @@ export function drawFlyer(g: CanvasRenderingContext2D, img: HTMLImageElement | H
   const iw = img.width;
   const ih = img.height;
   const cover = Math.max(W / iw, H / ih);
-  // Behind: the flyer itself, stretched to fill and darkened (a soft backdrop).
+  const mode = fit === 'auto' ? (Math.abs(Math.log(iw / ih / (W / H))) < 0.14 ? 'cover' : 'contain') : fit;
+  // Behind: the flyer itself, blown up, blurred and darkened (a soft backdrop).
   g.globalAlpha = 1;
+  g.filter = 'blur(10px)';
   g.drawImage(img, (W - iw * cover * 1.2) / 2, (H - ih * cover * 1.2) / 2, iw * cover * 1.2, ih * cover * 1.2);
-  g.fillStyle = 'rgba(10,12,14,.62)';
+  g.filter = 'none';
+  g.fillStyle = 'rgba(10,12,14,.5)';
   g.fillRect(0, 0, W, H);
-  const s = fit === 'cover' ? cover : Math.min(W / iw, H / ih);
+  const s = mode === 'cover' ? cover : Math.min(W / iw, H / ih);
+  if (mode === 'contain') {
+    g.shadowColor = 'rgba(0,0,0,.5)';
+    g.shadowBlur = H * 0.04;
+  }
   g.drawImage(img, (W - iw * s) / 2, (H - ih * s) / 2, iw * s, ih * s);
+  g.shadowBlur = 0;
   const u = H / 100;
   g.font = `800 ${4 * u}px system-ui, sans-serif`;
   g.fillStyle = 'rgba(0,0,0,.45)';
@@ -219,6 +233,24 @@ export function drawFlyer(g: CanvasRenderingContext2D, img: HTMLImageElement | H
   g.fillStyle = '#ffffff';
   g.textBaseline = 'middle';
   g.fillText('AD', W - 10.6 * u, 6.2 * u);
+  if (cta) {
+    // The call to action: a bright button, bottom right.
+    g.font = `900 ${7.5 * u}px system-ui, sans-serif`;
+    const text = cta.toUpperCase().slice(0, 26);
+    const tw = g.measureText(text).width;
+    const bw = tw + 9 * u;
+    const bh = 13 * u;
+    const bx = W - bw - 4 * u;
+    const by = H - bh - 4 * u;
+    g.shadowColor = 'rgba(0,0,0,.45)';
+    g.shadowBlur = 2 * u;
+    g.fillStyle = '#f2c21a';
+    roundRect(g, bx, by, bw, bh, bh / 2);
+    g.fill();
+    g.shadowBlur = 0;
+    g.fillStyle = '#121a14';
+    g.fillText(text, bx + 4.5 * u, by + bh / 2 + 0.4 * u);
+  }
   g.restore();
 }
 

@@ -29,7 +29,7 @@ type View = {
   boards: { lng: number; lat: number; ad: number }[];
   adPicture: (ad: number) => string;
   /** Tapping a billboard opens its advert card. */
-  openAd: (ad: number) => void;
+  openAd: (ad: number, lng: number, lat: number) => void;
 };
 
 const GROUPS: Group[] = [
@@ -161,11 +161,11 @@ const empty = { type: 'FeatureCollection' as const, features: [] };
 type Area = { lng: number; lat: number; radius: number; name: string };
 const inAny = (opens: Area[], p: { lng: number; lat: number }) => opens.some((o) => metres(p, o) <= o.radius);
 /** The edge of an open area: a gently uneven ring, like a district boundary rather than a circle. */
-function edgeRing(o: Area) {
+function edgeRing(o: Area, extra = 0) {
   const ring: number[][] = [];
   for (let i = 0; i <= 72; i++) {
     const a = (i / 72) * Math.PI * 2;
-    const r = o.radius * (1 + 0.035 * Math.sin(a * 3 + 1) + 0.02 * Math.sin(a * 5));
+    const r = o.radius * (1 + 0.035 * Math.sin(a * 3 + 1) + 0.02 * Math.sin(a * 5)) + extra;
     ring.push([o.lng + (Math.cos(a) * r) / M_LON, o.lat + (Math.sin(a) * r) / M_LAT]);
   }
   return ring;
@@ -320,14 +320,20 @@ export class FullMap {
         'icon-size': ['interpolate', ['exponential', 2], ['zoom'], 14, 0.18, 16, 0.6, 18, 1.4],
       },
     });
-    // The locked city: everything outside the open area is greyed out, with a gold dashed edge.
-    const rings = this.get().open.map(edgeRing);
-    map.addSource('fm-lock', {
-      type: 'geojson',
-      data: { type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [[[-1.5, 4.5], [1.5, 4.5], [1.5, 7], [-1.5, 7], [-1.5, 4.5]], ...rings.map((r) => r.slice().reverse())] } },
-    });
+    // The locked city: everything outside the open area is washed out, pale and grey, like a faded
+    // photo, deepening gently over the first 300 m past the edge (four soft layers), with a gold
+    // dashed edge.
+    const rings = this.get().open.map((o) => edgeRing(o));
+    const WORLD = [[-1.5, 4.5], [1.5, 4.5], [1.5, 7], [-1.5, 7], [-1.5, 4.5]];
+    const FADE: [number, number][] = [[0, 0.34], [70, 0.3], [160, 0.28], [300, 0.3]];
+    FADE.forEach(([extra], i) =>
+      map.addSource(`fm-lock-${i}`, {
+        type: 'geojson',
+        data: { type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [WORLD, ...this.get().open.map((o) => edgeRing(o, extra).slice().reverse())] } },
+      }),
+    );
     map.addSource('fm-edge', { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'MultiLineString', coordinates: rings } } });
-    map.addLayer({ id: 'fm-lock', type: 'fill', source: 'fm-lock', paint: { 'fill-color': '#4a4f55', 'fill-opacity': 0.66 } }, 'fm-route-glow');
+    FADE.forEach(([, opacity], i) => map.addLayer({ id: `fm-lock-${i}`, type: 'fill', source: `fm-lock-${i}`, paint: { 'fill-color': i < 2 ? '#e4e2dc' : '#b9bcbb', 'fill-opacity': opacity } }, 'fm-route-glow'));
     map.addLayer({ id: 'fm-edge-glow', type: 'line', source: 'fm-edge', paint: { 'line-color': '#e3a92b', 'line-width': 9, 'line-opacity': 0.25, 'line-blur': 4 } }, 'fm-route-glow');
     map.addLayer({ id: 'fm-edge', type: 'line', source: 'fm-edge', paint: { 'line-color': '#e3a92b', 'line-width': 2.5, 'line-dasharray': [3, 2] } }, 'fm-route-glow');
     // Only our own pins: the base map's business names are hidden (no real brands in the game).
@@ -481,7 +487,7 @@ export class FullMap {
         el.innerHTML = `<img alt="" src="${pics.get(b.ad)}"><i></i>`;
         el.addEventListener('click', (e) => {
           e.stopPropagation();
-          view.openAd(b.ad);
+          view.openAd(b.ad, b.lng, b.lat);
         });
         this.markers.push(new maplibregl.Marker({ element: el, anchor: 'bottom' }).setLngLat([b.lng, b.lat]).addTo(this.map!));
       });
