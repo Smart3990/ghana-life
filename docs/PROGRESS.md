@@ -330,6 +330,9 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
 
   - **Speech bubbles are back** (owner, 27 Oct): people chatting, sellers calling and trotro mates calling their stops show their words in bubbles again, every few seconds, as before; with the owner's recordings playing they are text only (the recordings are the voices). At the moments a mate calls out in a recording, the bubble over that trotro or station mate shows a call too ("📣 Kaneshie Kaneshie! Odorkor! Last seat!").
 
+  - **Snatch seen from behind, roads crowded** (owner, 27 Oct): after the trotro drops you, the camera is behind you, a little high, with the road and the pavement either side in view, so you see the boy run up, grab the bag and dash across. Roads are packed: a vehicle every 3.8 to 6.2 m (side streets nearly as full as main roads), up to 100 round you on Light. A space too short for its vehicle (a bus in a car's space) stays empty, so no vehicle appears inside the one ahead.
+  - **Fix, empty streets on slower phones:** the game thinned people and traffic whenever the frame rate fell under 26, down to a quarter, and on Light (capped at 30) it needed 48 to come back, so after one slow moment the streets stayed empty for good. Now it compares with the phone's own cap (fewer below 72% of it, back above 90%), and vehicles never go below three-quarters.
+
 ## Waiting on the owner
 
 - Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.

@@ -2588,9 +2588,10 @@ async function arriveByBus(): Promise<number | null> {
   state.heading = state.camHeading = lane(0).heading; // watching it go
   await pause(1.9);
   // Then you stand there taking it in, amazed by Accra's noise and crowds: you look one way down the
-  // road, then the other (about 3 seconds), seen from the front and a little along the pavement (the
-  // trotro has gone by then). Then the bag.
-  story.shot = frameShot(spot.x, spot.z, (toRoad * 180) / Math.PI + 180 + 55 * Math.sign(lean || 1), 4.6, 77);
+  // road, then the other (about 3 seconds). Seen from behind you, a little high, with the road and the
+  // pavement either side in the picture, so the snatch that comes next is seen clearly. (The kiosks
+  // behind you stand back: the stop is kept clear.)
+  story.shot = frameShot(spot.x, spot.z, (toRoad * 180) / Math.PI + 12 * Math.sign(lean || 1), 7.5, 68);
   showBubble(state.x, state.z, 1.95, toMe('Ei! So this is Accra!'), 2.4);
   const turn = async (to: number, seconds: number) => {
     const from = state.heading;
@@ -3857,7 +3858,7 @@ async function start() {
     trafficModel = traffic;
     for (const b of pendingBatches.splice(0)) traffic.addRoads(b);
     // Busy roads (raised from the first budget of 15 / 40 / 100: they are drawn in batches, so they cost little).
-    const limit = { light: 80, standard: 200, ultra: 280 }[tier];
+    const limit = { light: 100, standard: 240, ultra: 320 }[tier];
     streetTraffic = new StreetTraffic(traffic, (lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT], limit, { light: 120, standard: 180, ultra: 230 }[tier]);
     scene.add(streetTraffic.group);
     streetTraffic.deckHeight = (x, z) => flyovers.heightAt(x, z);
@@ -3930,10 +3931,15 @@ async function start() {
     const baseLimit = { light: 100, standard: 170, ultra: 260 }[tier];
     for (;;) {
       const fps = await measureFps(2);
-      if (fps < 26 && density > 0.25) density *= 0.75;
-      else if (fps > 48 && density < 1) density = Math.min(1, density * 1.15);
+      // Measured against this phone's own frame cap (30 on Light, 60 on others): fewer only when it
+      // really struggles, and back up again as soon as it copes (before, a Light phone capped at 30
+      // could never get back above 48, so after one slow moment its streets stayed empty for good).
+      const cap = PRESET.fps;
+      if (fps < cap * 0.72 && density > 0.3) density *= 0.8;
+      else if (fps > cap * 0.9 && density < 1) density = Math.min(1, density * 1.15);
       life?.setDensity(density);
-      if (streetTraffic) streetTraffic.density = density;
+      // Vehicles are cheap to draw (a few batches): the roads always stay at least three-quarters full.
+      if (streetTraffic) streetTraffic.density = Math.max(0.75, density);
       void baseLimit;
       if (debug) debugLine.textContent = `${tier} (${reason}) · ${Math.round(fps)} fps · ${renderer.info.render.triangles} tris · busy ${Math.round(density * 100)}%`;
     }

@@ -15,8 +15,10 @@ import { KINDS, kindFor, type Kind, type Placed, type Traffic, type Vehicle } fr
 
 const M_LAT = 110574;
 const M_LON = 111320 * Math.cos((5.56 * Math.PI) / 180);
-const SPACING_M: [number, number] = [4.6, 7.6]; // packed like Accra: a vehicle every 4.6 to 7.6 m in each lane (bumper to bumper at lights)
+const SPACING_M: [number, number] = [3.8, 6.2]; // crowded like Accra: a vehicle every 3.8 to 6.2 m (every 7.6 to 12.4 m in each lane)
 const END_HIDE_M = 7; // vehicles are not shown this close to the start or end of an open route
+/** Body lengths (metres), for leaving room between vehicles in packed lanes. */
+const BODY_M: Record<Kind, number> = { car: 4.5, taxi: 4.5, trotro: 6.3, tricycle: 3, okada: 2, bus: 11, truck: 8, pickup: 5.2, suv: 4.8 };
 
 type Route = {
   key: number;
@@ -258,6 +260,29 @@ export function createStreetNetwork(spacingScale = 1): Traffic {
     return Math.atan2((a.lon - b.lon) * M_LON, (a.lat - b.lat) * M_LAT);
   };
 
+  // Packed lanes: a space too short for its vehicle (a bus in a car's space) is left empty, so no
+  // vehicle ever appears inside the one ahead of it. The same for every frame and every phone.
+  const fitsCache = new Map<number, boolean>();
+  const fits = (ri: number, slot: number) => {
+    const key = ri * 65536 + slot;
+    const known = fitsCache.get(key);
+    if (known !== undefined) return known;
+    const r = routes[ri];
+    const step = r.lanes === 2 ? 2 : 1; // the next one in the same lane
+    const me = vehicle(ri, slot);
+    const rank = (v: Vehicle) => BODY_M[v.kind] * 1e6 + (v.id % 1e6); // of two that would touch, the bigger one keeps its space
+    let ok = true;
+    if (r.slots > step * 2)
+      for (const k of [step, -step]) {
+        const other = vehicle(ri, (((slot + k) % r.slots) + r.slots) % r.slots);
+        let gap = Math.abs(other.offset - me.offset);
+        if (r.closed) gap = Math.min(gap, r.total - gap);
+        const need = (BODY_M[me.kind] + BODY_M[other.kind]) / 2 + 1.5; // half of each, and 1.5 m between
+        if (gap < need && rank(other) > rank(me)) ok = false;
+      }
+    fitsCache.set(key, ok);
+    return ok;
+  };
   let cache: { lon: number; lat: number; radius: number; n: number; spans: [number, number, number][] } | null = null;
   const spansNear = (lon: number, lat: number, radiusM: number) => {
     if (cache && cache.radius === radiusM && cache.n === routes.length && Math.hypot((cache.lon - lon) * M_LON, (cache.lat - lat) * M_LAT) < 40) return cache.spans;
@@ -298,6 +323,7 @@ export function createStreetNetwork(spacingScale = 1): Traffic {
           if (s < a || s > b) continue;
           taken.add(v.id);
           if (!r.closed && (s < END_HIDE_M || s > r.total - END_HIDE_M)) continue;
+          if (!fits(ri, slot)) continue; // (an empty space: it would not fit behind the one ahead)
           const pos = placeOn(r, s, v.lane, base);
           const d = Math.hypot((pos.lon - lon) * M_LON, (pos.lat - lat) * M_LAT);
           if (d > radiusM) continue;
@@ -323,7 +349,7 @@ export function createStreetNetwork(spacingScale = 1): Traffic {
         const i = routes.length;
         // Flyovers are fast and open: their vehicles are further apart.
         const onBridge = r.bridge.some((b) => b);
-        const spacing = (SPACING_M[0] + hash(r.key + 3) * (SPACING_M[1] - SPACING_M[0])) * (r.lanes === 1 ? 1.6 : 1) * spacingScale * (onBridge ? 2.5 : 1);
+        const spacing = (SPACING_M[0] + hash(r.key + 3) * (SPACING_M[1] - SPACING_M[0])) * (r.lanes === 1 ? 1.35 : 1) * spacingScale * (onBridge ? 2.5 : 1);
         const slots = Math.max(1, Math.floor(r.total / spacing));
         // Accra pace: from a crawl to a steady roll (metres per second); faster on flyovers.
         const speed = (onBridge ? 7 : 2.5) + hash(r.key + 5) * 4;
