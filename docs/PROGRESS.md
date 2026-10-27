@@ -316,6 +316,8 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
   - **Auntie Dede's stall is never on the road:** it stands at least 2.2 m from the road, and the customer's chair on its road side is on the pavement too. A close shot from the side shows you sitting and eating from your hand, bite after bite.
   - **The ride home is one unbroken shot** (about 24 seconds, no cuts or fades): a camera drone follows Uncle's car all the way along the real roads, turning gently with them; the signs show each road, area and landmark as it passes, and nobody talks over it ("This is Ring Road. Busy, busy" is gone).
 
+  - **Traffic:** when a phone struggles and the game shows fewer vehicles to stay smooth, it no longer removes one that is already close to you (they drive on past; only newcomers and far ones are left out). Checked on Light: no jumps, no overlaps, nothing off the road.
+
 ## Waiting on the owner
 
 - Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.

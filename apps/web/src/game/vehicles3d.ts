@@ -774,10 +774,12 @@ export class StreetTraffic {
     // never moves faster than a little catch-up speed, so there is no flicker or teleporting.
     // When the phone struggles, fewer vehicles are shown: always the same ones go (by their number),
     // so nothing flickers in and out.
+    // (When the phone struggles there are fewer vehicles, but never by removing one already close to
+    // you: those drive on until they are past; only newcomers and far ones are left out.)
     const placed: Placed[] = this.traffic
       .near(lon, lat, t, this.radiusM, this.limit * 2, lane)
       .filter((p) => !this.hide.has(p.v.id) && this.routeOk(p))
-      .filter((p) => this.density >= 1 || ((p.v.id * 2654435761) >>> 0) / 4294967296 < this.density)
+      .filter((p) => this.density >= 1 || ((p.v.id * 2654435761) >>> 0) / 4294967296 < this.density || (p.d < 60 && this.lastPlaced.has(p.v.id)))
       .slice(0, this.limit);
     // A vehicle held back for a while can be behind its timetable spot, which may already be out of
     // range: keep drawing it where it really is, so it never vanishes.
