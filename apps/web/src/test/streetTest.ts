@@ -3568,15 +3568,15 @@ function mateSpots() {
 // A mate's call comes from the trotro it is playing from; the street's voices from people round you.
 streetSound.onCall = (c) => {
   const t = performance.now() / 1000;
+  const seconds = Math.max(2.4, c.seconds + 1.2);
   if (c.kind === 'mates' && c.from) {
     // At the lorry station, one of its mates calls (and waves people over); on a trotro, its mate.
     const m = c.from.id === -1 && station ? station.people.find((q) => q.words) : null;
-    if (m) showBubble(m.x, m.z, 1.95, '📣', Math.max(1.2, c.seconds + 0.4));
-    else showBubble(c.from.x, c.from.z, c.from.id !== undefined && c.from.id < 0 ? 2.1 : 2.7, '📣', Math.max(1.2, c.seconds + 0.4));
-  }
-  else if (c.kind === 'street' && !story.frozen) {
+    if (m?.words) showBubble(m.x, m.z, 1.95, `📣 ${m.words[Math.floor(Math.random() * m.words.length)]}`, seconds);
+    else showBubble(c.from.x, c.from.z, c.from.id !== undefined && c.from.id < 0 ? 2.1 : 2.7, `📣 ${mateCall((c.from.id ?? 0) * 31 + Math.floor(t))}`, seconds);
+  } else if (c.kind === 'street' && !story.frozen) {
     const who = life?.scenes?.talkNear(state.x, state.z, t, Math.max(2, c.seconds + 1));
-    if (who) showBubble(who.x, who.z, who.height, '💬', Math.max(1.2, c.seconds + 0.3));
+    if (who) showBubble(who.x, who.z, who.height, CHATTER[Math.floor(Math.random() * CHATTER.length)], seconds);
   }
 };
 const music = new FilmMusic('/music/arrival.mp3');
@@ -3601,10 +3601,11 @@ function showBubble(x: number, z: number, height: number, text: string, seconds 
 // mates call, and now and then someone nearby calls out.
 let nextShout = 0;
 function streetVoices(t: number) {
-  // The owner's Accra recordings carry the street's voices (and the game's people move with them:
-  // heardCall below); these made-up voices are only for when the recordings cannot play.
-  if (streetSound.recorded) return;
-  if (t < nextShout || chatting || story.frozen || voices.busy) return;
+  // What people say shows in speech bubbles. With the owner's Accra recordings playing, those are
+  // the voices you hear (the bubbles are text only); the made-up voices speak only when the
+  // recordings cannot play.
+  const silent = streetSound.recorded;
+  if (t < nextShout || chatting || story.frozen || (!silent && voices.busy)) return;
   nextShout = t + 2.5 + Math.random() * 3.5;
   // A trotro passing close by: its mate shouts where it is going.
   let best: { x: number; z: number; id: number } | null = null;
@@ -3618,7 +3619,7 @@ function streetVoices(t: number) {
   if (best) {
     const line = mateCall(best.id * 31 + Math.floor(Math.random() * 1000));
     showBubble(best.x, best.z, 2.6, line);
-    void voices.say(line, { body: 'male', seed: best.id }, 1 / (1 + bestD / 9), 1);
+    if (!silent) void voices.say(line, { body: 'male', seed: best.id }, 1 / (1 + bestD / 9), 1);
     return;
   }
   // Near the station: one of its mates.
@@ -3628,7 +3629,7 @@ function streetVoices(t: number) {
     if (m?.words) {
       const line = m.words[Math.floor(Math.random() * m.words.length)];
       showBubble(m.x, m.z, 1.95, line);
-      void voices.say(line, { body: 'male', seed: Math.round(m.x * 3) }, 1 / (1 + Math.hypot(m.x - state.x, m.z - state.z) / 9), 1);
+      if (!silent) void voices.say(line, { body: 'male', seed: Math.round(m.x * 3) }, 1 / (1 + Math.hypot(m.x - state.x, m.z - state.z) / 9), 1);
       return;
     }
   }
@@ -3637,7 +3638,7 @@ function streetVoices(t: number) {
   if (w) {
     const line = CHATTER[Math.floor(Math.random() * CHATTER.length)];
     showBubble(w.x, w.z, w.height, line);
-    void voices.say(line, { body: w.body, seed: w.i * 13 }, 0.55 / (1 + Math.hypot(w.x - state.x, w.z - state.z) / 8), 0);
+    if (!silent) void voices.say(line, { body: w.body, seed: w.i * 13 }, 0.55 / (1 + Math.hypot(w.x - state.x, w.z - state.z) / 8), 0);
   }
 }
 const CHATTER = [

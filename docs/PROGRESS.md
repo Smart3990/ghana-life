@@ -328,6 +328,8 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
     - **People walk on and on:** at the end of a pavement they cross to the next one that carries on (waiting at the kerb until no vehicle is coming), instead of turning round and walking back; they turn back only at a real dead end.
     - Cost on Light: about 330,000 triangles in the test spot (was 266,000); the logic takes about 3 ms a frame. Needs the owner's check on the cheap Android.
 
+  - **Speech bubbles are back** (owner, 27 Oct): people chatting, sellers calling and trotro mates calling their stops show their words in bubbles again, every few seconds, as before; with the owner's recordings playing they are text only (the recordings are the voices). At the moments a mate calls out in a recording, the bubble over that trotro or station mate shows a call too ("📣 Kaneshie Kaneshie! Odorkor! Last seat!").
+
 ## Waiting on the owner
 
 - Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.
