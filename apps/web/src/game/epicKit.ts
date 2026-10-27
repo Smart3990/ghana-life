@@ -1,8 +1,11 @@
 // The Low Poly Epic City pack's look, shared by everything built from it (public/models/epic).
 // Every pack model uses one texture sheet (the atlas) of flat colours, plus a glow sheet: by day the
 // glow is dim, at night the pack's night glow sheet lights the windows, lamps and signs.
-// Day and night by real Accra time come in step 3; for now `setEpicNight` switches by hand.
+// The game switches between them by the real time in Accra (dayNight.ts).
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 const BASE = '/models/epic/tex/';
 const loader = new THREE.TextureLoader();
@@ -53,3 +56,43 @@ export const EPIC_UV = {
   white: [0.8159, 0.6861], // #dbdbda, lane dashes
   grass: [0.4245, 0.3819], // #508e34
 } as const;
+
+const gltf = new GLTFLoader();
+gltf.setMeshoptDecoder(MeshoptDecoder);
+const geometries = new Map<string, Promise<THREE.BufferGeometry>>();
+/** A plain number copy of an attribute (the files store small packed numbers). */
+function toFloat(a: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, size: number) {
+  const out = new Float32Array(a.count * size);
+  for (let i = 0; i < a.count; i++) for (let k = 0; k < size; k++) out[i * size + k] = a.getComponent(i, k);
+  return new THREE.BufferAttribute(out, size);
+}
+/**
+ * One pack model as a single shape (all its parts joined, in metres), for drawing many copies at once
+ * with the pack's material. `turn` turns it about the up axis (radians) first.
+ */
+export function epicGeometry(file: string, turn = 0): Promise<THREE.BufferGeometry> {
+  const k = file + '@' + turn;
+  if (!geometries.has(k)) {
+    geometries.set(k, gltf.loadAsync('/models/epic/' + file).then((g) => {
+      const parts: THREE.BufferGeometry[] = [];
+      g.scene.updateMatrixWorld(true);
+      g.scene.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        const src = mesh.geometry;
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', toFloat(src.getAttribute('position'), 3));
+        geo.setAttribute('normal', toFloat(src.getAttribute('normal'), 3));
+        geo.setAttribute('uv', toFloat(src.getAttribute('uv'), 2));
+        if (src.index) geo.setIndex(Array.from(src.index.array));
+        geo.applyMatrix4(mesh.matrixWorld);
+        parts.push(geo);
+      });
+      const merged = mergeGeometries(parts)!;
+      if (turn) merged.rotateY(turn);
+      merged.computeBoundingSphere();
+      return merged;
+    }));
+  }
+  return geometries.get(k)!;
+}

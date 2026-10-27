@@ -6,6 +6,7 @@
 // People are drawn in big batches animated by the graphics card (crowd.ts).
 import type { Arm, Junction } from './signals';
 import * as THREE from 'three';
+import { epicGeometry, epicMaterial } from './epicKit';
 import { slidingAdMaterial, twoSidedFace } from './adScreens';
 import { AD_COUNT, adSheet } from './adPosters';
 import { box, merge, paint, shadowTexture } from './vehicles3d';
@@ -148,6 +149,22 @@ const UMBRELLA_COLOURS = [0xe3a92b, 0xc8442e, 0x2f8f57, 0x1f5fa8, 0xf2efe6];
 
 type Batch = { mesh: THREE.InstancedMesh; all: Spot[]; tint: boolean };
 
+/** A soft round spot of light (bright in the middle, fading out), for the lamps' pools on the ground. */
+function poolTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d')!;
+  const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.45, 'rgba(255,255,255,0.55)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 64, 64);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
 // ---------- People on the pavements ----------
 
 /** A pavement: a line of points (x, z pairs) with the distance along it at each point. */
@@ -286,6 +303,26 @@ export class StreetLife {
     this.trees = make(neem(), true);
     this.palms = make(palm(), true);
     this.lights = make(streetLight(), false);
+    // The pack's road lamp in place of ours once it has loaded (its arm turned to reach over the road).
+    void epicGeometry('props/lamp-road.glb', -Math.PI / 2).then((g) => {
+      this.lights.mesh.geometry = g;
+      this.lights.mesh.material = epicMaterial();
+    });
+    // At night: a pool of light on the ground under every lamp near you, and real lights on the few nearest.
+    this.pools = new THREE.InstancedMesh(
+      new THREE.CircleGeometry(6.5, 20).rotateX(-Math.PI / 2).translate(0, 0.03, 3.4),
+      new THREE.MeshBasicMaterial({ map: poolTexture(), color: 0xffd9a0, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 }),
+      opts.props,
+    );
+    this.pools.count = 0;
+    this.pools.frustumCulled = false;
+    this.pools.visible = false;
+    this.group.add(this.pools);
+    for (let i = 0; i < (opts.people < 150 ? 0 : opts.people < 500 ? 4 : 8); i++) {
+      const l = new THREE.PointLight(0xffdcaa, 0, 22, 1.6);
+      this.lampLights.push(l);
+      this.group.add(l);
+    }
     this.kiosks = make(kiosk(), true);
     this.umbrellas = make(umbrella(), true);
     this.tanks = make(polytank(), false);
@@ -553,10 +590,13 @@ export class StreetLife {
               }
             }
           }
-          if (road.kind !== 'minor_road' && Math.round(s / spacing) % 2 === 0) {
-            // Street lights along the big roads, at the kerb.
-            const [lx, lz] = [x - dz * (size.half + GUTTER + 0.3) * side, z + dx * (size.half + GUTTER + 0.3) * side];
-            if (!this.onRoad(lx, lz, 0.1)) this.lights.all.push({ x: lx, z: lz, angle: facing + Math.PI, scale: 1, colour: 0 });
+          // Street lights all round the city, at the kerb (the Epic City pack's road lamp): on both
+          // sides of main roads about every 30 m, on one side of side roads about every 36 m.
+          const lampAt = Math.round(s / spacing);
+          for (const ls of road.kind === 'minor_road' ? (lampAt % 4 === 0 ? [1] : []) : lampAt % 3 === 0 ? [1, -1] : []) {
+            const [lx, lz] = [x - dz * (size.half + GUTTER + 0.3) * ls, z + dx * (size.half + GUTTER + 0.3) * ls];
+            const lf = angle + (ls > 0 ? -Math.PI / 2 : Math.PI / 2);
+            if (!this.onRoad(lx, lz, 0.1)) this.lights.all.push({ x: lx, z: lz, angle: lf + Math.PI, scale: 1, colour: 0 });
           }
           // Accra's roadsides: trees, then kiosks and umbrella stalls almost everywhere.
           // Accra's roadsides, on both sides: hardly a gap. Kiosks in rows (shops behind shops),
@@ -746,6 +786,24 @@ export class StreetLife {
       b.mesh.count = n;
       b.mesh.instanceMatrix.needsUpdate = true;
       if (b.mesh.instanceColor) b.mesh.instanceColor.needsUpdate = true;
+      if (b === this.lights && this.night > 0.02) {
+        // The pools of light go where the lamps are drawn (the same matrices).
+        for (let k = 0; k < n; k++) {
+          b.mesh.getMatrixAt(k, this.m);
+          this.pools.setMatrixAt(k, this.m);
+        }
+        this.pools.count = n;
+        this.pools.instanceMatrix.needsUpdate = true;
+        // Real light from the few lamps nearest you (warm white, on the road under the lamp head).
+        const near = list.filter((q) => (q.x - x) ** 2 + (q.z - z) ** 2 < 60 * 60).sort((a, c) => (a.x - x) ** 2 + (a.z - z) ** 2 - ((c.x - x) ** 2 + (c.z - z) ** 2));
+        this.lampLights.forEach((l, k) => {
+          const q = near[k];
+          if (!q) { l.intensity = 0; return; }
+          const a = Math.PI - q.angle;
+          l.position.set(q.x + Math.sin(a) * 3.4, 8.6, q.z + Math.cos(a) * 3.4);
+          l.intensity = 60 * this.night;
+        });
+      }
     }
     this.propShadows = shadows;
     // Advert faces on the billboards near the player.
@@ -998,6 +1056,17 @@ export class StreetLife {
 
   /** Street-name plates (drawn by roadSigns.ts). */
   namePlates: { x: number; z: number; angle: number; name: string }[] = [];
+
+  private pools: THREE.InstancedMesh;
+  private lampLights: THREE.PointLight[] = [];
+  private night = 0;
+  /** 0 by day, 1 at night: lamp pools on the ground and the nearest lamps' real light. */
+  setNight(n: number) {
+    this.night = n;
+    this.pools.visible = n > 0.02;
+    (this.pools.material as THREE.MeshBasicMaterial).opacity = 0.9 * n;
+    for (const l of this.lampLights) l.intensity = 0;
+  }
 
   /** How far the ground dips here (the sunk tarmac of the pack's roads); walkers step down onto it. */
   groundDip: ((x: number, z: number) => number) | null = null;

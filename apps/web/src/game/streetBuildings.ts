@@ -82,6 +82,8 @@ function clip(ring: { x: number; y: number }[]) {
 // A plot cleared of the map's buildings (Uncle Kwame's compound stands there): centre, its turn, and
 // half its size. Buildings there are not drawn and do not block.
 const CLEAR = { a: { value: new THREE.Vector4(0, 0, 1, 0) }, b: { value: new THREE.Vector4(0, 0, 0, 0) } };
+// 0 by day, 1 at night: at night about half the windows and some shops glow warm.
+const NIGHT = { value: 0 };
 
 // The wall material: lit like everything else, with windows, doors and shutters painted in by the shader.
 function wallMaterial() {
@@ -89,6 +91,7 @@ function wallMaterial() {
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uClearA = CLEAR.a;
     shader.uniforms.uClearB = CLEAR.b;
+    shader.uniforms.uNight = NIGHT;
     shader.vertexShader = shader.vertexShader
       .replace('void main() {', 'attribute vec3 facade;\nvarying vec3 vFacade;\nvarying vec2 vClearP;\nvoid main() {\n  vFacade = facade;\n  vClearP = position.xz;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>');
@@ -99,6 +102,7 @@ function wallMaterial() {
 varying vec2 vClearP;
 uniform vec4 uClearA;
 uniform vec4 uClearB;
+uniform float uNight;
 void main() {
   if (uClearB.z > 0.5) {
     vec2 d = vClearP - uClearA.xy;
@@ -139,6 +143,13 @@ void main() {
           float win = step(1.7, cellU) * step(cellU, 2.8) * step(1.0, cellV) * step(cellV, 2.1);
           wall = mix(wall, vec3(0.33, 0.2, 0.13), door);
           wall = mix(wall, vec3(0.12, 0.15, 0.17), win);
+          // At night most small shops still have their light on.
+          totalEmissiveRadiance += vec3(1.0, 0.74, 0.42) * 1.1 * uNight * step(0.62, hash) * (win + door * 0.6);
+        }
+        if (hash < 0.55 && uNight > 0.0) {
+          // A lit sign board over some closed shutters.
+          float sign = step(0.35, cellU) * step(cellU, 2.85) * step(2.4, cellV) * step(cellV, 2.75);
+          totalEmissiveRadiance += vec3(1.0, 0.9, 0.7) * 0.9 * uNight * step(0.25, hash) * sign;
         }
       } else {
         // Upper floors: a window with a frame and louvres in most bays.
@@ -148,6 +159,10 @@ void main() {
         vec3 pane = hash < 0.5 ? vec3(0.13, 0.16, 0.19) : vec3(0.22, 0.27, 0.3) * louvres;
         wall = mix(wall, vec3(0.92, 0.92, 0.9), frame * step(0.15, hash));
         wall = mix(wall, pane, glass * step(0.15, hash));
+        // At night about half the windows are lit, warm or cool (lamps and phone screens behind louvres).
+        float lit = step(0.15, hash) * step(0.5, fract(hash * 7.31));
+        vec3 lamp = fract(hash * 13.7) < 0.7 ? vec3(1.0, 0.78, 0.45) : vec3(0.75, 0.85, 1.0);
+        totalEmissiveRadiance += lamp * 1.2 * uNight * lit * glass * (0.8 + 0.2 * louvres);
       }
     }
     diffuseColor.rgb = wall;
@@ -161,6 +176,11 @@ void main() {
 type Cell = { key: string; mesh: THREE.Mesh | null; footprints: Footprint[] };
 
 export class StreetBuildings {
+  /** 0 by day, 1 at night (lit windows and shops). */
+  setNight(n: number) {
+    NIGHT.value = n;
+  }
+
   readonly group = new THREE.Group();
   private material = wallMaterial();
   private cells = new Map<string, Cell>();

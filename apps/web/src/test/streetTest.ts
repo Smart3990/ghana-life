@@ -18,6 +18,8 @@ import type { Nearby } from '../game/streetScenes';
 import { Signals, lightFor } from '../game/signals';
 import { Flyovers } from '../game/flyovers';
 import { EpicRoads } from '../game/epicRoads';
+import { GameTime, dayLook, forTheHour, type DayLook } from '../game/dayNight';
+import { setEpicNight } from '../game/epicKit';
 import { BigScreen } from '../game/bigScreen';
 import { RoadSigns } from '../game/roadSigns';
 import { planStation } from '../game/trotroStation';
@@ -132,9 +134,12 @@ const PRESET = {
 }[tier];
 
 const scene = new THREE.Scene();
-// Late-afternoon Accra light. The sky itself lights everything (image-based light, made in code
-// from a sky model when the game starts), plus a warm low sun that casts shadows.
-const SUN_DIR = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToRad(90 - 16), THREE.MathUtils.degToRad(-115));
+// Accra's light at the real time of day (dayNight.ts): the sun moves across the sky, and after
+// sunset a dim moon. The sky itself lights everything (image-based light, made in code from a sky
+// model, remade as the sun moves), plus the sun that casts shadows.
+const gameTime = new GameTime(Number(params.get('timescale')) || 1, params.has('hour') ? Number(params.get('hour')) : undefined);
+let day: DayLook = dayLook(gameTime.now());
+const SUN_DIR = day.dir.clone();
 // Light phones skip the sky light (it costs a little on every pixel) and use a brighter simple fill instead.
 const hemi = new THREE.HemisphereLight(0xfff1dc, 0x6b4f3a, PRESET.skyLight ? 0.9 : 1.4);
 scene.add(hemi);
@@ -315,21 +320,7 @@ const layer: maplibregl.CustomLayerInterface = {
     }
     // Light from the sky: render a sky model once into a small "environment" that every surface reflects.
     if (!PRESET.skyLight) return;
-    const skyScene = new THREE.Scene();
-    const skyDome = new Sky();
-    skyDome.scale.setScalar(1000);
-    const u = skyDome.material.uniforms;
-    u.turbidity.value = 7;
-    u.rayleigh.value = 1.6;
-    u.mieCoefficient.value = 0.006;
-    u.mieDirectionalG.value = 0.82;
-    u.sunPosition.value.copy(SUN_DIR);
-    skyScene.add(skyDome);
-    const pmrem = new THREE.PMREMGenerator(renderer);
-    scene.environment = pmrem.fromScene(skyScene, 0.02).texture;
-    scene.environmentIntensity = 0.16; // the sky model is very bright: a little goes a long way
-    pmrem.dispose();
-    renderer.resetState();
+    refreshSkyLight();
   },
   render(_gl, args) {
     const projection = new THREE.Matrix4().fromArray(args.defaultProjectionData.mainMatrix as unknown as number[]);
@@ -342,6 +333,79 @@ const layer: maplibregl.CustomLayerInterface = {
     renderer.render(scene, camera3d);
   },
 };
+
+// The sky light, made again when the sun has moved a few degrees (only on phones that use it).
+let skyLightFor = -999;
+function refreshSkyLight() {
+  if (!renderer || !PRESET.skyLight) return;
+  skyLightFor = day.elevation;
+  const skyScene = new THREE.Scene();
+  const skyDome = new Sky();
+  skyDome.scale.setScalar(1000);
+  const u = skyDome.material.uniforms;
+  u.turbidity.value = 7;
+  u.rayleigh.value = 1.6;
+  u.mieCoefficient.value = 0.006;
+  u.mieDirectionalG.value = 0.82;
+  // At night the sky model is lit by a sun just under the horizon: a deep blue glow.
+  u.sunPosition.value.set(day.dir.x, day.elevation > -1 ? Math.max(0.05, day.dir.y) : -0.08, day.dir.z);
+  skyScene.add(skyDome);
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const old = scene.environment;
+  scene.environment = pmrem.fromScene(skyScene, 0.02).texture;
+  old?.dispose();
+  pmrem.dispose();
+  skyDome.geometry.dispose();
+  skyDome.material.dispose();
+  renderer.resetState();
+}
+
+// ---------- Day and night ----------
+// At night, a soft warm light around the player (as from the shops and lamps all round), so the
+// people near you can still be seen. Always there (dark by day), so switching costs nothing.
+const nightFill = new THREE.PointLight(0xffe2c0, 0, 18, 1.2);
+scene.add(nightFill);
+const HEMI_BASE = PRESET.skyLight ? 0.9 : 1.4;
+let lookAt = -1;
+let mapLookAt = -1;
+let nightShown = -1;
+/** Light, sky and night lights for the time now (worked out once a second; cheap). */
+function applyDayLook(force = false) {
+  const now = performance.now();
+  if (!force && now - lookAt < 1000) return;
+  lookAt = now;
+  day = dayLook(gameTime.now());
+  SUN_DIR.copy(day.dir);
+  sun.color.copy(day.sun);
+  sun.intensity = day.sunI;
+  hemi.color.copy(day.sky);
+  hemi.groundColor.copy(day.ground);
+  hemi.intensity = HEMI_BASE * day.skyI;
+  scene.environmentIntensity = 0.16 * day.env; // the sky model is very bright: a little goes a long way
+  (shadowCatcher.material as THREE.ShadowMaterial).opacity = day.shade;
+  if (PRESET.skyLight && Math.abs(day.elevation - skyLightFor) > 4) refreshSkyLight();
+  // Night lights: the pack's night glow, lit windows, street lights, headlights, lit billboards.
+  const n = Math.round(day.night * 20) / 20;
+  if ((n > 0.5) !== nightShown > 0.5 || nightShown < 0) setEpicNight(n > 0.5); // (changes the pack's shader: only when it flips)
+  nightShown = n;
+  setNightLights(n); // every second: cheap, and it reaches things that appeared since
+  nightFill.intensity = 38 * n;
+
+  // The map's sky and its flat ground, every few seconds (changing the map's style costs a little).
+  if (force || now - mapLookAt > 4000) {
+    mapLookAt = now;
+    if (map.isStyleLoaded()) {
+      map.setSky({ 'sky-color': day.mapSky, 'horizon-color': day.horizon, 'sky-horizon-blend': 0.7, 'horizon-fog-blend': 0.6, 'fog-color': day.fog, 'fog-ground-blend': 0.9 });
+      if (map.getLayer('night-dim')) map.setPaintProperty('night-dim', 'fill-opacity', day.dim);
+    }
+  }
+}
+/** Switch the night lights of everything in the street (0 = day, 1 = full night). */
+function setNightLights(n: number) {
+  buildings.setNight(n);
+  life?.setNight(n);
+  streetTraffic?.setNight(n);
+}
 
 const camEye = new THREE.Vector4();
 const camInverse = new THREE.Matrix4();
@@ -612,11 +676,11 @@ const debugLine = document.getElementById('debug')!;
 const help = document.getElementById('help')!;
 
 const updateClock = () => {
-  const now = new Date(); // Ghana time is UTC
+  const now = new Date(gameTime.now()); // Ghana time is UTC
   clock.textContent = `${String(now.getUTCHours()).padStart(2, '0')}:${String(now.getUTCMinutes()).padStart(2, '0')}`;
 };
 updateClock();
-setInterval(updateClock, 10_000);
+setInterval(updateClock, 2_000);
 
 let currentPlace = '';
 let placeTimer = 0;
@@ -898,7 +962,9 @@ function step(player: Player, dt: number, t: number) {
   map.jumpTo(cam);
   checkPlace(here);
   buildings.update(here, state.x, state.z);
+  applyDayLook();
   followSun(state.x, state.z);
+  nightFill.position.set(state.x, 4.5, state.z);
   life?.update(state.x, state.z, dt, performance.now() / 1000);
   sky.update(Date.now() / 1000);
   placeBubbles(performance.now() / 1000);
@@ -1121,14 +1187,14 @@ async function chat(who: Who, t: number) {
   const start = { x: state.x, z: state.z };
   const away = () => Math.hypot(state.x - start.x, state.z - start.z) > 2.5 || me.doing !== 'greet';
   const speak = async (text: string, mine: boolean) => {
-    const line = mine ? fill(text) : toMe(fill(text));
+    const line = forTheHour(mine ? fill(text) : toMe(fill(text)), day.hour);
     if (mine) life?.scenes?.onSpeak?.(state.x, state.z, 1.95, line);
     else showBubble(who.x, who.z, who.height, line, 3 + line.length * 0.05);
     const wait = new Promise((r) => setTimeout(r, Math.max(1600, 700 + line.length * 55)));
     await Promise.all([voices.say(line, mine ? playerVoice() : { body: who.body, seed: who.seed }, mine ? 0.8 : 1, 2), wait]);
   };
   // You say hello first.
-  await speak(who.kind === 'muslimMan' || who.kind === 'muslimWoman' ? 'Salaam alaikum.' : ['Good afternoon!', 'Hello!', 'Chale, how far?'][Math.floor(Math.random() * 3)], true);
+  await speak(who.kind === 'muslimMan' || who.kind === 'muslimWoman' ? 'Salaam alaikum.' : [forTheHour('Good afternoon!', day.hour), 'Hello!', 'Chale, how far?'][Math.floor(Math.random() * 3)], true);
   while (node && !away()) {
     await speak(node.them, false);
     if (!node.choices?.length || away()) break;
@@ -3598,7 +3664,7 @@ soundButton.addEventListener('click', () => {
 function showBubble(x: number, z: number, height: number, text: string, seconds = 2.6) {
   const el = document.createElement('div');
   el.className = 'bubble';
-  el.textContent = text;
+  el.textContent = forTheHour(text, day.hour);
   document.body.appendChild(el);
   bubbles.push({ el, at: new THREE.Vector3(x, height + 0.25, z), until: performance.now() / 1000 + seconds });
 }
@@ -3849,15 +3915,11 @@ async function start() {
   for (const l of map.getStyle().layers) if ((l as { 'source-layer'?: string })['source-layer'] === 'pois') map.setLayoutProperty(l.id, 'visibility', 'none');
   for (const id of ['buildings', 'roofs']) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', 'none');
   map.addLayer(layer);
-  // Sunset over Accra for this test: warm sky, light on the buildings from the west.
-  map.setSky({
-    'sky-color': '#f2b36b',
-    'horizon-color': '#f7d9b0',
-    'sky-horizon-blend': 0.7,
-    'horizon-fog-blend': 0.6,
-    'fog-color': '#f1d7b6',
-    'fog-ground-blend': 0.9,
-  });
+  // At night the map's flat ground (far roads and open ground) is darkened by a sheet over it.
+  map.addSource('night-dim', { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [[[-0.6, 5.2], [0.3, 5.2], [0.3, 6.0], [-0.6, 6.0], [-0.6, 5.2]]] } } });
+  map.addLayer({ id: 'night-dim', type: 'fill', source: 'night-dim', paint: { 'fill-color': '#0b1226', 'fill-opacity': 0 } }, 'street-3d');
+  // The sky and light for the time now (Accra time), then kept up to date.
+  applyDayLook(true);
   map.setLight({ anchor: 'map', color: '#ffe2bd', intensity: 0.45, position: [1.4, 265, 35] });
   // Real 3D vehicles at street level (the overview map's blocks are not used here).
   {

@@ -350,6 +350,15 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
     - The pack's own square road pieces are not placed as they are: they only fit a straight grid with the pack's widths, and our roads are built from their exact shapes and colours instead, so they look the same and follow Accra.
     - **Done when:** on the test site, every street round Circle has the pack's tarmac, kerbs, pavements and lines, the flyovers look like the pack's bridges, and the game stays as smooth as before on the cheap Android.
 
+  - **Epic City pack, step 3: day and night on real Accra time, street lights everywhere** (owner, 27 Oct):
+    - `src/game/dayNight.ts`: the sun's real place over Accra for the date and time (checked: on 27 Oct sunrise 5:47, sunset 17:43; in June sunset 18:16). The light, the sky light, the shadows, the map's sky and the flat ground follow it: warm low light in the morning, white at midday, golden in the afternoon, an orange sunset, blue dusk, then a dim moonlit night. Accra keeps GMT, so the game clock is the real UTC time (the on-screen clock shows it). For testing: `?hour=21` starts at another hour, `?timescale=60` runs the clock faster.
+    - Street lights all round the city: the pack's road lamp on both sides of main roads about every 30 m and on one side of side roads about every 36 m (`streetLife.ts`).
+    - At night: the lamps' heads glow (the pack's night glow), a pool of light lies on the road under every lamp near you, about half the windows and many small shops are lit, shop signs glow, every vehicle has headlights with a beam on the road and red tail lights, billboards stay bright, and a soft warm light around the player keeps the people near you visible. On Standard and Ultra the nearest 4 to 8 lamps also give real light.
+    - Greetings and street talk follow the clock ("Good morning / afternoon / evening"; no "the sun is hot" after dark).
+    - Cost on Light: no extra real lights except the one round the player; the lamp pools and headlights are flat glowing shapes drawn in a few batches.
+    - Still to do in later steps: pupils with school bags still walk at night (step 5 makes the crowd change with the hour); the pack's night glow turns car windows pink, handled when the pack's vehicles come in (step 4).
+    - **Done when:** on the test site the light matches the real time outside (morning, afternoon, evening), and at night the street lights, windows and headlights are on and the people near you can still be seen, with the game as smooth as before on the cheap Android.
+
 ## Waiting on the owner
 
 - Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.

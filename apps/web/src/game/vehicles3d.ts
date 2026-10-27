@@ -604,6 +604,15 @@ export class StreetTraffic {
     this.taxiSigns.count = 0;
     this.taxiSigns.frustumCulled = false;
     this.group.add(this.taxiSigns);
+    // Night: headlights with a beam on the road ahead, and red tail lights.
+    this.headlights = new THREE.InstancedMesh(headlightShape(), new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }), limit);
+    this.taillights = new THREE.InstancedMesh(taillightShape(), new THREE.MeshBasicMaterial({ color: 0xff2a1a, side: THREE.DoubleSide }), limit);
+    for (const m of [this.headlights, this.taillights]) {
+      m.count = 0;
+      m.frustumCulled = false;
+      m.visible = false;
+      this.group.add(m);
+    }
     for (const [kind, model] of Object.entries(models) as [BatchKey, Model][]) {
       const look = kind === 'taxi' || kind === 'trotro' || kind === 'sprinter' || kind === 'bus' ? livery(paintMat, kind) : paintMat;
       const body = new THREE.InstancedMesh(model.body, look, limit);
@@ -686,6 +695,16 @@ export class StreetTraffic {
   signals: { shouldStop: (x: number, z: number, heading: number, half: number, t: number) => boolean } | null = null;
   private ads: Partial<Record<BatchKey, THREE.InstancedMesh>> = {};
   private taxiSigns!: THREE.InstancedMesh;
+  private headlights!: THREE.InstancedMesh;
+  private taillights!: THREE.InstancedMesh;
+  private night = 0;
+  private lamp = new THREE.Matrix4();
+  /** 0 by day, 1 at night: headlights and tail lights on. */
+  setNight(n: number) {
+    this.night = n;
+    this.headlights.visible = this.taillights.visible = n > 0.02;
+    (this.headlights.material as THREE.MeshBasicMaterial).color.setScalar(n);
+  }
   /** The story's own vehicles (the car that blocks you in the chase, Uncle Kwame's car): moved by
    *  the story, drawn with the others, and solid. */
   story: { key: BatchKey; kind: Kind; id: number; x: number; z: number; heading: number; colour: string; shown: boolean; moving: boolean }[] = [];
@@ -967,6 +986,7 @@ export class StreetTraffic {
     let shadowCount = 0;
     type Draw = { key: BatchKey; id: number; x: number; z: number; ground: number; heading: number; colour: string; bounce: boolean };
     const draws: Draw[] = [];
+    let lit = 0;
     for (const p of placed) {
       // Cars are a mix: about one in three is a small hatchback. About a third of trotros are the
       // longer Sprinter type. Tricycles: half carry passengers (pragya), half goods (motor king).
@@ -1005,6 +1025,13 @@ export class StreetTraffic {
         (ads.geometry.getAttribute('aAd') as THREE.InstancedBufferAttribute).setX(n, Math.floor(r * 1.25 * AD_ROWS) % AD_ROWS);
       }
       if (d.key === 'taxi') this.taxiSigns.setMatrixAt(signs++, this.m);
+      if (this.night > 0.02) {
+        // Lights at the front and back, sized to the vehicle (its model's front is +z).
+        const kind: Kind = d.key === 'hatch' ? 'car' : d.key === 'sprinter' ? 'trotro' : d.key === 'motorking' ? 'tricycle' : d.key;
+        const half = KIND_LENGTH[kind] / 2, halfW = KIND_WIDTH[kind] / 2;
+        this.headlights.setMatrixAt(lit, this.lamp.makeScale(halfW, 1, 1).setPosition(0, 0, half - 0.05).premultiply(this.m));
+        this.taillights.setMatrixAt(lit++, this.lamp.makeScale(halfW, 1, 1).setPosition(0, 0, -half + 0.05).premultiply(this.m));
+      }
       this.v.y = d.ground + 0.03;
       this.m.compose(this.v, this.q, this.shadowScale.set(b.shadow[0], 1, b.shadow[1]));
       this.shadows.setMatrixAt(shadowCount++, this.m);
@@ -1024,5 +1051,37 @@ export class StreetTraffic {
     AD_TIME.value = t;
     this.taxiSigns.count = signs;
     this.taxiSigns.instanceMatrix.needsUpdate = true;
+    this.headlights.count = this.taillights.count = lit;
+    this.headlights.instanceMatrix.needsUpdate = this.taillights.instanceMatrix.needsUpdate = true;
   }
+}
+
+/** Two headlamps (x in -1..1 of the half width) and the beam they throw on the road ahead (+z). */
+function headlightShape() {
+  const pos: number[] = [];
+  const col: number[] = [];
+  const quad = (a: number[], b: number[], c: number[], d: number[], ca: number, cb: number) => {
+    for (const [p, k] of [[a, ca], [b, ca], [c, cb], [a, ca], [c, cb], [d, cb]] as [number[], number][]) {
+      pos.push(...p);
+      col.push(k, k * 0.95, k * 0.82);
+    }
+  };
+  for (const x of [-0.72, 0.72]) quad([x - 0.2, 0.55, 0.02], [x + 0.2, 0.55, 0.02], [x + 0.2, 0.78, 0.02], [x - 0.2, 0.78, 0.02], 1, 1);
+  // The beam: bright near the car, fading out 14 m ahead.
+  quad([-0.95, 0.05, 0.3], [0.95, 0.05, 0.3], [2.6, 0.05, 14], [-2.6, 0.05, 14], 0.42, 0);
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  return g;
+}
+/** Two red tail lights facing back (-z). */
+function taillightShape() {
+  const pos: number[] = [];
+  for (const x of [-0.78, 0.78]) {
+    const [a, b, c, d] = [[x + 0.16, 0.6, -0.02], [x - 0.16, 0.6, -0.02], [x - 0.16, 0.8, -0.02], [x + 0.16, 0.8, -0.02]];
+    pos.push(...a, ...b, ...c, ...a, ...c, ...d);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  return g;
 }
