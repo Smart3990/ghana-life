@@ -4,6 +4,7 @@
 // without joining another one. Nothing drives on them yet; they are scenery that tells you where you are.
 import * as THREE from 'three';
 import { paint, merge } from './vehicles3d';
+import { epicGeometry, epicLampMaterial, lightPoolGeometry, lightPoolMaterial } from './epicKit';
 
 const HIGH = 7; // deck height, metres
 const SLOPE = 0.11; // how steeply the ends come down
@@ -23,6 +24,57 @@ export class Flyovers {
   private bannerMat = new THREE.MeshStandardMaterial({ map: bannerTexture(), roughness: 0.6, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 });
   private banners: THREE.Mesh | null = null;
   private seen = new Set<string>();
+  // Street lights on the decks: the pack's road lamp in pairs inside the barriers, every 25 m.
+  private lampSpots: { x: number; y: number; z: number; a: number; across: number }[] = [];
+  private lampGeo: THREE.BufferGeometry | null = null;
+  private lamps: THREE.InstancedMesh | null = null;
+  private pools: THREE.InstancedMesh | null = null;
+  private night = 0;
+  constructor() {
+    void epicGeometry('props/lamp-road.glb', -Math.PI / 2).then((g) => {
+      this.lampGeo = g;
+      this.placeLamps();
+    });
+  }
+  /** 0 by day, 1 at night (the decks are lit like the streets). */
+  setNight(n: number) {
+    this.night = n;
+    if (this.pools) this.pools.visible = n > 0.02;
+  }
+  /** How many deck lamps are drawn (the nearest), and how far their light on the deck reaches. */
+  maxLamps = 60;
+  private lampsAt: [number, number] = [1e9, 1e9];
+  private placeLamps() {
+    if (!this.lampGeo) return;
+    if (!this.lamps) {
+      this.lamps = new THREE.InstancedMesh(this.lampGeo, epicLampMaterial(), this.maxLamps);
+      this.pools = new THREE.InstancedMesh(lightPoolGeometry(), lightPoolMaterial(), 400);
+      for (const m of [this.lamps, this.pools]) { m.count = 0; m.frustumCulled = false; }
+      this.lamps.castShadow = true;
+      this.group.add(this.lamps, this.pools);
+    }
+    this.pools!.visible = this.night > 0.02;
+    this.lampsAt = [1e9, 1e9];
+  }
+  /** Draw the deck lamps near (x, z): the nearest ones, and the light of all within 250 m. */
+  updateLamps(x: number, z: number) {
+    if (!this.lamps || !this.pools || Math.hypot(x - this.lampsAt[0], z - this.lampsAt[1]) < 12) return;
+    this.lampsAt = [x, z];
+    const near = this.lampSpots.filter((sp) => Math.abs(sp.x - x) < 250 && Math.abs(sp.z - z) < 250).sort((a, b) => Math.hypot(a.x - x, a.z - z) - Math.hypot(b.x - x, b.z - z));
+    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), pool = new THREE.Matrix4(), one = new THREE.Vector3(1, 1, 1);
+    let n = 0, p = 0;
+    for (const sp of near) {
+      m.compose(new THREE.Vector3(sp.x, sp.y, sp.z), q.setFromAxisAngle(up, Math.PI - sp.a), one);
+      if (n < this.maxLamps) this.lamps.setMatrixAt(n++, m);
+      if (p < 400) {
+        pool.makeScale(36, 1, sp.across).setPosition(0, 0, sp.across / 2 - 1);
+        this.pools.setMatrixAt(p++, m.multiply(pool));
+      }
+    }
+    this.lamps.count = n;
+    this.pools.count = p;
+    this.lamps.instanceMatrix.needsUpdate = this.pools.instanceMatrix.needsUpdate = true;
+  }
   /** Goes up each time the flyovers are rebuilt (so traffic re-checks its routes). */
   version = 0;
 
@@ -69,6 +121,7 @@ export class Flyovers {
     const ends: [number, number][] = [];
     for (const l of this.lines) ends.push([l.pts[0], l.pts[1]], [l.pts[l.pts.length - 2], l.pts[l.pts.length - 1]]);
     const joined = (x: number, z: number) => ends.filter(([ex, ez]) => Math.hypot(ex - x, ez - z) < 3).length > 1;
+    this.lampSpots = [];
     for (const l of this.lines) {
       const n = l.pts.length / 2;
       const cum = [0];
@@ -120,6 +173,19 @@ export class Flyovers {
             }
           }
         }
+        // Street lights in pairs on the deck, just inside the barriers, their arms over the lanes.
+        for (let s = Math.ceil(cum[i] / 25) * 25; s < cum[i + 1]; s += 25) {
+          const k = (s - cum[i]) / len;
+          const h = height(s);
+          if (h < 1) continue;
+          const ux = (x2 - x1) / len, uz = (z2 - z1) / len;
+          for (const side of [1, -1]) {
+            const o = (half - 0.45) * side;
+            // Facing the deck's middle (bearing of the direction (-ax, -az) * side).
+            const vx = uz * side, vz = -ux * side;
+            this.lampSpots.push({ x: x1 + (x2 - x1) * k - uz * o, y: h, z: z1 + (z2 - z1) * k + ux * o, a: Math.atan2(vx, -vz), across: half + 1.2 });
+          }
+        }
         // Pillars under the high parts.
         for (let s = Math.ceil(cum[i] / PILLAR_EVERY) * PILLAR_EVERY; s < cum[i + 1]; s += PILLAR_EVERY) {
           const k = (s - cum[i]) / len;
@@ -148,6 +214,7 @@ export class Flyovers {
       this.banners = new THREE.Mesh(g, this.bannerMat);
       this.group.add(this.banners);
     }
+    this.placeLamps();
     if (!parts.length) return;
     this.mesh = new THREE.Mesh(merge(parts), this.material);
     this.mesh.castShadow = true;

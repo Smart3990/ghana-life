@@ -405,6 +405,7 @@ function setNightLights(n: number) {
   buildings.setNight(n);
   life?.setNight(n);
   streetTraffic?.setNight(n);
+  flyovers.setNight(n);
 }
 
 const camEye = new THREE.Vector4();
@@ -1000,6 +1001,7 @@ function step(player: Player, dt: number, t: number) {
   if (life) signals.junctions = life.junctions;
   signals.update(state.x, state.z, Date.now() / 1000);
   flyovers.update();
+  flyovers.updateLamps(state.x, state.z);
   epicRoads.update(state.x, state.z, tier === 'light' ? 3 : 5);
   if (flyovers.version !== flyoverVersion) {
     flyoverVersion = flyovers.version;
@@ -3867,6 +3869,7 @@ let screenCheck = 0;
 
 // Flyovers built from the map's bridges.
 const flyovers = new Flyovers();
+flyovers.maxLamps = { light: 40, standard: 90, ultra: 140 }[tier];
 scene.add(flyovers.group);
 const epicRoads = new EpicRoads();
 epicRoads.showRadius = { light: 260, standard: 380, ultra: 550 }[tier];

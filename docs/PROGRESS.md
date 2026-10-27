@@ -366,6 +366,12 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
     - Cost on Light: about 30,000 more triangles in the test spot (now about 305,000 by day); no extra real lights.
     - Asked for and planned for step 4: the main roads crowded in the evening (rush hour).
 
+  - **The whole road lit at night** (owner, 27 Oct night):
+    - Street lights are now spaced along the whole road (before, the count started again at every bend, so on curvy roads the lamps came out uneven and not always in pairs): exact pairs facing each other across the road, every 20 m on main roads and every 27 m on side roads.
+    - Each road lamp lights its half of the road, from the pavement behind it to past the middle, and the whole gap to the next pair, so the two lamps of a pair light the full width and the light runs on unbroken to the end of the road. The pavement lamps light their stretch of walkway the same way.
+    - New: lamps on the lanes and service roads (one side, every 25 m) and in pairs on the flyover decks (every 25 m, lighting the deck).
+    - Phones: on Light only the nearest 200 road lamps, 110 pavement lamps and 40 deck lamps are drawn, but the light on the ground is drawn for every lamp near you. About 312,000 triangles at night in the test spot.
+
 ## Waiting on the owner
 
 - Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.

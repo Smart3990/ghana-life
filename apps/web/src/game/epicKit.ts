@@ -102,3 +102,48 @@ export function epicGeometry(file: string, turn = 0): Promise<THREE.BufferGeomet
   }
   return geometries.get(k)!;
 }
+
+// ---------- Street lights at night (shared by the streets and the flyovers) ----------
+let lampMat: THREE.MeshStandardMaterial | null = null;
+let poolMat: THREE.MeshBasicMaterial | null = null;
+let lampsLit = false;
+/** The road lamps' material: the pack's, with the lamp heads glowing sodium yellow at night. */
+export function epicLampMaterial() {
+  if (!lampMat) lampMat = epicMaterial().clone();
+  return lampMat;
+}
+/** A flat square of light (soft at the edges, even in the middle), stretched to the area a lamp lights. */
+export function lightPoolGeometry() {
+  return new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2).translate(0, 0.03, 0);
+}
+export function lightPoolMaterial() {
+  if (!poolMat) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const g = c.getContext('2d')!;
+    const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grad.addColorStop(0, 'rgba(255,255,255,1)');
+    grad.addColorStop(0.55, 'rgba(255,255,255,0.85)');
+    grad.addColorStop(0.85, 'rgba(255,255,255,0.3)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 64, 64);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    poolMat = new THREE.MeshBasicMaterial({ map: t, color: 0xffa83c, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 });
+  }
+  return poolMat;
+}
+/** 0 by day, 1 at night: lamp heads yellow, the ground lit under them. */
+export function setEpicLampNight(n: number) {
+  lightPoolMaterial().opacity = 0.48 * n;
+  const lit = n > 0.5;
+  if (lit === lampsLit && lampMat) return;
+  lampsLit = lit;
+  const m = epicLampMaterial();
+  const glow = epicGlowMaps();
+  m.emissiveMap = lit ? glow.night : glow.day;
+  if (lit) m.emissive.setRGB(1.5, 0.9, 0.32);
+  else m.emissive.setRGB(0.58, 0.58, 0.58);
+  m.needsUpdate = true;
+}
