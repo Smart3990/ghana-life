@@ -43,3 +43,10 @@ wallet.webp, kelewele.webp, radio.webp, water.webp: made for Ghanaverse with Ima
 
 - `street-a.m4a`, `street-b.m4a` (traffic, horns, people talking) and `mates-a.m4a`, `mates-b.m4a` (trotro mates calling passengers): recorded in Accra by the Ghanaverse owner on 26-27 Oct 2026, the owner's own recordings. Used exactly as recorded (only moved from the phone's .mp4 container into .m4a, the sound itself not re-encoded). `sounds.json` marks the moments someone calls out (found by loudness in the voice range).
 - Faces and voices of passers-by are not identifiable from these; if a recording ever catches a clearly identifiable private conversation, cut that part out.
+
+## Low Poly Epic City (public/models/epic/)
+
+- **What:** "Low Poly Epic City" v1.0 by Polyperfect (https://u3d.as/2Fjw), bought by the Ghanaverse owner on the Unity Asset Store for $25 (Oct 2026). Licence: Unity Asset Store End User Licence Agreement (standard licence): the models may be used and changed inside our game, but the pack's files must not be given out on their own. The owner keeps the receipt.
+- **Rule:** the original pack (the .unitypackage and its FBX files) never goes into Git or onto the website. Only the converted game files ship, inside the game. The GitHub repository is private (made private by the owner on 27 Oct 2026).
+- **Changes we made:** converted from FBX to GLB in true metres, one shared material in place of the pack's (the pack's own texture sheets are in `tex/`: albedo, day glow, night glow, specular), shapes packed smaller with meshopt (not simplified), by `apps/web/scripts/epic/convert.cjs` and `optimise.mjs`. People are the pack's rigged versions; their animations (stand, walk, run) are in `people-animations.glb`. Catalogue pictures in `thumbs/` were drawn by our converter from the models.
+- 438 models: 100 buildings, 55 vehicles, 26 people, 67 street things, 56 nature, 95 road, rail, bridge and other tiles, 16 beach, 8 farm, 6 military buildings, 4 racing, 5 hills.

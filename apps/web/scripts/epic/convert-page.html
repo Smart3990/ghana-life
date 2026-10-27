@@ -1,0 +1,111 @@
+<!doctype html>
+<html>
+<!-- Converter page for the Low Poly Epic City pack (run by convert.cjs in a headless browser).
+     It loads one FBX, turns it into true metres, gives it the pack's shared atlas material,
+     exports a GLB and draws a catalogue picture. Nothing from the pack is stored in this file. -->
+<body style="margin:0;background:#eef1f4">
+<canvas id="c" width="320" height="320"></canvas>
+<script type="importmap">{"imports":{"three":"/three/build/three.module.js","three/addons/":"/three/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+
+const r = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: true, preserveDrawingBuffer: true, alpha: true });
+r.setClearColor('#000000', 0);
+r.outputColorSpace = THREE.SRGBColorSpace;
+r.toneMapping = THREE.ACESFilmicToneMapping;
+const tl = new THREE.TextureLoader();
+const tex = async (name, srgb) => { const t = await tl.loadAsync('/src/tex/' + name); if (srgb) t.colorSpace = THREE.SRGBColorSpace; return t; };
+const albedo = await tex('albedo.png', true);
+const glow = await tex('emission.png', true);
+const loader = new FBXLoader();
+
+// Show material (for the picture) and export material (no texture inside: the game adds the shared atlas).
+const show = new THREE.MeshStandardMaterial({ map: albedo, emissiveMap: glow, emissive: new THREE.Color(0.58, 0.58, 0.58), roughness: 0.9, metalness: 0 });
+const exportMat = new THREE.MeshStandardMaterial({ name: 'epic-atlas', roughness: 0.9, metalness: 0 });
+
+function b64(buf) {
+  const u = new Uint8Array(buf); let s = '';
+  for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+const exportGlb = (obj, animations) => new Promise((ok, bad) => new GLTFExporter().parse(obj, ok, bad, { binary: true, animations: animations || [], onlyVisible: false }));
+
+function picture(obj) {
+  const scene = new THREE.Scene();
+  scene.add(new THREE.HemisphereLight('#ffffff', '#9a8f80', 1.6));
+  const sun = new THREE.DirectionalLight('#fff4e0', 2.4); sun.position.set(4, 7, 5); scene.add(sun);
+  const clone = obj.clone(true);
+  clone.traverse((o) => { if (o.isMesh) o.material = show; });
+  scene.add(clone);
+  const box = new THREE.Box3().setFromObject(clone);
+  const size = box.getSize(new THREE.Vector3()); const c = box.getCenter(new THREE.Vector3());
+  const R = Math.max(size.length() / 2, 0.05);
+  const cam = new THREE.PerspectiveCamera(28, 1, R / 50, R * 60);
+  const dir = new THREE.Vector3(1.0, 0.75, 1.25).normalize();
+  cam.position.copy(c).addScaledVector(dir, R / Math.sin(THREE.MathUtils.degToRad(14)) * 1.02);
+  cam.lookAt(c);
+  r.render(scene, cam);
+  return r.domElement.toDataURL('image/png');
+}
+
+window.convert = async (file, unit, skinnedOk) => {
+  const raw = await loader.loadAsync('/src/' + file);
+  const s = unit / 100; // FBX UnitScaleFactor: 1 = centimetres, 100 = metres
+  const skinned = (() => { let k = false; raw.traverse((o) => { if (o.isSkinnedMesh) k = true; }); return k; })();
+  let root;
+  let tris = 0;
+  const parts = [];
+  if (skinned) {
+    // People: keep the skeleton, scale the root.
+    root = new THREE.Group(); root.name = file.replace(/\.fbx$/, '');
+    raw.scale.multiplyScalar(s); raw.updateMatrixWorld(true);
+    raw.traverse((o) => { if (o.isMesh) { o.material = exportMat; const g = o.geometry; for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv', 'skinIndex', 'skinWeight'].includes(k)) g.deleteAttribute(k); tris += (g.index ? g.index.count : g.attributes.position.count) / 3; parts.push(o.name); } });
+    root.add(raw);
+  } else {
+    // Everything else: bake the scale and each part's place into its shape, keep each part as its own
+    // mesh (wheels, doors, rotors) with its pivot at the part's centre so it can be spun later.
+    root = new THREE.Group(); root.name = file.replace(/\.fbx$/, '');
+    const S = new THREE.Matrix4().makeScale(s, s, s);
+    raw.updateMatrixWorld(true);
+    raw.traverse((o) => {
+      if (!o.isMesh) return;
+      const g = o.geometry.clone();
+      for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g.deleteAttribute(k);
+      g.clearGroups();
+      g.applyMatrix4(new THREE.Matrix4().multiplyMatrices(S, o.matrixWorld));
+      g.computeBoundingBox();
+      const c = g.boundingBox.getCenter(new THREE.Vector3());
+      g.translate(-c.x, -c.y, -c.z);
+      const m = new THREE.Mesh(g, exportMat); m.name = o.name || 'part'; m.position.copy(c);
+      root.add(m);
+      tris += (g.index ? g.index.count : g.attributes.position.count) / 3;
+      parts.push(m.name);
+    });
+  }
+  root.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(root);
+  const size = box.getSize(new THREE.Vector3());
+  const png = picture(root);
+  const glb = await exportGlb(root, skinned ? [] : []);
+  return { glb: b64(glb), png, size: [size.x, size.y, size.z].map((v) => +v.toFixed(2)), min: [box.min.x, box.min.y, box.min.z].map((v) => +v.toFixed(2)), tris: Math.round(tris), parts: parts.slice(0, 40), skinned };
+};
+
+// The people animations: export the skeleton with its clips (idle, walk, run) so the game can play
+// them on every pack person (they all share the same bone names).
+window.convertAnimations = async (file, unit) => {
+  const raw = await loader.loadAsync('/src/' + file);
+  raw.scale.multiplyScalar(unit / 100);
+  const keep = [];
+  raw.traverse((o) => { if (o.isMesh) keep.push(o); });
+  keep.forEach((o) => o.parent && o.parent.remove(o)); // only the bones and the clips
+  const names = raw.animations.map((a) => ({ name: a.name, seconds: +a.duration.toFixed(2), tracks: a.tracks.length }));
+  const glb = await exportGlb(raw, raw.animations);
+  const bones = []; raw.traverse((o) => { if (o.isBone) bones.push(o.name); });
+  return { glb: b64(glb), clips: names, bones };
+};
+window.ready = true;
+</script>
+</body>
+</html>

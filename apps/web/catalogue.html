@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#121A14" />
+    <meta name="robots" content="noindex" />
+    <title>Model catalogue · Ghanaverse</title>
+    <style>
+      :root { --bg: #121a14; --card: #1c2620; --line: #2c3a31; --ink: #f2efe6; --dim: #a9b3a8; --gold: #e3a92b; }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; background: var(--bg); color: var(--ink); font-family: system-ui, -apple-system, sans-serif; }
+      header { position: sticky; top: 0; z-index: 5; background: rgba(18, 26, 20, 0.96); padding: 12px 16px 8px; border-bottom: 1px solid var(--line); }
+      h1 { font-size: 18px; margin: 0 0 2px; }
+      #count { color: var(--dim); font-size: 13px; }
+      #search { width: 100%; margin: 8px 0; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font-size: 15px; }
+      #chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+      .chip { flex: none; padding: 6px 11px; border-radius: 16px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font-size: 13px; white-space: nowrap; }
+      .chip.on { background: var(--gold); color: #1b1404; border-color: var(--gold); font-weight: 600; }
+      main { padding: 12px 16px 40px; }
+      h2 { font-size: 15px; color: var(--gold); margin: 18px 0 8px; text-transform: capitalize; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+      .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 6px; text-align: center; cursor: pointer; }
+      .card img { width: 100%; aspect-ratio: 1; display: block; background: radial-gradient(#2a3830, #18211b); border-radius: 8px; }
+      .card b { display: block; font-size: 11px; font-weight: 600; margin-top: 4px; word-break: break-word; }
+      .card span { display: block; font-size: 10px; color: var(--dim); }
+      #viewer { position: fixed; inset: 0; z-index: 10; background: #0d130f; display: none; flex-direction: column; }
+      #viewer.open { display: flex; }
+      #view { flex: 1; width: 100%; min-height: 0; display: block; touch-action: none; }
+      #bar { padding: 10px 16px calc(12px + env(safe-area-inset-bottom)); display: flex; flex-wrap: wrap; gap: 8px; align-items: center; background: #121a14; border-top: 1px solid var(--line); }
+      #bar .title { width: 100%; font-size: 14px; }
+      #bar .title small { color: var(--dim); }
+      #bar button { padding: 8px 13px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font-size: 14px; }
+      #bar button.on { background: var(--gold); color: #1b1404; border-color: var(--gold); }
+      #close { margin-left: auto; }
+      .note { color: var(--dim); font-size: 12px; margin: 6px 0 0; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Ghanaverse model catalogue</h1>
+      <div id="count">Loading…</div>
+      <input id="search" type="search" placeholder="Search: taxi, bus, bank, lamp…" autocomplete="off" />
+      <div id="chips"></div>
+    </header>
+    <main id="list"></main>
+    <div id="viewer">
+      <canvas id="view"></canvas>
+      <div id="bar">
+        <div class="title" id="vtitle"></div>
+        <button id="day" class="on">☀️ Day</button>
+        <button id="night">🌙 Night</button>
+        <span id="anims"></span>
+        <button id="close">Close</button>
+      </div>
+    </div>
+    <script type="module" src="/src/test/catalogue.ts"></script>
+  </body>
+</html>

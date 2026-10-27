@@ -333,6 +333,13 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
   - **Snatch seen from behind, roads crowded** (owner, 27 Oct): after the trotro drops you, the camera is behind you, a little high, with the road and the pavement either side in view, so you see the boy run up, grab the bag and dash across. Roads are packed: a vehicle every 3.8 to 6.2 m (side streets nearly as full as main roads), up to 100 round you on Light. A space too short for its vehicle (a bus in a car's space) stays empty, so no vehicle appears inside the one ahead.
   - **Fix, empty streets on slower phones:** the game thinned people and traffic whenever the frame rate fell under 26, down to a quarter, and on Light (capped at 30) it needed 48 to come back, so after one slow moment the streets stayed empty for good. Now it compares with the phone's own cap (fewer below 72% of it, back above 90%), and vehicles never go below three-quarters.
 
+  - **Epic City pack, step 1: all models in game form, and a catalogue** (owner, 27 Oct): the owner bought the Low Poly Epic City pack (Polyperfect, $25) and asked to use all of it on the real Accra map: their roads, buildings, vehicles, people, traffic rules, trains, planes, and a day and night that follow real Accra time (plan of 7 steps agreed in chat; weather later).
+    - All 438 models converted to game files (true metres, one shared texture sheet, 9 MB in all, 48 MB before packing): 100 buildings, 55 vehicles, 26 animated people with stand, walk and run, 67 street things, 95 road, bridge, rail and runway pieces, nature, beach and more. No weapons in any of them (checked).
+    - The catalogue page `/catalogue`: every model's picture by group, search, tap to spin it in 3D, Day and Night buttons (at night the windows, lamps and signs glow with the pack's own night glow), and the people walk, run and stand.
+    - Found on the way: the pack's people all have light skin, so in step 5 they get a range of Ghanaian skin tones (the licence lets us change the models); the pack has no day and night system of its own (we build it in step 3); the pack has only about ten everyday road vehicles (taxi, car, bus, school bus, van, police, ambulance, trucks), so the trotro and okada come from the van and old motorbike, or our own, in step 4.
+    - Licence recorded in `public/models/LICENSES.md`; the repository is now private.
+    - **Done when:** the owner opens `/street-test`'s sister page `/catalogue` on the test site on a phone and sees every model, spins a few, and sees the night glow.
+
 ## Waiting on the owner
 
 - Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.
@@ -346,4 +353,3 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
 - The song for the opening: written permission from the artist and label to use it in the game (until then our own highlife tune plays).
 - Share the picture of the advert banner style you like, so ours can match its feel (our own design).
 - Native-speaker check of the Twi and Fante greetings, and the Pidgin, Twi, Ga and Ewe word lists.
-- GitHub repository visibility: make it private.
