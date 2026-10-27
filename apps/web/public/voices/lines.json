@@ -25,21 +25,6 @@
   "who": "Bus mate (young man, loud)"
  },
  {
-  "id": "accra-accra-accra-last-seat-come-come",
-  "line": "Accra! Accra! Accra! Last seat, come, come!",
-  "who": "Bus mate (young man, loud)"
- },
- {
-  "id": "my-child-go-and-make-us-proud",
-  "line": "My child, go and make us proud.",
-  "who": "Grandma (old woman, warm, slow)"
- },
- {
-  "id": "go-and-make-us-proud",
-  "line": "Go and make us proud.",
-  "who": "Grandma (old woman, warm, slow)"
- },
- {
   "id": "ei-sit-down-my-child-what-happened",
   "line": "Ei! Sit down, my child. What happened?",
   "who": "Auntie Dede (woman about 50, loud and motherly)"
@@ -95,11 +80,6 @@
   "who": "You, the player (young man about 20; a young woman reads them for a female player)"
  },
  {
-  "id": "uncle-is-nima-far",
-  "line": "Uncle, is Nima far?",
-  "who": "You, the player (young man about 20; a young woman reads them for a female player)"
- },
- {
   "id": "ei-okay-no-problem-tell-her-to-stay-there-i-am-coming-very-s",
   "line": "Ei! Okay, no problem. Tell her to stay there. I am coming very soon.",
   "who": "Uncle Kwame (man about 55, deep and calm)"
@@ -132,21 +112,6 @@
  {
   "id": "rest-well-tomorrow-we-start",
   "line": "Rest well. Tomorrow, we start.",
-  "who": "Uncle Kwame (man about 55, deep and calm)"
- },
- {
-  "id": "this-is-ring-road-busy-busy-you-will-learn-it-fast",
-  "line": "This is Ring Road. Busy, busy. You will learn it fast.",
-  "who": "Uncle Kwame (man about 55, deep and calm)"
- },
- {
-  "id": "not-far-fifteen-minutes-if-the-traffic-allows-ha",
-  "line": "Not far. Fifteen minutes, if the traffic allows. Ha!",
-  "who": "Uncle Kwame (man about 55, deep and calm)"
- },
- {
-  "id": "this-is-nima-our-home-everybody-knows-everybody-here",
-  "line": "This is Nima. Our home. Everybody knows everybody here.",
   "who": "Uncle Kwame (man about 55, deep and calm)"
  },
  {

@@ -38,3 +38,8 @@ wallet.webp, kelewele.webp, radio.webp, water.webp: made for Ghanaverse with Ima
 
 - `arrival.mp3`: our own highlife tune (palm-wine guitars, bass, bell, shaker and drums), made entirely in code by `apps/web/scripts/music/highlife.mjs` (no samples, no recordings). Ours to use.
 - A commercial song may replace it only with the artist's and label's written permission for use in the game (recorded here when we have it).
+
+## Street sounds (public/sounds/accra/)
+
+- `street-a.m4a`, `street-b.m4a` (traffic, horns, people talking) and `mates-a.m4a`, `mates-b.m4a` (trotro mates calling passengers): recorded in Accra by the Ghanaverse owner on 26-27 Oct 2026, the owner's own recordings. Used exactly as recorded (only moved from the phone's .mp4 container into .m4a, the sound itself not re-encoded). `sounds.json` marks the moments someone calls out (found by loudness in the voice range).
+- Faces and voices of passers-by are not identifiable from these; if a recording ever catches a clearly identifiable private conversation, cut that part out.

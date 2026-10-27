@@ -914,6 +914,8 @@ function step(player: Player, dt: number, t: number) {
     }),
     people: life?.nearCount ?? 0,
     music: life?.scenes?.musicSpots ?? [],
+    trotros: mateSpots(),
+    quiet: !!compoundRoomShot() || (compound.placed && Math.hypot(state.x - compound.x, state.z - compound.z) < COMPOUND.w / 2),
   });
   if (life?.scenes && !life.scenes.onSpeak) {
     life.scenes.onSpeak = (x, z, height, said, body, seed) => {
@@ -1398,9 +1400,6 @@ cine.onLine = (who, line) => {
   const v = who === 'YOU' ? playerVoice() : FILM_VOICES[who];
   if (v) void voices.say(line, v, 1, 2);
 };
-// The film clip plays on Standard and Ultra phones with a good connection; others see the moving pictures.
-const connection = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
-const useFilmClip = tier !== 'light' && !connection?.saveData && !['slow-2g', '2g', '3g'].includes(connection?.effectiveType ?? '4g');
 const story = {
   busy: false, // the story is running (the first goals wait)
   frozen: false, // a film scene is playing: no control
@@ -1769,7 +1768,7 @@ function placeAuntie() {
     for (const along of [4, 6, 8, 2.5, 10]) {
       const ox = Math.sin(zebra.angle) * along;
       const oz = -Math.cos(zebra.angle) * along;
-      for (const out of [3.2, 4, 2.6]) {
+      for (const out of [4.4, 5.2, 3.8, 6]) {
         const face = zebra.angle + (far > 0 ? -Math.PI / 2 : Math.PI / 2); // her table faces the road
         tries.push({ x: zebra.x + ox + rx * (zebra.half + out) * far, z: zebra.z + oz + rz * (zebra.half + out) * far, face });
       }
@@ -1779,10 +1778,14 @@ function placeAuntie() {
   if (pave) tries.push({ x: pave.x, z: pave.z, face: state.heading + Math.PI });
   // First a free spot; if kiosks fill them all, she takes the first spot clear of roads and
   // buildings and the kiosks there move aside.
-  const free = (t: { x: number; z: number }) => !solidAt(t.x, t.z, 1.2) && !life?.roadAt(t.x, t.z, 1.4);
-  const open = (t: { x: number; z: number }) => !buildings.blocked(t.x, t.z, 1.2) && !flyovers.lowRampAt(t.x, t.z) && !life?.roadAt(t.x, t.z, 1.4);
+  // Never on the road: the stall well back from the kerb, and the customer's chair (on the road side
+  // of the table) on the pavement too.
+  const chairAt = (t: { x: number; z: number; face: number }) => ({ x: t.x + Math.sin(t.face) * 1.05, z: t.z - Math.cos(t.face) * 1.05 });
+  const offRoad = (t: { x: number; z: number; face: number }) => !life?.roadAt(t.x, t.z, 2.2) && !life?.roadAt(chairAt(t).x, chairAt(t).z, 0.8);
+  const free = (t: { x: number; z: number; face: number }) => !solidAt(t.x, t.z, 1.2) && offRoad(t);
+  const open = (t: { x: number; z: number; face: number }) => !buildings.blocked(t.x, t.z, 1.2) && !flyovers.lowRampAt(t.x, t.z) && offRoad(t);
   const pick = tries.find(free) ?? tries.find(open);
-  if (pick && !free(pick)) life?.clearArea(pick.x, pick.z, 2.6);
+  if (pick) life?.clearArea(pick.x, pick.z, 2.8); // (kiosks never crowd her stall)
   for (const t of pick ? [pick] : []) {
     // The stall's model faces +z: turn it so the customer's chair is on the road side.
     auntie.group.position.set(t.x, 0, t.z);
@@ -1871,6 +1874,9 @@ function placeOnPavement() {
   const ok = life.pavementNear(spot.x + 1.6, spot.z, 1.5) ?? spot;
   [state.okadaX, state.okadaZ] = [ok.x, ok.z];
   [state.x, state.z] = [spot.x, spot.z];
+  // Your first steps are on open pavement: no kiosk is ever put where you stand (they arrive with
+  // the streets, a little after you do).
+  life.clearArea(spot.x, spot.z, 3.5);
   return true;
 }
 let startedAt = performance.now();
@@ -2492,45 +2498,17 @@ async function playOpening(start: StartChoice) {
   const home = start.hometown;
   homeTown = home;
   bag.holder = 'player'; // you arrive holding your travel bag
-  cine.preload(useFilmClip ? ['/film/circle.webp'] : ['/film/village.webp', '/film/hands.webp', '/film/bus.webp', '/film/circle.webp']);
   story.busy = story.frozen = true;
   goalChip.classList.add('hidden');
   setMoney(50, 'From Grandma for the journey');
-  // 1. Home: title cards on black.
+  // 1. Title cards on black. (The opening film from home is being made again: it goes here.)
   cine.begin();
   await cine.black(true, 0.01);
-  // Film pictures (made with ImagineArt, public/film): home at dawn, Grandma's goodbye, the bus,
-  // arriving in Accra. Each one moves slowly while the lines are spoken.
-  await cine.title(home, 'Dawn. The cockerels are crowing.', 2.4);
-  // Give the clip a few more seconds to download if it needs them; if it is still not ready, use the pictures.
-  for (let i = 0; useFilmClip && i < 40 && !cine.videoReady() && !cine.skipped; i++) await cine.wait(0.1);
-  // The music: in from the bus leaving for Accra, out as the thief gets away.
+  // The music: in as the journey begins, out as the thief gets away.
   music.preload();
-  let musicOn = false;
-  const startMusic = () => {
-    if (musicOn) return;
-    musicOn = true;
-    music.play(3);
-  };
-  if (useFilmClip && cine.videoReady()) {
-    window.setTimeout(startMusic, 7400); // "The bus leaves for Accra"
-    // The film clip (made with ImagineArt, public/film/journey-480.mp4, 640 KB): waking up,
-    // Grandma, the ₵50 and her letter, the bus leaving for Accra.
-    await cine.video([
-      [0.4, '', `${home}. The big morning.`],
-      [3.0, 'GRANDMA', 'My child, go and make us proud.'],
-      [5.4, '', 'She folds ₵50 and her letter into your hand.'],
-      [7.9, '', 'The bus leaves for Accra.'],
-    ]);
-  } else {
-    // Cheap phones, saved data or a slow connection: the moving pictures instead (330 KB).
-    await cine.picture('/film/village.webp', 'in', [['', `${home}. Grandma has been up since before the cockerels.`]], 0.6);
-    await cine.picture('/film/hands.webp', 'in', [['', 'She folds ₵50 into your hand.'], ['GRANDMA', 'Go and make us proud.']], 0.4);
-    startMusic();
-    await cine.picture('/film/bus.webp', 'left', [['BUS MATE', 'Accra! Accra! Accra! Last seat, come, come!']], 0.3);
-  }
-  startMusic();
-  await cine.picture('/film/circle.webp', 'out', [['', 'Hours later. Accra. Kwame Nkrumah Circle.']], 0.3);
+  music.play(3);
+  await cine.title(home, 'Grandma’s ₵50 and her letter in your bag. The bus to Accra.', 2.6);
+  await cine.title('Accra', 'Hours later. Kwame Nkrumah Circle.', 2.2);
   // 2. The camera comes down over the city to Circle.
   if (!cine.skipped) {
     story.fly = { t: performance.now() / 1000, length: 9 };
@@ -2667,8 +2645,10 @@ async function playOpening(start: StartChoice) {
       story.pose = null; // just sitting
       story.eating = true;
     }
-    onYou();
+    // Close on you from the side, sitting and eating from your hand, bite after bite.
+    story.shot = frameShot(stall.chair.x, stall.chair.z, sideBearing + 25 * side, 2.2, 78);
     await cine.say('', 'Hot, sweet and peppery. For the first time today, you smile.', 3.4);
+    await pause(2.4);
     ayekoo('Mission 1 complete', 'You found Auntie Dede. Uncle Kwame is on his way.');
     storyStep.auntie = true;
     me.vibe += 5;
@@ -2802,11 +2782,12 @@ async function playOpening(start: StartChoice) {
   toast('Explore the city', 'Your first goals are top left');
 }
 /**
- * The ride to Nima as a short film (about 15 seconds): six shots of Uncle Kwame's car driving at a
- * normal speed through real places on the real way (Circle, Kokomlemle, Asylum Down, the Al-Waleed
- * Bin Talal Highway, Nima Roundabout, Nima), each with the road and place signs you pass there, quick
- * fades between them, while you and Uncle talk. The city here is the map's own 3D blocks (our street
- * pieces are only round you), shown in 3D on every phone for these few seconds.
+ * The ride to Nima: one long, unbroken shot (about 24 seconds) following Uncle Kwame's car the whole
+ * real way, smoothly, like a camera drone above and behind it, swinging slowly round it (Circle,
+ * Ring Road Central past Kokomlemle and Asylum Down, the Al-Waleed Bin Talal Highway, Nima
+ * Roundabout, Nima). The car never disappears. Signs show each road, area and landmark as it passes;
+ * nobody talks over it. The city is the map's own 3D blocks (our street pieces are only round you),
+ * shown in 3D on every phone for these seconds.
  */
 async function rideFilm(way: Way, uCar: NonNullable<typeof streetTraffic>['story'][number]) {
   await cine.black(true, 0.35);
@@ -2820,70 +2801,46 @@ async function rideFilm(way: Way, uCar: NonNullable<typeof streetTraffic>['story
       added.push(l.id);
     }
   if (tier === 'light' && map.getLayer('buildings')) map.setLayoutProperty('buildings', 'visibility', 'none'); // (the flat ones)
-  // Where each shot is (metres along the way), and how it is filmed.
-  type Cam = 'side' | 'chase' | 'front' | 'high';
-  const SHOTS: [number, Cam][] = [
-    [240, 'side'],
-    [700, 'chase'],
-    [930, 'front'],
-    [1880, 'high'],
-    [2420, 'side'],
-    [Math.min(2760, way.length - 30), 'chase'],
-  ];
-  const LEN = 2.0; // seconds a shot (with the pull-away at Circle, about 15 seconds in all)
-  const SPEED = 13; // metres a second (about 47 km/h)
-  const lines: [number, string, string][] = [
-    [0.6, 'UNCLE KWAME', 'This is Ring Road. Busy, busy. You will learn it fast.'],
-    [3.6, 'YOU', 'Uncle, is Nima far?'],
-    [6.2, 'UNCLE KWAME', 'Not far. Fifteen minutes, if the traffic allows. Ha!'],
-    [9.4, 'UNCLE KWAME', 'This is Nima. Our home. Everybody knows everybody here.'],
-  ];
-  let line = 0;
+  const LEN = 24;
+  const start = 40;
+  const end = way.length - 40;
+  let bearing = way.at(start + 60).heading;
   let next = 0;
-  const film0 = gameClock;
   uCar.moving = true;
-  for (let i = 0; i < SHOTS.length; i++) {
-    const [mid, kind] = SHOTS[i];
-    const from = mid - (SPEED * LEN) / 2;
-    const side = i % 4 < 2 ? 1 : -1;
-    const frame = (d: number, k: number) => {
-      const p = way.at(d);
-      const right = { x: Math.cos(p.heading), z: Math.sin(p.heading) };
-      [uCar.x, uCar.z, uCar.heading] = [p.x + right.x * 1.8, p.z + right.z * 1.8, p.heading]; // the right-hand lane
-      const h = (p.heading * 180) / Math.PI;
-      // Each kind of shot moves a little while it lasts, like a camera on a crane or a car.
-      if (kind === 'side') story.shot = frameShot(uCar.x, uCar.z, h + 90 * side - 25 + 30 * k, 11, 72);
-      else if (kind === 'chase') story.shot = frameShot(uCar.x, uCar.z, h + 12 * side, 13 - 2 * k, 66);
-      else if (kind === 'front') story.shot = frameShot(uCar.x, uCar.z, h + 180 - 20 * side + 25 * k, 12, 74);
-      else story.shot = frameShot(uCar.x, uCar.z, h + 40 * side - 50 * k, 34, 52 + 6 * k);
-      placeCarTag(uCar.x, uCar.z);
-    };
-    frame(from, 0);
-    carTag.hidden = true;
-    await pause(0.12);
-    await cine.black(false, 0.22);
-    // The signs of this part of the way: one about every second.
-    const until = i + 1 < SHOTS.length ? (SHOTS[i][0] + SHOTS[i + 1][0]) / 2 : Infinity;
-    const signs: RideSign[] = [];
-    while (next < RIDE_SIGNS.length && RIDE_SIGNS[next].at < until) signs.push(RIDE_SIGNS[next++]);
-    const t0 = gameClock;
-    let shown = 0;
-    while (gameClock - t0 < LEN) {
-      const t = gameClock - t0;
-      frame(from + SPEED * t, t / LEN);
-      while (shown < signs.length && t >= (shown * (LEN - 0.4)) / Math.max(1, signs.length)) rideSign(signs[shown++]);
-      if (line < lines.length && gameClock - film0 >= lines[line][0]) {
-        void cine.say(lines[line][1], lines[line][2], 2.6);
-        line++;
-      }
-      await pause(0.02);
-    }
-    while (shown < signs.length) rideSign(signs[shown++]);
-    if (i + 1 < SHOTS.length) {
-      carTag.hidden = true;
-      await cine.black(true, 0.2);
-    }
+  const place = (k: number) => {
+    // Gently away, an even pace, gently to a stop at the end.
+    const e = k < 0.08 ? (k * k) / 0.16 : k > 0.92 ? 1 - ((1 - k) * (1 - k)) / 0.16 : k - 0.04;
+    const d = start + (end - start) * Math.max(0, Math.min(1, e));
+    const p = way.at(d);
+    const right = { x: Math.cos(p.heading), z: Math.sin(p.heading) };
+    [uCar.x, uCar.z, uCar.heading] = [p.x + right.x * 1.8, p.z + right.z * 1.8, p.heading]; // the right-hand lane
+    return d;
+  };
+  const shoot = (t: number, k: number, ease: number) => {
+    // Turns with the road slowly, never with a jerk; swings from one side of the car to the other.
+    bearing += angleDiff(uCar.heading, bearing) * ease;
+    const b = bearing + Math.sin(t * 0.26) * 0.55;
+    const fwd = { x: Math.sin(b), z: -Math.cos(b) };
+    story.shot = { x: uCar.x + fwd.x * 14, z: uCar.z + fwd.z * 14, bearing: (b * 180) / Math.PI, zoom: 19.55 - 0.35 * Math.sin(k * Math.PI), pitch: 57 + 5 * Math.sin(k * Math.PI) };
+    placeCarTag(uCar.x, uCar.z);
+  };
+  place(0);
+  bearing = uCar.heading;
+  shoot(0, 0, 1);
+  await pause(0.15);
+  void cine.black(false, 0.8);
+  const t0 = gameClock;
+  let last = t0;
+  while (gameClock - t0 < LEN) {
+    const t = gameClock - t0;
+    const k = Math.min(1, t / LEN);
+    const d = place(k);
+    shoot(t, k, Math.min(1, (gameClock - last) * 1.6));
+    last = gameClock;
+    while (next < RIDE_SIGNS.length && d >= RIDE_SIGNS[next].at) rideSign(RIDE_SIGNS[next++]);
+    await pause(0.02);
   }
+  while (next < RIDE_SIGNS.length) rideSign(RIDE_SIGNS[next++]);
   carTag.hidden = true;
   for (const id of added) map.removeLayer(id);
 }
@@ -3436,6 +3393,34 @@ life = new StreetLife((x, z, m) => buildings.blocked(x, z, m), { ...{
 scene.add(life.group);
 // The sound of Accra (starts on the first tap), with a button to switch it off.
 const streetSound = new StreetSound();
+/** Where trotro mates call from: trotros passing, the lorry station, bus stops (ids: <0 for places). */
+let mateSpotCache: { at: number; list: { x: number; z: number; id: number }[] } = { at: -1, list: [] };
+function mateSpots() {
+  const now = performance.now();
+  const moving = (streetTraffic?.placed ?? []).filter((p) => p.v.kind === 'trotro' && !p.bridge).map((p) => ({ x: (p.lon - START[0]) * M_LON, z: (START[1] - p.lat) * M_LAT, id: p.v.id }));
+  if (now - mateSpotCache.at > 2000) {
+    const fixed: { x: number; z: number; id: number }[] = [];
+    if (station) fixed.push({ x: station.x, z: station.z, id: -1 });
+    places.list().forEach((q, i) => q.kind === 'BUS STOP' && Math.hypot(q.x - state.x, q.z - state.z) < 90 && fixed.push({ x: q.x, z: q.z, id: -10 - i }));
+    mateSpotCache = { at: now, list: fixed };
+  }
+  return [...moving, ...mateSpotCache.list];
+}
+// A voice calls out in one of the owner's recordings: someone in the game does it at the same moment.
+// A mate's call comes from the trotro it is playing from; the street's voices from people round you.
+streetSound.onCall = (c) => {
+  const t = performance.now() / 1000;
+  if (c.kind === 'mates' && c.from) {
+    // At the lorry station, one of its mates calls (and waves people over); on a trotro, its mate.
+    const m = c.from.id === -1 && station ? station.people.find((q) => q.words) : null;
+    if (m) showBubble(m.x, m.z, 1.95, '📣', Math.max(1.2, c.seconds + 0.4));
+    else showBubble(c.from.x, c.from.z, c.from.id !== undefined && c.from.id < 0 ? 2.1 : 2.7, '📣', Math.max(1.2, c.seconds + 0.4));
+  }
+  else if (c.kind === 'street' && !story.frozen) {
+    const who = life?.scenes?.talkNear(state.x, state.z, t, Math.max(2, c.seconds + 1));
+    if (who) showBubble(who.x, who.z, who.height, '💬', Math.max(1.2, c.seconds + 0.3));
+  }
+};
 const music = new FilmMusic('/music/arrival.mp3');
 const soundButton = document.getElementById('btn-sound')!;
 soundButton.addEventListener('click', () => {
@@ -3458,6 +3443,9 @@ function showBubble(x: number, z: number, height: number, text: string, seconds 
 // mates call, and now and then someone nearby calls out.
 let nextShout = 0;
 function streetVoices(t: number) {
+  // The owner's Accra recordings carry the street's voices (and the game's people move with them:
+  // heardCall below); these made-up voices are only for when the recordings cannot play.
+  if (streetSound.recorded) return;
   if (t < nextShout || chatting || story.frozen || voices.busy) return;
   nextShout = t + 2.5 + Math.random() * 3.5;
   // A trotro passing close by: its mate shouts where it is going.
@@ -3666,7 +3654,7 @@ async function start() {
     (async (): Promise<StartChoice> => {
       await landscapeGate(document.getElementById('gate')!, autoTest);
       const female = params.has('female') ? 'female' : undefined;
-      return skipStory ? { body: female ?? 'male', hometown: 'Ada' } : startScreen({ body: female }, () => useFilmClip && cine.prepareVideo('/film/journey-480.mp4', '/film/journey-poster.jpg'));
+      return skipStory ? { body: female ?? 'male', hometown: 'Ada' } : startScreen({ body: female });
     })(),
     new Promise<void>((r) => map.once('load', () => r())),
   ]);
@@ -3719,7 +3707,7 @@ async function start() {
     if (life) life.vehicleAt = vehicleAt;
     streetTraffic.onBlocked = onVehicleBlocked;
     void loadDriver();
-    if (debug) Object.assign(window, { __street: { state, sky, look, life, story, thief, signals, lightFor, flyovers, pinch, bigScreen, roadSigns, getStation: () => station, places, fuelWhy, bag, driver, shove, uncle, compound, props, camera3d, adCard, frameShot, placeCompound, buildings, nimaRoute, rideSign, RIDE_SIGNS, map, placeCarTag, fullMap, phone, camAvoid, camAt, viewBlocked, heightAtView, solidAt, traffic: streetTraffic, driveIn, parkingNear, pullIn, pullOut, roadLineNear, compoundAt, music, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
+    if (debug) Object.assign(window, { __street: { state, sky, look, life, story, thief, signals, lightFor, flyovers, pinch, bigScreen, roadSigns, getStation: () => station, places, fuelWhy, bag, driver, shove, uncle, compound, props, camera3d, adCard, frameShot, placeCompound, buildings, nimaRoute, rideSign, RIDE_SIGNS, map, placeCarTag, fullMap, phone, camAvoid, camAt, viewBlocked, heightAtView, solidAt, traffic: streetTraffic, driveIn, parkingNear, pullIn, pullOut, roadLineNear, compoundAt, music, streetSound, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
   }
 
   document.getElementById('loading')!.remove();

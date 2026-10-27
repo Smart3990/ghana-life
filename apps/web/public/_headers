@@ -18,3 +18,7 @@
 # The service worker must always be fresh, so updates reach phones.
 /sw.js
   Cache-Control: no-cache
+
+# The owner's Accra sound recordings: rebuilt rarely.
+/sounds/*
+  Cache-Control: public, max-age=604800

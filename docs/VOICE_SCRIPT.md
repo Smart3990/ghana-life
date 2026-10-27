@@ -33,16 +33,6 @@ Lines with `{...}` in them say a name the game fills in (your hometown, a place)
 | File | Line |
 | --- | --- |
 | `circle-circle-last-stop-everybody-down-down.mp3` | Circle! Circle! Last stop! Everybody down, down! |
-| `accra-accra-accra-last-seat-come-come.mp3` | Accra! Accra! Accra! Last seat, come, come! |
-
-## Story: Grandma
-
-*Who:* Grandma (old woman, warm, slow)
-
-| File | Line |
-| --- | --- |
-| `my-child-go-and-make-us-proud.mp3` | My child, go and make us proud. |
-| `go-and-make-us-proud.mp3` | Go and make us proud. |
 
 ## Story: Auntie Dede
 
@@ -68,7 +58,6 @@ Lines with `{...}` in them say a name the game fills in (your hometown, a place)
 | `a-boy-took-my-bag-my-money-my-phone-everything.mp3` | A boy took my bag. My money, my phone… everything. |
 | `my-uncle-uncle-kwame.mp3` | My uncle. Uncle Kwame. |
 | `thank-you-uncle-medaase.mp3` | Thank you, Uncle. Medaase. |
-| `uncle-is-nima-far.mp3` | Uncle, is Nima far? |
 
 ## Story: Uncle Kwame
 
@@ -84,9 +73,6 @@ Lines with `{...}` in them say a name the game fills in (your hometown, a place)
 | `welcome-home-this-is-our-compound-come-let-me-show-you-your.mp3` | Welcome home. This is our compound. Come, let me show you your room. |
 | `this-is-your-room-it-is-small-but-it-is-yours-the-mattress-i.mp3` | This is your room. It is small, but it is yours. The mattress is new. |
 | `rest-well-tomorrow-we-start.mp3` | Rest well. Tomorrow, we start. |
-| `this-is-ring-road-busy-busy-you-will-learn-it-fast.mp3` | This is Ring Road. Busy, busy. You will learn it fast. |
-| `not-far-fifteen-minutes-if-the-traffic-allows-ha.mp3` | Not far. Fifteen minutes, if the traffic allows. Ha! |
-| `this-is-nima-our-home-everybody-knows-everybody-here.mp3` | This is Nima. Our home. Everybody knows everybody here. |
 
 ## You, chasing the thief
 
@@ -538,4 +524,4 @@ Lines with `{...}` in them say a name the game fills in (your hometown, a place)
 
 ---
 
-265 lines to record.
+258 lines to record.

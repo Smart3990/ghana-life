@@ -1,0 +1,117 @@
+{
+ "source": "Recorded in Accra by the Ghanaverse owner, 26-27 Oct 2026 (own recordings)",
+ "tracks": [
+  {
+   "file": "/sounds/accra/street-a.m4a",
+   "kind": "street",
+   "length": 73.98,
+   "loudness": -17.7,
+   "calls": [
+    [
+     4.0,
+     5.0
+    ],
+    [
+     5.5,
+     6.25
+    ],
+    [
+     7.5,
+     8.5
+    ],
+    [
+     18.75,
+     21.0
+    ],
+    [
+     68.5,
+     69.5
+    ]
+   ]
+  },
+  {
+   "file": "/sounds/accra/street-b.m4a",
+   "kind": "street",
+   "length": 14.59,
+   "loudness": -14.4,
+   "calls": [
+    [
+     0.75,
+     1.25
+    ],
+    [
+     4.25,
+     5.5
+    ],
+    [
+     6.0,
+     6.75
+    ]
+   ]
+  },
+  {
+   "file": "/sounds/accra/mates-a.m4a",
+   "kind": "mates",
+   "length": 33.26,
+   "loudness": -15.6,
+   "calls": [
+    [
+     22.25,
+     23.0
+    ],
+    [
+     23.5,
+     24.75
+    ],
+    [
+     25.25,
+     26.0
+    ]
+   ]
+  },
+  {
+   "file": "/sounds/accra/mates-b.m4a",
+   "kind": "mates",
+   "length": 45.42,
+   "loudness": -15.1,
+   "calls": [
+    [
+     10.75,
+     11.25
+    ],
+    [
+     25.25,
+     25.75
+    ],
+    [
+     27.0,
+     27.75
+    ],
+    [
+     28.5,
+     31.25
+    ],
+    [
+     32.0,
+     33.0
+    ],
+    [
+     33.5,
+     35.75
+    ],
+    [
+     36.75,
+     37.25
+    ],
+    [
+     38.25,
+     41.25
+    ],
+    [
+     42.75,
+     43.5
+    ]
+   ]
+  }
+ ]
+}

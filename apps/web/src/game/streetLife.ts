@@ -444,7 +444,12 @@ export class StreetLife {
     return false;
   }
   private free(x: number, z: number, margin: number) {
-    return !this.blocked(x, z, margin) && !this.onRoad(x, z, margin);
+    return !this.blocked(x, z, margin) && !this.onRoad(x, z, margin) && !this.keptClear(x, z, margin);
+  }
+  /** Places kept clear for the story (where you start, the bus stop, Auntie's stall, the compound). */
+  private keepClear: { x: number; z: number; r: number }[] = [];
+  private keptClear(x: number, z: number, margin: number) {
+    return this.keepClear.some((k) => Math.hypot(k.x - x, k.z - z) < k.r + margin);
   }
 
   /** New roads and roofs from a tile: place things along them. */
@@ -948,6 +953,7 @@ export class StreetLife {
   }
   /** Take things away from an area (to make room for the trotro station). */
   clearArea(x: number, z: number, r: number) {
+    this.keepClear.push({ x, z, r }); // (and nothing new is put there when more streets arrive)
     const keep = (p: Spot) => Math.hypot(p.x - x, p.z - z) > r;
     for (const b of this.batches) if (b !== this.poles && b !== this.lights) b.all = b.all.filter(keep);
     this.gatherings = this.gatherings.filter((g) => Math.hypot(g.x - x, g.z - z) > r);

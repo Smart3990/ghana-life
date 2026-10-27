@@ -266,6 +266,24 @@ export class StreetScenes {
     return { x: m.x, z: m.z, height: 1.95 * m.look.scale, seller: !!m.cycle?.includes('sell'), kind: m.kind, body: (m.look.scale < 0.85 ? 'child' : m.body) as 'male' | 'female' | 'child', seed: m.slot + (m.body === 'female' ? 5000 : 0), words: m.words };
   }
 
+  /**
+   * Someone near the player talks (with their hands) for a few seconds, in time with a voice heard in
+   * the street recording. Returns where they are, or null if nobody suitable is near.
+   */
+  talkNear(px: number, pz: number, t: number, seconds: number, reach = 22) {
+    let best: (typeof this.members)[number] | null = null;
+    let bestD = reach;
+    for (const m of this.members) {
+      if (m.orbit || m.clip === 'dance' || m.clip === 'sit' || m.clip === 'talk') continue;
+      const d = Math.hypot(m.x - px, m.z - pz);
+      if (d > 3 && d < bestD) [best, bestD] = [m, d];
+    }
+    if (!best) return null;
+    this.switchTo(best, Math.random() < 0.35 ? 'call' : 'talk', t);
+    best.nextChange = t + seconds;
+    return { x: best.x, z: best.z, height: 1.95 * best.look.scale };
+  }
+
   /** The player greets someone: they answer with a word and a nod or a wave. */
   answer(who: number, t: number, seller: boolean) {
     const m = this.members[who];
