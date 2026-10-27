@@ -701,29 +701,21 @@ export class StreetTraffic {
   onBlocked: ((v: { id: number; x: number; z: number; heading: number; kind: string; halfW: number; half: number; waited: number }) => void) | null = null;
   /** Is a point inside a low flyover ramp (set by the street test)? Ground traffic never drives there. */
   lowRamp: ((x: number, z: number) => boolean) | null = null;
-  private routeChecked = new Map<number, boolean>();
-  /** Check every route again (the flyovers changed). */
-  recheckRoutes() {
-    this.routeChecked.clear();
-  }
+  /** The flyovers changed (nothing to redo: each vehicle is checked where it is, every frame). */
+  recheckRoutes() {}
   /**
-   * A route on the ground that passes under a low ramp (where the real road has no way through) gets no
-   * vehicles at all. Each route is checked once, along its whole length, the first time it shows up.
+   * A ground vehicle is never drawn where its road runs under the low end of a flyover ramp (lower
+   * than a vehicle): there it is out of sight behind the ramp's walls and kerbs. Everywhere else on
+   * the same road it drives as usual (only those few metres are left out, so the roads stay full).
    */
   private routeOk(p: Placed) {
     if (!this.lowRamp || p.bridge) return true;
-    const r = p.v.route;
-    const known = this.routeChecked.get(r);
-    if (known !== undefined) return known;
-    let ok = true;
-    for (let s = 0; s < 900 && ok; s += 3) {
-      const at = this.traffic.at(p.v, p.s + s, this.lane);
-      if (at.bridge) continue;
-      const [x, z] = this.toLocal(at.lon, at.lat);
-      if (this.lowRamp(x, z)) ok = false;
-    }
-    this.routeChecked.set(r, ok);
-    return ok;
+    const [x, z] = this.toLocal(p.lon, p.lat);
+    const half = KIND_LENGTH[p.v.kind] / 2;
+    const fx = Math.sin(p.heading);
+    const fz = -Math.cos(p.heading);
+    for (const k of [-half, 0, half]) if (this.lowRamp(x + fx * k, z + fz * k)) return false;
+    return true;
   }
   /** Vehicles not drawn (the story has taken their place on the road). */
   hide = new Set<number>();

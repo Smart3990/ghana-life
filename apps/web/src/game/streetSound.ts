@@ -24,6 +24,10 @@ export type SoundScene = {
   trotros?: (Pos & { id: number })[];
   /** Somewhere quiet (inside the compound): the street is heard softly. */
   quiet?: boolean;
+  /** An ambulance going past (its siren comes from it), or none. */
+  siren?: Pos | null;
+  /** People are talking to you (a chat, or a scene with Auntie Dede or Uncle Kwame): the street drops to 30%. */
+  talk?: boolean;
 };
 
 /** The owner's Accra recordings (public/sounds/accra): the street, and trotro mates calling. */
@@ -58,6 +62,8 @@ export class StreetSound {
   private mate: { p: Playing; id: number; until: number } | null = null;
   private nextMate = 0;
   private mateTurn = 0;
+  private fadingOut: Playing | null = null;
+  private duckNow = 1;
   /** True once the street recordings are playing (the made-up horns and murmur then stay quiet). */
   get recorded() {
     return this.streetOn >= 0;
@@ -248,7 +254,8 @@ export class StreetSound {
     if (!p?.buffer) return;
     this.streetOn = i;
     p.fired.clear();
-    this.play(p, 0, () => this.playStreet((i + 1) % this.street.length));
+    p.gain.gain.value = 0; // (it fades in)
+    this.play(p, 0, () => this.streetOn === i && this.playStreet((i + 1) % this.street.length));
   }
   /** Each recording at about the same loudness (they were recorded at different distances). */
   private level(t: Track, want: number) {
@@ -278,14 +285,32 @@ export class StreetSound {
     this.rumble.gain.setTargetAtTime(Math.min(rec ? 0.08 : 0.32, 0.05 + near * 0.006) * (rec ? 0.6 : 1), now, 0.5);
     this.murmur.gain.setTargetAtTime(rec ? 0 : Math.min(0.28, s.people * 0.012), now, 0.6);
     // The street recording: louder where the road is busy and people are many, soft when quiet.
+    // While someone talks to you, all of it drops to 30% (smoothly), and comes back after.
+    const duck = s.talk ? 0.3 : 1;
     const sp = this.street[this.streetOn];
     if (sp) {
       const busy = Math.min(1, near / 14 + s.people / 40);
-      sp.gain.gain.setTargetAtTime(this.level(sp.track, (s.quiet ? 0.22 : 0.42 + 0.4 * busy)), now, 0.8);
+      sp.gain.gain.setTargetAtTime(this.level(sp.track, (s.quiet ? 0.22 : 0.42 + 0.4 * busy) * duck), now, 0.9);
       this.calls(sp, null);
+      // One sound with no seams: 4 seconds before a recording ends, the next one fades in under it
+      // while this one fades out.
+      const nextUp = this.street[(this.streetOn + 1) % this.street.length];
+      if (this.at(sp) > sp.track.length - 4 && sp.track.length > 8 && nextUp !== sp && nextUp?.buffer && !this.fadingOut) {
+        this.fadingOut = sp;
+        this.playStreet((this.streetOn + 1) % this.street.length);
+      }
     }
+    if (this.fadingOut) {
+      this.fadingOut.gain.gain.setTargetAtTime(0, now, 1.2);
+      if (this.fadingOut.gain.gain.value < 0.003 || this.at(this.fadingOut) > this.fadingOut.track.length) {
+        this.stopPlaying(this.fadingOut);
+        this.fadingOut = null;
+      }
+    }
+    this.duckNow = duck;
     // A trotro near you: its mate calls for passengers (the mates' recording, from where it is).
     this.updateMate(s, now);
+    this.updateSiren(s, now);
 
     // Engine.
     const e = this.engine;
@@ -320,7 +345,7 @@ export class StreetSound {
       const d = v ? Math.hypot(v.x - s.x, v.z - s.z) : 99;
       // It follows its trotro; it fades away when the trotro has gone, or after a while.
       const off = !v || d > 60 || now > m.until || s.quiet;
-      m.p.gain.gain.setTargetAtTime(off ? 0 : this.level(m.p.track, 0.95 / (1 + d / 9)), now, off ? 0.6 : 0.2);
+      m.p.gain.gain.setTargetAtTime(off ? 0 : this.level(m.p.track, (0.95 / (1 + d / 9)) * this.duckNow), now, off ? 1.4 : 0.9);
       if (v) m.p.pan.pan.setTargetAtTime(this.panFor(v, s), now, 0.2);
       if (!off && v) this.calls(m.p, v);
       if (off && m.p.gain.gain.value < 0.01) {
@@ -346,6 +371,55 @@ export class StreetSound {
     p.gain.gain.value = 0;
     if (!this.play(p, from, () => (this.mate?.p === p ? (this.mate.until = 0) : undefined))) return;
     this.mate = { p, id: best.id, until: now + 9 + Math.random() * 5 };
+  }
+
+  // The ambulance's siren: the rise-and-fall wail of Ghana's ambulances (two tones a little apart,
+  // rising and falling about every 1.4 seconds), from where the ambulance is, louder as it nears.
+  private sirenNodes: { gain: GainNode; pan: StereoPannerNode; oscs: OscillatorNode[] } | null = null;
+  private updateSiren(s: SoundScene, now: number) {
+    const ctx = this.ctx!;
+    if (s.siren && !this.sirenNodes) {
+      const gain = ctx.createGain();
+      gain.gain.value = 0;
+      const pan = ctx.createStereoPanner();
+      const tone = ctx.createBiquadFilter();
+      tone.type = 'lowpass';
+      tone.frequency.value = 2600;
+      gain.connect(tone).connect(pan).connect(this.master);
+      const lfo = ctx.createOscillator();
+      lfo.type = 'triangle';
+      lfo.frequency.value = 0.7;
+      const depth = ctx.createGain();
+      depth.gain.value = 320;
+      lfo.connect(depth);
+      const oscs: OscillatorNode[] = [lfo];
+      for (const [f, level] of [[960, 0.5], [1440, 0.18]] as const) {
+        const o = ctx.createOscillator();
+        o.type = 'square';
+        o.frequency.value = f;
+        depth.connect(o.frequency);
+        const g = ctx.createGain();
+        g.gain.value = level;
+        o.connect(g).connect(gain);
+        oscs.push(o);
+      }
+      for (const o of oscs) o.start();
+      this.sirenNodes = { gain, pan, oscs };
+    }
+    const n = this.sirenNodes;
+    if (!n) return;
+    if (s.siren) {
+      const d = Math.hypot(s.siren.x - s.x, s.siren.z - s.z);
+      n.gain.gain.setTargetAtTime((0.06 / (1 + d / 14)) * this.duckNow, now, 0.3);
+      n.pan.pan.setTargetAtTime(this.panFor(s.siren, s), now, 0.15);
+    } else {
+      n.gain.gain.setTargetAtTime(0, now, 0.8);
+      if (n.gain.gain.value < 0.0005) {
+        for (const o of n.oscs) o.stop();
+        n.gain.disconnect();
+        this.sirenNodes = null;
+      }
+    }
   }
 
   // Left or right, from where the sound is compared with where the camera faces.

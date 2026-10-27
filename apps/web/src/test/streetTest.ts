@@ -40,7 +40,6 @@ import { TouchControls } from '../hud/touchControls';
 import { landscapeGate } from '../hud/landscape';
 import { Cinema, startScreen, type StartChoice } from '../hud/cinema';
 import { FilmMusic } from '../game/music';
-import { cityBlocks3d } from '../map/style';
 import { billboardPlace, vehiclePlace } from '../game/adPrices';
 
 // ---------- Where and how big ----------
@@ -915,6 +914,8 @@ function step(player: Player, dt: number, t: number) {
     people: life?.nearCount ?? 0,
     music: life?.scenes?.musicSpots ?? [],
     trotros: mateSpots(),
+    talk: chatting || performance.now() / 1000 < cine.lastTalk + 2.5,
+    siren: ambulance.car ? { x: ambulance.car.x, z: ambulance.car.z } : null,
     quiet: !!compoundRoomShot() || (compound.placed && Math.hypot(state.x - compound.x, state.z - compound.z) < COMPOUND.w / 2),
   });
   if (life?.scenes && !life.scenes.onSpeak) {
@@ -973,6 +974,7 @@ function step(player: Player, dt: number, t: number) {
   updateThief(dt);
   updateDriver(dt);
   updateUncle(dt);
+  updateAmbulance(performance.now() / 1000);
   if (compound.placed && compound.group) {
     const dx = state.x - compound.x;
     const dz = state.z - compound.z;
@@ -1604,6 +1606,102 @@ function updateUncle(dt: number) {
   p.root.position.set(uncle.x, 0, uncle.z);
   p.root.rotation.set(0, Math.PI - uncle.heading, 0);
   p.mixer.update(dt);
+}
+
+// An ambulance now and then (about every minute and a half while you walk the streets): white,
+// a red stripe, red and blue lights flashing on the roof and its siren on, driving along
+// a real road near you; the traffic behind it waits, and in a jam it waits too, siren going.
+const ambulance = {
+  car: null as NonNullable<typeof streetTraffic>['story'][number] | null,
+  v: null as null | (NonNullable<typeof streetTraffic>['placed'][number]['v']),
+  s: 0,
+  until: 0,
+  last: 0,
+  next: 25,
+  group: null as THREE.Group | null,
+  lights: [] as THREE.MeshBasicMaterial[],
+};
+function ambulanceId() {
+  // A number with no advert space on it (the vehicles' adverts are picked by number).
+  for (let id = 900100; ; id++) if (((id * 2246822519) >>> 0) / 4294967296 >= 0.8) return id;
+}
+function ambulanceLook() {
+  const g = new THREE.Group();
+  const red = new THREE.MeshBasicMaterial({ color: '#ff2a2a' });
+  const blue = new THREE.MeshBasicMaterial({ color: '#2a6bff' });
+  const stripe = new THREE.MeshStandardMaterial({ color: '#c8102e', roughness: 0.6 });
+  const bar = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.16, 0.34), new THREE.MeshStandardMaterial({ color: '#222', roughness: 0.5 }));
+  bar.position.set(0, 2.62, -1.8);
+  g.add(bar);
+  for (const [x, m] of [[-0.42, red], [0.42, blue]] as const) {
+    const l = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.18, 0.3), m);
+    l.position.set(x, 2.74, -1.8);
+    g.add(l);
+  }
+  for (const x of [-1.02, 1.02]) {
+    const st = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.22, 5.2), stripe);
+    st.position.set(x, 1.15, 0);
+    g.add(st);
+  }
+  ambulance.lights = [red, blue];
+  return g;
+}
+function updateAmbulance(t: number) {
+  if (!streetTraffic) return;
+  const a = ambulance;
+  if (a.car && a.v) {
+    // Along its lane at up to 15 m/s, but never into the vehicle ahead: in a jam it waits, siren on.
+    const step = Math.min(0.1, Math.max(0, t - a.last)) * 15;
+    a.last = t;
+    const ahead = streetTraffic.routeAt(a.v, a.s + 5.5);
+    const blocked = streetTraffic.boxes.some((b) => Math.hypot(b.x - ahead.x, b.z - ahead.z) < b.half + 1.2 && !(b.x === a.car!.x && b.z === a.car!.z));
+    if (!blocked) a.s += step;
+    const p = streetTraffic.routeAt(a.v, a.s);
+    [a.car.x, a.car.z, a.car.heading] = [p.x, p.z, p.heading];
+    a.group!.position.set(a.car.x, 0, a.car.z);
+    a.group!.rotation.y = Math.PI - p.heading;
+    const on = Math.floor(t * 4) % 2 === 0;
+    a.lights[0].color.set(on ? '#ff2a2a' : '#4a0a0a');
+    a.lights[1].color.set(on ? '#0a1640' : '#2a6bff');
+    if (t > a.until || p.bridge) {
+      streetTraffic.story = streetTraffic.story.filter((q) => q !== a.car);
+      scene.remove(a.group!);
+      a.car = null;
+      a.v = null;
+      a.next = t + 70 + Math.random() * 40;
+    }
+    return;
+  }
+  if (t < a.next || story.frozen || story.autoRun || chatting) return;
+  a.next = t + 10; // (try again soon if no road fits)
+  // A vehicle 35 to 80 m away driving towards you: the ambulance comes along its road from there.
+  let pick: (typeof streetTraffic.placed)[number] | null = null;
+  for (const q of streetTraffic.placed) {
+    if (q.bridge) continue;
+    const [x, z] = [(q.lon - START[0]) * M_LON, (START[1] - q.lat) * M_LAT];
+    const d = Math.hypot(x - state.x, z - state.z);
+    const towards = ((state.x - x) * Math.sin(q.heading) + (state.z - z) * -Math.cos(q.heading)) / (d || 1);
+    if (d > 35 && d < 80 && towards > 0.6) {
+      pick = q;
+      break;
+    }
+  }
+  if (!pick) return;
+  // Behind that vehicle, in a free gap in its lane (never on top of another vehicle).
+  const tr = streetTraffic;
+  const back = [-14, -22, -30, -38].find((k) => {
+    const q = tr.routeAt(pick.v, pick.s + k);
+    return !q.bridge && !tr.boxes.some((b) => Math.hypot(b.x - q.x, b.z - q.z) < b.half + 3.4);
+  });
+  if (back === undefined) return;
+  a.v = pick.v;
+  a.s = pick.s + back;
+  a.until = t + 20;
+  a.last = t;
+  a.car = { key: 'sprinter', kind: 'trotro', id: ambulanceId(), x: 0, z: 0, heading: 0, colour: '#f6f6f2', shown: true, moving: true };
+  streetTraffic.story.push(a.car);
+  a.group ??= ambulanceLook();
+  scene.add(a.group);
 }
 
 // The compound house: placed on open ground near where the ride ends, its gate facing the road.
@@ -2433,6 +2531,7 @@ async function arriveByBus(): Promise<number | null> {
   const toRoad = life?.roadDirNear(spot.x, spot.z, 30, 2) ?? null;
   const lane = roadLineNear(spot.x, spot.z);
   if (!lane || toRoad === null || !streetTraffic) {
+    story.hidePlayer = false;
     await cine.say('', 'Circle. Noise, crowds, hawkers everywhere. You made it to Accra.');
     return null;
   }
@@ -2487,10 +2586,29 @@ async function arriveByBus(): Promise<number | null> {
   };
   go();
   state.heading = state.camHeading = lane(0).heading; // watching it go
-  await pause(1.6);
-  // Now you turn to the road to cross.
-  state.heading = state.camHeading = toRoad;
+  await pause(1.9);
+  // Then you stand there taking it in, amazed by Accra's noise and crowds: you look one way down the
+  // road, then the other (about 3 seconds), seen from the front and a little along the pavement (the
+  // trotro has gone by then). Then the bag.
+  story.shot = frameShot(spot.x, spot.z, (toRoad * 180) / Math.PI + 180 + 55 * Math.sign(lean || 1), 4.6, 77);
+  showBubble(state.x, state.z, 1.95, toMe('Ei! So this is Accra!'), 2.4);
+  const turn = async (to: number, seconds: number) => {
+    const from = state.heading;
+    const t0 = gameClock;
+    while (gameClock - t0 < seconds) {
+      const k = smooth((gameClock - t0) / seconds);
+      state.heading = from + angleDiff(to, from) * k;
+      await pause(0.02);
+    }
+    state.heading = to;
+  };
+  await turn(toRoad - 0.9, 0.7);
   await pause(0.5);
+  await turn(toRoad + 0.9, 0.9);
+  await pause(0.5);
+  await turn(toRoad, 0.5);
+  await pause(0.3);
+  state.camHeading = toRoad;
   return lane(0).heading + Math.PI; // the thief comes along the pavement, against the traffic
 }
 
@@ -2499,6 +2617,7 @@ async function playOpening(start: StartChoice) {
   homeTown = home;
   bag.holder = 'player'; // you arrive holding your travel bag
   story.busy = story.frozen = true;
+  story.hidePlayer = true; // (you are on the trotro until it stops at Circle and you step down)
   goalChip.classList.add('hidden');
   setMoney(50, 'From Grandma for the journey');
   // 1. Title cards on black. (The opening film from home is being made again: it goes here.)
@@ -2669,6 +2788,14 @@ async function playOpening(start: StartChoice) {
     me.seat = null;
     [state.x, state.z, state.heading] = [standX, standZ, stall.chair.face];
     const park = lane ? parkingNear(lane, stall) : null;
+    // The streets of the ride home start loading now (they are ready when you set off).
+    void nimaRoute.then((way) => {
+      if (!way) return;
+      for (let d = 400; d < way.length; d += 300) {
+        const q = way.at(d);
+        buildings.loadAround(toLngLat(q.x, q.z), 160);
+      }
+    });
     let uCar: NonNullable<typeof streetTraffic>['story'][number] | null = null;
     if (lane && park && streetTraffic) {
       uCar = { key: 'car', kind: 'car', id: 900002, x: 0, z: 0, heading: 0, colour: '#b3261e', shown: true, moving: true }; // Uncle Kwame's red saloon
@@ -2782,63 +2909,95 @@ async function playOpening(start: StartChoice) {
   toast('Explore the city', 'Your first goals are top left');
 }
 /**
- * The ride to Nima: one long, unbroken shot (about 24 seconds) following Uncle Kwame's car the whole
- * real way, smoothly, like a camera drone above and behind it, swinging slowly round it (Circle,
- * Ring Road Central past Kokomlemle and Asylum Down, the Al-Waleed Bin Talal Highway, Nima
- * Roundabout, Nima). The car never disappears. Signs show each road, area and landmark as it passes;
- * nobody talks over it. The city is the map's own 3D blocks (our street pieces are only round you),
- * shown in 3D on every phone for these seconds.
+ * The ride to Nima, at a real driving speed (about 15 m/s, 54 km/h), filmed low from behind and
+ * beside Uncle Kwame's car so the street and its buildings fill the picture: first through Circle
+ * onto Ring Road Central (about 14 s, past the lorry station and the fire service), a fade ("Twenty
+ * minutes later", with the signs of the places in between), then into Nima (about 11 s: the
+ * roundabout, the clinic, the market, the post office) and home. Signs show each road, area and
+ * landmark as it passes; nobody talks over it. The city is the map's own 3D blocks (our street pieces
+ * are only round you), in 3D on every phone for these seconds.
  */
 async function rideFilm(way: Way, uCar: NonNullable<typeof streetTraffic>['story'][number]) {
   await cine.black(true, 0.35);
-  buildings.group.visible = false;
-  for (const id of ['buildings', 'roofs']) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', 'visible');
+  // The real street all along the way, as round you on foot: its buildings, kiosks, people and
+  // traffic are built round the car as it goes (the map squares were loaded before the ride).
+  story.hidePlayer = true;
+  for (let d = 400; d < way.length; d += 300) {
+    const q = way.at(d);
+    buildings.loadAround(toLngLat(q.x, q.z), 160); // (already loading since Uncle was called)
+  }
+  await waitUntil(() => !buildings.loading, 8);
   const added: string[] = [];
-  if (tier === 'light')
-    for (const l of cityBlocks3d()) {
-      if (map.getLayer(l.id)) continue;
-      map.addLayer(l, map.getLayer('street-3d') ? 'street-3d' : undefined);
-      added.push(l.id);
-    }
-  if (tier === 'light' && map.getLayer('buildings')) map.setLayoutProperty('buildings', 'visibility', 'none'); // (the flat ones)
-  const LEN = 24;
-  const start = 40;
-  const end = way.length - 40;
-  let bearing = way.at(start + 60).heading;
+  const SPEED = 15;
+  // (The first 400 m of the way go up over the Kwame Nkrumah Interchange flyover: the ride starts just
+  // past it, down on Ring Road Central, where the car is on the street.)
+  const parts: [number, number][] = [
+    [490, 14], // from (metres along the way), for (seconds)
+    [Math.max(490 + SPEED * 14 + 20, way.length - 20 - SPEED * 11), 11],
+  ];
   let next = 0;
+  while (next < RIDE_SIGNS.length && RIDE_SIGNS[next].at < parts[0][0] - 30) next++; // (Circle's own signs: seen there already)
   uCar.moving = true;
-  const place = (k: number) => {
-    // Gently away, an even pace, gently to a stop at the end.
-    const e = k < 0.08 ? (k * k) / 0.16 : k > 0.92 ? 1 - ((1 - k) * (1 - k)) / 0.16 : k - 0.04;
-    const d = start + (end - start) * Math.max(0, Math.min(1, e));
-    const p = way.at(d);
-    const right = { x: Math.cos(p.heading), z: Math.sin(p.heading) };
-    [uCar.x, uCar.z, uCar.heading] = [p.x + right.x * 1.8, p.z + right.z * 1.8, p.heading]; // the right-hand lane
-    return d;
-  };
-  const shoot = (t: number, k: number, ease: number) => {
-    // Turns with the road slowly, never with a jerk; swings from one side of the car to the other.
-    bearing += angleDiff(uCar.heading, bearing) * ease;
-    const b = bearing + Math.sin(t * 0.26) * 0.55;
-    const fwd = { x: Math.sin(b), z: -Math.cos(b) };
-    story.shot = { x: uCar.x + fwd.x * 14, z: uCar.z + fwd.z * 14, bearing: (b * 180) / Math.PI, zoom: 19.55 - 0.35 * Math.sin(k * Math.PI), pitch: 57 + 5 * Math.sin(k * Math.PI) };
-    placeCarTag(uCar.x, uCar.z);
-  };
-  place(0);
-  bearing = uCar.heading;
-  shoot(0, 0, 1);
-  await pause(0.15);
-  void cine.black(false, 0.8);
-  const t0 = gameClock;
-  let last = t0;
-  while (gameClock - t0 < LEN) {
-    const t = gameClock - t0;
-    const k = Math.min(1, t / LEN);
-    const d = place(k);
-    shoot(t, k, Math.min(1, (gameClock - last) * 1.6));
-    last = gameClock;
-    while (next < RIDE_SIGNS.length && d >= RIDE_SIGNS[next].at) rideSign(RIDE_SIGNS[next++]);
-    await pause(0.02);
+  for (let i = 0; i < parts.length; i++) {
+    const [from, LEN] = parts[i];
+    let bearing = way.at(from + 20).heading;
+    let gone = 0; // metres driven in this part
+    let tPrev = 0;
+    const drive = (t: number) => {
+      // Gently away at the start of the ride, gently to a stop at the end; an even pace between.
+      const pace = Math.min(i === 0 ? Math.min(1, 0.2 + t / 2.5) : 1, i === parts.length - 1 ? Math.max(0.15, Math.min(1, (LEN - t) / 2.5)) : 1);
+      // Never into the vehicle ahead: in traffic it slows and waits, like everyone else.
+      const look = way.at(from + gone + 6.5);
+      const lr = { x: Math.cos(look.heading), z: Math.sin(look.heading) };
+      const aheadX = look.x + lr.x * 1.8;
+      const aheadZ = look.z + lr.z * 1.8;
+      const jam = (streetTraffic?.boxes ?? []).some((b) => !(b.x === uCar.x && b.z === uCar.z) && Math.hypot(b.x - aheadX, b.z - aheadZ) < b.halfW + 1.2);
+      gone += (jam ? 0 : SPEED * pace) * Math.max(0, t - tPrev);
+      tPrev = t;
+      const d = from + gone;
+      const p = way.at(d);
+      const right = { x: Math.cos(p.heading), z: Math.sin(p.heading) };
+      [uCar.x, uCar.z, uCar.heading] = [p.x + right.x * 1.8, p.z + right.z * 1.8, p.heading]; // the right-hand lane
+      [state.x, state.z] = [uCar.x, uCar.z]; // (the city is built round you, in the car)
+      return d;
+    };
+    const shoot = (t: number, turn: number) => {
+      // Low and close behind the car (over the road, never out over the buildings), swaying a little,
+      // turning with the road gently.
+      bearing += angleDiff(uCar.heading, bearing) * turn;
+      const b = bearing + 0.16 * Math.sin(t * 0.35 + i * 2);
+      story.shot = frameShot(uCar.x, uCar.z, (b * 180) / Math.PI, 13, 70);
+      placeCarTag(uCar.x, uCar.z);
+    };
+    drive(0);
+    bearing = uCar.heading;
+    shoot(0, 1);
+    await pause(0.15);
+    void cine.black(false, 0.7);
+    const t0 = gameClock;
+    let last = t0;
+    while (gameClock - t0 < LEN) {
+      const t = gameClock - t0;
+      const d = drive(t);
+      shoot(t, Math.min(1, (gameClock - last) * 1.4));
+      last = gameClock;
+      while (next < RIDE_SIGNS.length && d >= RIDE_SIGNS[next].at) rideSign(RIDE_SIGNS[next++]);
+      await pause(0.02);
+    }
+    if (i + 1 < parts.length) {
+      // Twenty minutes later: the places passed on the way show while the screen is dark.
+      carTag.hidden = true;
+      await cine.black(true, 0.5);
+      const skip = parts[i + 1][0];
+      const between: RideSign[] = [];
+      while (next < RIDE_SIGNS.length && RIDE_SIGNS[next].at < skip) between.push(RIDE_SIGNS[next++]);
+      void cine.title('Twenty minutes later', between.filter((g) => g.kind !== 'road').map((g) => g.name).join(' · ') || 'Ring Road Central', 2.2);
+      for (const g of between) {
+        rideSign(g);
+        await pause(0.35);
+      }
+      await pause(Math.max(0, 2.2 - between.length * 0.35));
+    }
   }
   while (next < RIDE_SIGNS.length) rideSign(RIDE_SIGNS[next++]);
   carTag.hidden = true;
@@ -3383,12 +3542,11 @@ const buildings = new StreetBuildings(
 );
 scene.add(buildings.group);
 life = new StreetLife((x, z, m) => buildings.blocked(x, z, m), { ...{
-  // Busy but not packed (owner, 2026-10-25: the earlier 110 / 320 / 560 walkers was too much).
-  // Circle is packed (owner, 2026-10-25): many more people on the pavements, and shops everywhere.
+  // Packed, chaotic Circle (owner, 2026-10-27: "very crowded", kiosks and stalls everywhere).
   // On a struggling phone the walkers thin out automatically (busy %), the shops stay.
-  light: { radiusM: 140, people: 95, props: 450, scenes: 36 },
-  standard: { radiusM: 200, people: 250, props: 1000, scenes: 80 },
-  ultra: { radiusM: 280, people: 480, props: 1600, scenes: 130 },
+  light: { radiusM: 140, people: 110, props: 520, scenes: 42 },
+  standard: { radiusM: 200, people: 380, props: 1300, scenes: 100 },
+  ultra: { radiusM: 280, people: 650, props: 2000, scenes: 150 },
 }[tier], smoothCrowd: PRESET.smoothCrowd });
 scene.add(life.group);
 // The sound of Accra (starts on the first tap), with a button to switch it off.
@@ -3698,8 +3856,8 @@ async function start() {
     trafficModel = traffic;
     for (const b of pendingBatches.splice(0)) traffic.addRoads(b);
     // Busy roads (raised from the first budget of 15 / 40 / 100: they are drawn in batches, so they cost little).
-    const limit = { light: 100, standard: 170, ultra: 260 }[tier];
-    streetTraffic = new StreetTraffic(traffic, (lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT], limit, { light: 140, standard: 180, ultra: 230 }[tier]);
+    const limit = { light: 80, standard: 200, ultra: 280 }[tier];
+    streetTraffic = new StreetTraffic(traffic, (lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT], limit, { light: 120, standard: 180, ultra: 230 }[tier]);
     scene.add(streetTraffic.group);
     streetTraffic.deckHeight = (x, z) => flyovers.heightAt(x, z);
     streetTraffic.lowRamp = (x, z) => flyovers.lowRampAt(x, z);

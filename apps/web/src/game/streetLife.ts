@@ -172,6 +172,12 @@ type Agent = {
   faceZ?: number;
   lastX?: number;
   lastZ?: number;
+  lastH?: number;
+  // Walking on and on (never back and forth): along which way, from which time, and the bit of road
+  // being crossed to the next pavement.
+  rev?: boolean;
+  legT?: number;
+  cross?: { ax: number; az: number; bx: number; bz: number; len: number } | null;
 };
 
 // A phone stand: a table with a glass case of phones, chargers hanging on a board, and a small
@@ -561,28 +567,28 @@ export class StreetLife {
             const rr = hash(x + sd * 3.1, z - sd * 1.7);
             const put = (extra: number) => [x - dz * (edge + extra) * sd, z + dx * (edge + extra) * sd] as const;
             const face = angle + (sd > 0 ? -Math.PI / 2 : Math.PI / 2);
-            if (rr < 0.1) {
+            if (rr < 0.07) {
               const [tx, tz] = put(1.2);
               if (this.free(tx, tz, 1.2)) {
                 const b = rr < 0.045 ? this.palms : this.trees;
                 b.all.push({ x: tx, z: tz, angle: rr * 40, scale: 0.85 + hash(tx, tz) * 0.45, colour: 0xffffff });
               }
-            } else if (rr < 0.55) {
+            } else if (rr < 0.58) {
               // A row of container shops, and more behind it where there is open ground.
-              for (const [extra, chance] of [[1.5, 1], [4.4, 0.85], [7.3, 0.7], [10.2, 0.55], [13.1, 0.4]] as const) {
+              for (const [extra, chance] of [[1.5, 1], [4.4, 0.95], [7.3, 0.85], [10.2, 0.72], [13.1, 0.58], [16, 0.42]] as const) {
                 if (hash(x * 1.3 + extra, z + sd) > chance) break;
                 const [kx, kz] = put(extra);
                 if (!this.free(kx, kz, 1.4)) break;
                 this.kiosks.all.push({ x: kx, z: kz, angle: face, scale: 1, colour: KIOSK_COLOURS[Math.floor(hash(kx, kz) * KIOSK_COLOURS.length)] });
               }
-            } else if (rr < 0.68) {
+            } else if (rr < 0.72) {
               // A phone and accessories stand: the "Circle boys" selling phones, chargers and earpieces.
               const [px, pz] = put(-size.walk / 2);
               if (size.walk && this.free(px, pz, 0.8)) this.phones.all.push({ x: px, z: pz, angle: face, scale: 1, colour: 0 });
-            } else if (rr < 0.9) {
+            } else {
               // Market stalls fill the open ground behind the pavement too.
-              for (const extra of [2.2, 5.4, 8.6]) {
-                if (hash(x + extra, z * 1.7 + sd) > 0.6) break;
+              for (const extra of [2.2, 5.4, 8.6, 11.8]) {
+                if (hash(x + extra, z * 1.7 + sd) > 0.82) break;
                 const [mx, mz] = put(extra);
                 if (!this.free(mx, mz, 1)) break;
                 this.umbrellas.all.push({ x: mx, z: mz, angle: hash(mx, mz) * 30, scale: 1, colour: UMBRELLA_COLOURS[Math.floor(hash(mx, mz) * UMBRELLA_COLOURS.length)] });
@@ -1067,6 +1073,7 @@ export class StreetLife {
         // Everyone, hawkers too, keeps to the pavements (owner, 2026-10-25: sellers by the road, not on it).
         const inTraffic = false;
         a.run = inTraffic ? this.nearCentre[Math.floor(hash(i, t) * this.nearCentre.length)] : this.pickWalkway(hash(i, Math.floor(t)));
+        a.legT = undefined; // (starts somewhere along it)
         a.spot = a.still && this.nearSpots.length && hash(i, 9) < 0.7 ? this.nearSpots[Math.floor(hash(i, t) * this.nearSpots.length)] : null;
       }
       let px: number;
@@ -1079,19 +1086,70 @@ export class StreetLife {
         pz = a.spot.z - Math.cos(ang) * 1.6;
         heading = ang + Math.PI;
       } else if (a.run) {
-        const w = a.run;
         const held = leader ? (leader.held ?? 0) : (a.held ?? 0);
-        const along = a.still ? a.s0 % w.total : (a.s0 + (t - held) * (leader ? leader.speed : a.speed)) % (w.total * 2);
-        const forward = along < w.total;
-        let s = forward ? along : w.total * 2 - along;
-        if (leader) s = Math.max(0, Math.min(w.total, s - (forward ? 1 : -1) * (1 + ((i - a.leader) % 3) * 0.9)));
-        const [qx, qz, dir] = this.pointOn(w, s);
+        let dir: number;
+        let qx: number;
+        let qz: number;
+        let forward = true;
+        if (a.still) {
+          const w = a.run;
+          [qx, qz, dir] = this.pointOn(w, a.s0 % w.total);
+        } else if (leader && leader.lastX !== undefined) {
+          // In a group: a step or two behind the leader, the same way.
+          const lh = leader.lastH ?? 0;
+          const back = 1 + ((i - a.leader) % 3) * 0.9;
+          [qx, qz, dir] = [leader.lastX - Math.sin(lh) * back, leader.lastZ! + Math.cos(lh) * back, lh];
+        } else {
+          // On and on along the pavements: at the end of one, across to the next that carries on
+          // (over a side road if need be); back the other way only at a real dead end.
+          const tt = t - held;
+          if (a.legT === undefined) {
+            a.rev = hash(i, 41) < 0.5;
+            a.legT = tt - (a.s0 % a.run.total) / a.speed;
+            a.cross = null;
+          }
+          let d = (tt - a.legT) * a.speed;
+          for (let guard = 0; guard < 4; guard++) {
+            if (a.cross) {
+              if (d < a.cross.len) break;
+              a.legT += a.cross.len / a.speed;
+              a.cross = null;
+              d = (tt - a.legT) * a.speed;
+              continue;
+            }
+            if (d <= a.run.total) break;
+            this.nextLeg(a);
+            d = (tt - a.legT!) * a.speed;
+          }
+          if (a.cross) {
+            const c = a.cross;
+            // At the kerb: wait until no vehicle is on the way across, then go.
+            if (d < 0.6 && this.vehicleAt && Math.abs(c.ax - x) < 70 && Math.abs(c.az - z) < 70) {
+              let busy = false;
+              for (const k of [0.2, 0.5, 0.8]) if (this.vehicleAt(c.ax + (c.bx - c.ax) * k, c.az + (c.bz - c.az) * k, 3)) busy = true;
+              if (busy && !leader) {
+                a.held = (a.held ?? 0) + dt;
+                d = Math.max(0, d - a.speed * dt);
+              }
+            }
+            const k = Math.max(0, Math.min(1, d / (c.len || 1)));
+            [qx, qz] = [c.ax + (c.bx - c.ax) * k, c.az + (c.bz - c.az) * k];
+            dir = Math.atan2(c.bx - c.ax, -(c.bz - c.az));
+          } else {
+            const w = a.run;
+            const sAt = Math.max(0, Math.min(w.total, a.rev ? w.total - d : d));
+            [qx, qz, dir] = this.pointOn(w, sAt);
+            if (a.rev) forward = false;
+          }
+        }
         heading = forward ? dir : dir + Math.PI;
+        if (a.still) heading = dir;
         // Keep to the right of the pavement a little, so people pass each other.
         const side = (a.still ? a.lateral : 0.45 * (forward ? 1 : -1) + a.lateral * 0.5) * (leader ? 0.6 : 1);
         px = qx + Math.cos(dir) * side;
         pz = qz + Math.sin(dir) * side;
         if (a.still) heading = dir + (a.lateral > 0 ? Math.PI / 2 : -Math.PI / 2);
+        a.lastH = heading;
         // Talking with the player: stand still, face them, talk with the hands.
         if ((a.talkUntil ?? 0) > t) {
           if (!a.still) a.held = (a.held ?? 0) + dt;
@@ -1171,10 +1229,42 @@ export class StreetLife {
   // Far from the player now (checked a few times a second per person, not every frame).
   private tooFar(a: Agent, x: number, z: number, t: number, far: number) {
     if (Math.floor(t * 3) % 7 !== a.slot % 7) return false;
+    if (a.lastX !== undefined) return Math.hypot(a.lastX - x, a.lastZ! - z) > far;
     const w = a.run!;
-    const along = a.still ? a.s0 % w.total : (a.s0 + t * a.speed) % (w.total * 2);
-    const s = along < w.total ? along : w.total * 2 - along;
-    const [px, pz] = this.pointOn(w, s);
+    const [px, pz] = this.pointOn(w, a.s0 % w.total);
     return Math.hypot(px - x, pz - z) > far;
+  }
+
+  /** At the end of a pavement: the next one that carries on (crossing to it), or back the way they came. */
+  private nextLeg(a: Agent) {
+    const w = a.run!;
+    a.legT! += w.total / a.speed;
+    const n = w.pts.length;
+    const [ex, ez] = a.rev ? [w.pts[0], w.pts[1]] : [w.pts[n - 2], w.pts[n - 1]];
+    // The way they were going at the end.
+    const [px, pz] = a.rev ? [w.pts[2], w.pts[3]] : [w.pts[n - 4], w.pts[n - 3]];
+    const gx = ex - px;
+    const gz = ez - pz;
+    const gl = Math.hypot(gx, gz) || 1;
+    let best: { w: Walkway; rev: boolean; x: number; z: number; score: number } | null = null;
+    for (const o of this.nearWalkways) {
+      if (o === w || o.total < 6) continue;
+      const m = o.pts.length;
+      for (const [atEnd, ox, oz] of [[false, o.pts[0], o.pts[1]], [true, o.pts[m - 2], o.pts[m - 1]]] as const) {
+        const d = Math.hypot(ox - ex, oz - ez);
+        if (d > 13) continue;
+        // Which way the next one goes from there, compared with the way they were walking.
+        const [nx, nz] = atEnd ? [o.pts[m - 4], o.pts[m - 3]] : [o.pts[2], o.pts[3]];
+        const dot = ((nx - ox) * gx + (nz - oz) * gz) / ((Math.hypot(nx - ox, nz - oz) || 1) * gl);
+        if (dot < -0.3) continue; // that would send them back
+        const score = d - dot * 6 + hash(ox, oz + a.slot) * 3;
+        if (!best || score < best.score) best = { w: o, rev: atEnd, x: ox, z: oz, score };
+      }
+    }
+    if (best) {
+      a.cross = { ax: ex, az: ez, bx: best.x, bz: best.z, len: Math.hypot(best.x - ex, best.z - ez) };
+      a.run = best.w;
+      a.rev = best.rev;
+    } else a.rev = !a.rev; // a real dead end: back the way they came
   }
 }

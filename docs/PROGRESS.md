@@ -318,6 +318,16 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
 
   - **Traffic:** when a phone struggles and the game shows fewer vehicles to stay smooth, it no longer removes one that is already close to you (they drive on past; only newcomers and far ones are left out). Checked on Light: no jumps, no overlaps, nothing off the road.
 
+  - **Owner's pass, 27 Oct (afternoon):**
+    - You arrive on the trotro: you are not seen until it stops and you step down (before, you stood there waiting for it). Then you stand and take Accra in for about 3 seconds, amazed, looking one way down the road and then the other ("Ei! So this is Accra!"), and then the boy snatches the bag.
+    - **Full roads again:** the rule that kept cars from driving under the low end of a ramp threw out every road that came near a ramp within 900 m, and around Circle that was most of them. Now a vehicle is left out only for the few metres where its road runs under a low ramp (out of sight behind the ramp's walls). Vehicles are also packed closer (a vehicle every 4.6 to 7.6 m in each lane). On Light: about 80 vehicles round you (it was 35), kept within 120 m so it costs little.
+    - **One seamless sound:** each street recording fades into the next under it (no stop and start), the mates fade in and out softly, and whenever someone talks to you (a chat, Auntie Dede, Uncle Kwame) the whole street drops to 30% and comes back after.
+    - **Ambulances:** about every minute and a half while you walk the streets, a white ambulance with a red stripe and flashing red and blue roof lights drives along a road near you with its siren on (from where it is, louder as it passes); the traffic behind it waits, and in a jam it waits too. (No siren was found in the owner's recordings, so the siren is made in code.)
+    - **The ride home at a real speed** (about 15 m/s, 54 km/h), 25 seconds, filmed low behind the car so the street fills the picture: the real street the whole way (its buildings, kiosks, people, traffic lights and traffic are built round the car; the map squares along the way start loading when Auntie calls Uncle), Uncle's car waiting behind the traffic ahead like everyone else. First along Ring Road Central past the Interchange (14 s), a fade ("Twenty minutes later", with the signs of the places in between), then into Nima (11 s) and home.
+    - **Busier streets:** more container shops (rows six deep), more market umbrellas, phone stands, fewer trees; more people (Light 110, Standard 380, Ultra 650; the busy % still thins them on a struggling phone).
+    - **People walk on and on:** at the end of a pavement they cross to the next one that carries on (waiting at the kerb until no vehicle is coming), instead of turning round and walking back; they turn back only at a real dead end.
+    - Cost on Light: about 330,000 triangles in the test spot (was 266,000); the logic takes about 3 ms a frame. Needs the owner's check on the cheap Android.
+
 ## Waiting on the owner
 
 - Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.

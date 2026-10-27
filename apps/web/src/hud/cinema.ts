@@ -186,9 +186,12 @@ export class Cinema {
   onLine: ((who: string, line: string) => void) | null = null;
 
   /** A subtitle line, with who is speaking. */
+  /** When someone last spoke a line (seconds, performance clock): the street goes quiet round talks. */
+  lastTalk = -99;
   async say(who: string, line: string, seconds = 0) {
     if (this.skipping) return;
     this.onLine?.(who, line);
+    if (who) this.lastTalk = performance.now() / 1000 + (seconds || Math.max(2, 0.8 + line.length / 14));
     this.sub.innerHTML = '';
     if (who) {
       const name = el('b');

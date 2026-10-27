@@ -15,7 +15,7 @@ import { KINDS, kindFor, type Kind, type Placed, type Traffic, type Vehicle } fr
 
 const M_LAT = 110574;
 const M_LON = 111320 * Math.cos((5.56 * Math.PI) / 180);
-const SPACING_M: [number, number] = [6, 10]; // busy but moving: a vehicle every 6 to 10 m in each lane
+const SPACING_M: [number, number] = [4.6, 7.6]; // packed like Accra: a vehicle every 4.6 to 7.6 m in each lane (bumper to bumper at lights)
 const END_HIDE_M = 7; // vehicles are not shown this close to the start or end of an open route
 
 type Route = {
