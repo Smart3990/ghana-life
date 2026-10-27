@@ -540,7 +540,7 @@ export class StreetLife {
         for (let s = left; s < len; s += 25) {
           const H = HALF.other.half + 0.5;
           const [lx, lz] = [x1 + dx * s - dz * H, z1 + dz * s + dx * H];
-          if (this.free(lx, lz, 0.4)) this.lights.all.push({ x: lx, z: lz, angle: angle - Math.PI / 2 + Math.PI, scale: 1, colour: 0, light: { along: 33, across: HALF.other.half * 2 + 2, mid: HALF.other.half - 0.2 } });
+          if (this.free(lx, lz, 0.4)) this.lights.all.push({ x: lx, z: lz, angle: angle - Math.PI / 2, scale: 1, colour: 0, light: { along: 33, across: HALF.other.half * 2 + 2, mid: HALF.other.half - 0.2 } });
         }
         left = ((left - len) % 25 + 25) % 25;
       }
@@ -622,11 +622,11 @@ export class StreetLife {
             const lf = angle + (ls > 0 ? -Math.PI / 2 : Math.PI / 2);
             if (lampAt % every === 0) {
               const [lx, lz] = [x - dz * (H + 0.3) * ls, z + dx * (H + 0.3) * ls];
-              if (!this.onRoad(lx, lz, 0.1)) this.lights.all.push({ x: lx, z: lz, angle: lf + Math.PI, scale: 1, colour: 0, light: { along: spacing * every * 1.45, across: H + 4.2, mid: (H + 1.8) / 2 } });
+              if (!this.onRoad(lx, lz, 0.1)) this.lights.all.push({ x: lx, z: lz, angle: lf, scale: 1, colour: 0, light: { along: spacing * every * 1.45, across: H + 4.2, mid: (H + 1.8) / 2 } });
             } else if (lampAt % every === 1) {
               const back = H + size.walk - 0.35;
               const [wx, wz] = [x - dz * back * ls, z + dx * back * ls];
-              if (!this.onRoad(wx, wz, 0.3)) this.walkLights.all.push({ x: wx, z: wz, angle: lf, scale: 1, colour: 0, light: { along: spacing * every * 1.3, across: size.walk + 0.9, mid: -(size.walk - 0.55) / 2 } }); // (its front faces away from the road)
+              if (!this.onRoad(wx, wz, 0.3)) this.walkLights.all.push({ x: wx, z: wz, angle: lf, scale: 1, colour: 0, light: { along: spacing * every * 1.3, across: size.walk + 0.9, mid: (size.walk - 0.55) / 2 } }); // (its front faces the road)
             }
           }
           // Accra's roadsides: trees, then kiosks and umbrella stalls almost everywhere.
@@ -848,8 +848,8 @@ export class StreetLife {
         this.lampLights.forEach((l, k) => {
           const q = near[k];
           if (!q) { l.intensity = 0; return; }
-          const a = Math.PI - q.angle;
-          l.position.set(q.x + Math.sin(a) * 3.4, 8.6, q.z + Math.cos(a) * 3.4);
+          // The lamp's head, 3.4 m out along its arm (towards bearing q.angle).
+          l.position.set(q.x + Math.sin(q.angle) * 3.4, 8.6, q.z - Math.cos(q.angle) * 3.4);
           l.intensity = 60 * this.night;
         });
       }

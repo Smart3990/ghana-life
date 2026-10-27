@@ -372,6 +372,8 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
     - New: lamps on the lanes and service roads (one side, every 25 m) and in pairs on the flyover decks (every 25 m, lighting the deck).
     - Phones: on Light only the nearest 200 road lamps, 110 pavement lamps and 40 deck lamps are drawn, but the light on the ground is drawn for every lamp near you. About 312,000 triangles at night in the test spot.
 
+  - **Fix: street lights faced the pavement** (owner, 27 Oct night): the road lamps' arms pointed away from the road, so their light fell on the pavements and shops and the roads stayed dark (the pavement lamps had the opposite mistake). All lamps now face the road: arms over the lanes, light on the tarmac from the kerb to past the middle; pavement lamps light their walkway. Under the flyovers, lights fixed under the deck now light the road below (it was the darkest place at night).
+
 ## Waiting on the owner
 
 - Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.

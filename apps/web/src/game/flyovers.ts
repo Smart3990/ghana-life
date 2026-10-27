@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { paint, merge } from './vehicles3d';
 import { epicGeometry, epicLampMaterial, lightPoolGeometry, lightPoolMaterial } from './epicKit';
+import { ROAD_DIP } from './epicRoads';
 
 const HIGH = 7; // deck height, metres
 const SLOPE = 0.11; // how steeply the ends come down
@@ -25,7 +26,7 @@ export class Flyovers {
   private banners: THREE.Mesh | null = null;
   private seen = new Set<string>();
   // Street lights on the decks: the pack's road lamp in pairs inside the barriers, every 25 m.
-  private lampSpots: { x: number; y: number; z: number; a: number; across: number }[] = [];
+  private lampSpots: { x: number; y: number; z: number; a: number; across: number; under?: boolean }[] = [];
   private lampGeo: THREE.BufferGeometry | null = null;
   private lamps: THREE.InstancedMesh | null = null;
   private pools: THREE.InstancedMesh | null = null;
@@ -65,9 +66,11 @@ export class Flyovers {
     let n = 0, p = 0;
     for (const sp of near) {
       m.compose(new THREE.Vector3(sp.x, sp.y, sp.z), q.setFromAxisAngle(up, Math.PI - sp.a), one);
-      if (n < this.maxLamps) this.lamps.setMatrixAt(n++, m);
+      if (!sp.under && n < this.maxLamps) this.lamps.setMatrixAt(n++, m);
       if (p < 400) {
-        pool.makeScale(36, 1, sp.across).setPosition(0, 0, sp.across / 2 - 1);
+        // A deck lamp lights from the barrier to past the middle; an under-deck light, all the road below.
+        if (sp.under) pool.makeScale(30, 1, sp.across).setPosition(0, -ROAD_DIP + 0.01, 0);
+        else pool.makeScale(36, 1, sp.across).setPosition(0, 0, sp.across / 2 - 1);
         this.pools.setMatrixAt(p++, m.multiply(pool));
       }
     }
@@ -185,6 +188,14 @@ export class Flyovers {
             const vx = uz * side, vz = -ux * side;
             this.lampSpots.push({ x: x1 + (x2 - x1) * k - uz * o, y: h, z: z1 + (z2 - z1) * k + ux * o, a: Math.atan2(vx, -vz), across: half + 1.2 });
           }
+        }
+        // Under the high parts, lights fixed under the deck light the road below (else it is the
+        // darkest place in the city at night).
+        for (let s = Math.ceil(cum[i] / 22) * 22 + 11; s < cum[i + 1]; s += 22) {
+          if (height(s) < 4.5) continue;
+          const k = (s - cum[i]) / len;
+          const ux = (x2 - x1) / len, uz = (z2 - z1) / len;
+          this.lampSpots.push({ x: x1 + (x2 - x1) * k, y: 0, z: z1 + (z2 - z1) * k, a: Math.atan2(-uz, -ux), across: half * 2 + 6, under: true });
         }
         // Pillars under the high parts.
         for (let s = Math.ceil(cum[i] / PILLAR_EVERY) * PILLAR_EVERY; s < cum[i + 1]; s += PILLAR_EVERY) {
