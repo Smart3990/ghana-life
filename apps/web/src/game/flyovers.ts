@@ -1,6 +1,6 @@
 // Flyovers: the map marks some roads as bridges (at Circle, the Kwame Nkrumah Interchange's ring
 // road decks and slip roads). Here they are built in 3D: a concrete deck about 7 m up, with low
-// walls along both edges, standing on round pillars, sloping down to the ground where a bridge ends
+// walls along both edges, standing on blade piers, sloping down to the ground where a bridge ends
 // without joining another one. Nothing drives on them yet; they are scenery that tells you where you are.
 import * as THREE from 'three';
 import { paint, merge } from './vehicles3d';
@@ -11,6 +11,8 @@ const PILLAR_EVERY = 24;
 const LOW = 4.5; // below this a deck is a solid ramp, not a bridge you can pass under
 
 type Line = { pts: Float32Array; half: number; heights?: Float32Array };
+// The Epic City pack's bridge colours (measured from its bridge-mainroad piece).
+const PACK = { tarmac: '#3f3c3c', concrete: '#a7a19e', barrier: '#eeeeec', yellow: '#fdcf24', white: '#dbdbda' };
 
 export class Flyovers {
   readonly group = new THREE.Group();
@@ -125,8 +127,11 @@ export class Flyovers {
           if (h < 3) continue;
           const px = x1 + (x2 - x1) * k;
           const pz = z1 + (z2 - z1) * k;
-          const pillar = new THREE.CylinderGeometry(0.75, 0.85, h - 0.9, 12).translate(px, (h - 0.9) / 2, pz);
-          parts.push(paint(pillar, '#b9b6ae'));
+          // A flat blade pier across the deck, as the Epic City pack's bridges stand on.
+          const pier = new THREE.BoxGeometry(Math.max(2, half * 2 - 3), h - 0.9, 1.3)
+            .rotateY(-Math.atan2(z2 - z1, x2 - x1) + Math.PI / 2)
+            .translate(px, (h - 0.9) / 2, pz);
+          parts.push(paint(pier, PACK.concrete));
         }
       }
     }
@@ -196,7 +201,7 @@ function rampWalls(x1: number, z1: number, h1: number, x2: number, z2: number, h
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.computeVertexNormals();
-  return paint(g, '#a9a59c');
+  return paint(g, PACK.concrete);
 }
 
 /** The deck height at a point (0 if none). With `edge`, only on the deck itself (its width plus edge metres). */
@@ -237,17 +242,24 @@ function deckPiece(x1: number, z1: number, h1: number, x2: number, z2: number, h
   };
   const P = (s: number, side: number, y: number) => [x1 + dx * s + ax * side, (s ? h2 : h1) + y, z1 + dz * s + az * side];
   const parts: THREE.BufferGeometry[] = [
-    quad([P(0, -half, 0), P(1, -half, 0), P(1, half, 0), P(0, half, 0)], '#4d4b47'), // tarmac (seen from above)
-    quad([P(0, half, -1), P(1, half, -1), P(1, -half, -1), P(0, -half, -1)], '#a9a59c'), // underside
-    quad([P(0, half, 0), P(1, half, 0), P(1, half, -1), P(0, half, -1)], '#c4c0b6'), // edges
-    quad([P(0, -half, -1), P(1, -half, -1), P(1, -half, 0), P(0, -half, 0)], '#c4c0b6'),
+    quad([P(0, -half, 0), P(1, -half, 0), P(1, half, 0), P(0, half, 0)], PACK.tarmac), // tarmac (seen from above)
+    quad([P(0, half, -1), P(1, half, -1), P(1, -half, -1), P(0, -half, -1)], PACK.concrete), // underside
+    quad([P(0, half, 0), P(1, half, 0), P(1, half, -1), P(0, half, -1)], PACK.concrete), // edges
+    quad([P(0, -half, -1), P(1, -half, -1), P(1, -half, 0), P(0, -half, 0)], PACK.concrete),
   ];
-  // Low concrete walls on both edges (both faces, so they show from the road and from the deck).
+  // The pack's lines on the deck: an unbroken yellow centre line and white lane dashes (1.67 m every 5 m).
+  const across = (s0: number, s1: number, a: number, b: number, colour: string) => {
+    const Q = (s: number, side: number) => [x1 + dx * s + ax * side, h1 + (h2 - h1) * s + 0.02, z1 + dz * s + az * side];
+    parts.push(quad([Q(s0, a), Q(s1, a), Q(s1, b), Q(s0, b)], colour));
+  };
+  across(0, 1, -0.15, 0.15, PACK.yellow);
+  for (let s = 1.66; s + 1.67 <= len; s += 5) for (const o of [(half - 0.6) / 2, -(half - 0.6) / 2]) across(s / len, (s + 1.67) / len, o - 0.1, o + 0.1, PACK.white);
+  // White barriers on both edges (both faces, so they show from the road and from the deck).
   for (const side of [half, -half]) {
     const inner = side - Math.sign(side) * 0.3;
-    parts.push(quad([P(0, side, 0), P(1, side, 0), P(1, side, 0.9), P(0, side, 0.9)], '#d2cec4'));
-    parts.push(quad([P(0, inner, 0.9), P(1, inner, 0.9), P(1, inner, 0), P(0, inner, 0)], '#cfcbc1'));
-    parts.push(quad([P(0, side, 0.9), P(1, side, 0.9), P(1, inner, 0.9), P(0, inner, 0.9)], '#dedad0'));
+    parts.push(quad([P(0, side, 0), P(1, side, 0), P(1, side, 1.1), P(0, side, 1.1)], PACK.barrier));
+    parts.push(quad([P(0, inner, 1.1), P(1, inner, 1.1), P(1, inner, 0), P(0, inner, 0)], PACK.barrier));
+    parts.push(quad([P(0, side, 1.1), P(1, side, 1.1), P(1, inner, 1.1), P(0, inner, 1.1)], PACK.barrier));
   }
   return merge(parts);
 }

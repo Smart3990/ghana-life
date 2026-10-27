@@ -999,6 +999,9 @@ export class StreetLife {
   /** Street-name plates (drawn by roadSigns.ts). */
   namePlates: { x: number; z: number; angle: number; name: string }[] = [];
 
+  /** How far the ground dips here (the sunk tarmac of the pack's roads); walkers step down onto it. */
+  groundDip: ((x: number, z: number) => number) | null = null;
+
   /** Is this point on a road? */
   roadAt(x: number, z: number, margin = 0) {
     return this.onRoad(x, z, margin);
@@ -1190,26 +1193,27 @@ export class StreetLife {
         continue;
       }
       this.q.setFromAxisAngle(this.up, Math.PI - heading);
-      this.m.compose(this.p.set(px, 0, pz), this.q, this.sc.setScalar(a.look.scale));
+      const gy = this.groundDip ? -this.groundDip(px, pz) : 0;
+      this.m.compose(this.p.set(px, gy, pz), this.q, this.sc.setScalar(a.look.scale));
       batch.mesh.setMatrixAt(a.slot, this.m);
       if (Math.abs(px - x) < 25 && Math.abs(pz - z) < 25) close++;
       // School children always carry a bag on their back; some grown-ups too.
       const bag = !a.look.load && (a.kind === 'pupil' || (a.kind === 'child' && hash(i, 31) < 0.6) || ((a.kind === 'man' || a.kind === 'woman') && hash(i, 31) < 0.22));
       if (bag) {
         const bob = a.still ? 0 : Math.abs(Math.sin(t * Math.PI * 2 * (a.speed / 1.35))) * 0.02;
-        this.m.compose(this.p.set(px, bob, pz), this.q, this.sc.setScalar(a.look.scale * (a.look.body === 'female' ? 0.96 : 1)));
+        this.m.compose(this.p.set(px, bob + gy, pz), this.q, this.sc.setScalar(a.look.scale * (a.look.body === 'female' ? 0.96 : 1)));
         this.bags.setMatrixAt(bagCount, this.m);
         this.bags.setColorAt(bagCount++, this.colour.setHex(BAG_COLOURS[Math.floor(hash(i, 32) * BAG_COLOURS.length)]));
       }
       if (a.look.load) {
         const top = (a.look.body === 'female' ? 1.74 : 1.8) * a.look.scale;
         const bob = a.still ? 0 : Math.abs(Math.sin(t * Math.PI * 2 * (a.speed / 1.35))) * 0.025;
-        this.m.compose(this.p.set(px, top + bob, pz), this.q, this.sc.setScalar(1));
+        this.m.compose(this.p.set(px, top + bob + gy, pz), this.q, this.sc.setScalar(1));
         this.loads[a.look.load].setMatrixAt(loadCount[a.look.load]++, this.m);
       }
       if (shadows < this.shadowBatch.instanceMatrix.count) {
         const r = 0.75 * a.look.scale;
-        this.m.compose(this.p.set(px, 0.03, pz), this.q, this.sc.set(r, 1, r));
+        this.m.compose(this.p.set(px, 0.03 + gy, pz), this.q, this.sc.set(r, 1, r));
         this.shadowBatch.setMatrixAt(shadows++, this.m);
       }
     }

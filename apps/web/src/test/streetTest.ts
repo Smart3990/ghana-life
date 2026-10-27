@@ -17,6 +17,7 @@ import { StreetLife } from '../game/streetLife';
 import type { Nearby } from '../game/streetScenes';
 import { Signals, lightFor } from '../game/signals';
 import { Flyovers } from '../game/flyovers';
+import { EpicRoads } from '../game/epicRoads';
 import { BigScreen } from '../game/bigScreen';
 import { RoadSigns } from '../game/roadSigns';
 import { planStation } from '../game/trotroStation';
@@ -787,7 +788,7 @@ function step(player: Player, dt: number, t: number) {
     player.shadow.visible = false; // the bike's shadow is enough
   } else {
     if (player.root.parent !== scene) scene.add(player.root);
-    player.root.position.set(state.x, state.y, state.z);
+    player.root.position.set(state.x, state.y - (state.y > 0.2 ? 0 : groundDip(state.x, state.z)), state.z);
     player.root.visible = !story.hidePlayer;
     player.root.rotation.set(0, Math.PI - state.heading, 0);
     player.shadow.visible = !PRESET.shadows;
@@ -933,6 +934,7 @@ function step(player: Player, dt: number, t: number) {
   if (life) signals.junctions = life.junctions;
   signals.update(state.x, state.z, Date.now() / 1000);
   flyovers.update();
+  epicRoads.update(state.x, state.z, tier === 'light' ? 3 : 5);
   if (flyovers.version !== flyoverVersion) {
     flyoverVersion = flyovers.version;
     streetTraffic?.recheckRoutes();
@@ -2927,7 +2929,7 @@ async function rideFilm(way: Way, uCar: NonNullable<typeof streetTraffic>['story
     const q = way.at(d);
     buildings.loadAround(toLngLat(q.x, q.z), 160); // (already loading since Uncle was called)
   }
-  await waitUntil(() => !buildings.loading, 8);
+  await waitUntil(() => !(buildings.loading || epicRoads.loading), 8);
   const added: string[] = [];
   const SPEED = 15;
   // (The first 400 m of the way go up over the Kwame Nkrumah Interchange flyover: the ride starts just
@@ -3020,7 +3022,7 @@ async function homeAtNima(uCar: NonNullable<typeof streetTraffic>['story'][numbe
   // road from a map square that has not loaded yet.
   buildings.loadAround(toLngLat(nima.x, nima.z), 250);
   await waitUntil(() => !!life?.roadDirNear(nima.x, nima.z, 80, 2), 25);
-  await waitUntil(() => !buildings.loading, 25);
+  await waitUntil(() => !(buildings.loading || epicRoads.loading), 25);
   await pause(0.5);
   const home = placeCompound(nima.x, nima.z);
   storyStep.home = true; // Nima opens on the map
@@ -3520,6 +3522,8 @@ const buildings = new StreetBuildings(
   { light: 220, standard: 320, ultra: 450 }[tier],
   (roads, roofs, pois) => {
     life?.add(roads, roofs);
+    // The roads themselves, in the Epic City pack's design (tarmac, kerbs, pavements, lines).
+    epicRoads.add(roads);
     // The real places from the map: filling stations, bus stops, banks, churches, schools...
     places.add(pois, placeFor);
     // Bridges become real flyovers (the Kwame Nkrumah Interchange at Circle).
@@ -3550,6 +3554,7 @@ life = new StreetLife((x, z, m) => buildings.blocked(x, z, m), { ...{
   ultra: { radiusM: 280, people: 650, props: 2000, scenes: 150 },
 }[tier], smoothCrowd: PRESET.smoothCrowd });
 scene.add(life.group);
+life.groundDip = (x, z) => epicRoads.dipAt(x, z); // walkers step down onto the tarmac
 // The sound of Accra (starts on the first tap), with a button to switch it off.
 const streetSound = new StreetSound();
 /** Where trotro mates call from: trotros passing, the lorry station, bus stops (ids: <0 for places). */
@@ -3797,6 +3802,10 @@ let screenCheck = 0;
 // Flyovers built from the map's bridges.
 const flyovers = new Flyovers();
 scene.add(flyovers.group);
+const epicRoads = new EpicRoads();
+epicRoads.showRadius = { light: 260, standard: 380, ultra: 550 }[tier];
+scene.add(epicRoads.group);
+const groundDip = (x: number, z: number) => epicRoads.dipAt(x, z);
 
 // Traffic lights and zebra crossings at the big junctions (vehicles stop on red).
 const signals = new Signals();
@@ -3862,12 +3871,13 @@ async function start() {
     streetTraffic = new StreetTraffic(traffic, (lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT], limit, { light: 120, standard: 180, ultra: 230 }[tier]);
     scene.add(streetTraffic.group);
     streetTraffic.deckHeight = (x, z) => flyovers.heightAt(x, z);
+    streetTraffic.groundDip = groundDip;
     streetTraffic.lowRamp = (x, z) => flyovers.lowRampAt(x, z);
     streetTraffic.signals = signals;
     if (life) life.vehicleAt = vehicleAt;
     streetTraffic.onBlocked = onVehicleBlocked;
     void loadDriver();
-    if (debug) Object.assign(window, { __street: { state, sky, look, life, story, thief, signals, lightFor, flyovers, pinch, bigScreen, roadSigns, getStation: () => station, places, fuelWhy, bag, driver, shove, uncle, compound, props, camera3d, adCard, frameShot, placeCompound, buildings, nimaRoute, rideSign, RIDE_SIGNS, map, placeCarTag, fullMap, phone, camAvoid, camAt, viewBlocked, heightAtView, solidAt, traffic: streetTraffic, driveIn, parkingNear, pullIn, pullOut, roadLineNear, compoundAt, music, streetSound, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
+    if (debug) Object.assign(window, { __street: { state, sky, look, life, story, thief, signals, lightFor, flyovers, pinch, bigScreen, roadSigns, getStation: () => station, places, fuelWhy, bag, driver, shove, uncle, compound, props, camera3d, adCard, frameShot, placeCompound, buildings, nimaRoute, rideSign, RIDE_SIGNS, map, placeCarTag, fullMap, phone, camAvoid, camAt, viewBlocked, heightAtView, solidAt, traffic: streetTraffic, driveIn, parkingNear, pullIn, pullOut, roadLineNear, compoundAt, music, streetSound, epicRoads, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
   }
 
   document.getElementById('loading')!.remove();

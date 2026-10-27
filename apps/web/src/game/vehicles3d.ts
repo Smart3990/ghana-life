@@ -695,6 +695,8 @@ export class StreetTraffic {
   density = 1;
   /** The flyover deck's height at a point (set by the street test). */
   deckHeight: ((x: number, z: number) => number) | null = null;
+  /** How far the ground dips here (the sunk tarmac of the pack's roads, epicRoads.ts); 0 if none. */
+  groundDip: ((x: number, z: number) => number) | null = null;
   /** Called when a driver hoots at the player (x, z in metres). */
   onHoot: ((x: number, z: number) => void) | null = null;
   /** Called every frame for each vehicle stopped because the player stands in its way. */
@@ -975,12 +977,13 @@ export class StreetTraffic {
         : p.v.kind;
       const [x, z] = this.toLocal(p.lon, p.lat);
       // On a flyover: at the deck's height.
-      const ground = p.bridge && this.deckHeight ? this.deckHeight(x, z) : 0;
+      // Off it: on the tarmac, which sits a little below the pavement.
+      const ground = p.bridge && this.deckHeight ? this.deckHeight(x, z) : -(this.groundDip?.(x, z) ?? 0);
       draws.push({ key, id: p.v.id, x, z, ground, heading: p.heading, colour: p.v.colour, bounce: true });
     }
-    for (const q of this.parked) draws.push({ ...q, ground: 0, bounce: false });
+    for (const q of this.parked) draws.push({ ...q, ground: -(this.groundDip?.(q.x, q.z) ?? 0), bounce: false });
     // The story's own vehicles first, so they are always drawn even when a batch is full.
-    for (const q of this.story) if (q.shown) draws.unshift({ key: q.key, id: q.id, x: q.x, z: q.z, heading: q.heading, colour: q.colour, ground: 0, bounce: q.moving });
+    for (const q of this.story) if (q.shown) draws.unshift({ key: q.key, id: q.id, x: q.x, z: q.z, heading: q.heading, colour: q.colour, ground: -(this.groundDip?.(q.x, q.z) ?? 0), bounce: q.moving });
     for (const d of draws) {
       const b = this.batches[d.key];
       if (counts[d.key] >= b.body.instanceMatrix.count) continue;

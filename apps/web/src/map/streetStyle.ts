@@ -13,10 +13,11 @@ export const metres = (m: number): ExpressionSpecification => ['interpolate', ['
 
 // Road widths (metres) by kind, as found around Accra.
 const ROAD: Record<string, { width: number; walk: number; colour: string }> = {
-  highway: { width: 14, walk: 2.5, colour: '#4f4e4b' },
-  major_road: { width: 10, walk: 2.5, colour: '#55534f' },
-  minor_road: { width: 6.5, walk: 1.8, colour: '#5f5d58' },
-  other: { width: 4.5, walk: 0, colour: '#8b8477' }, // lanes and service roads: often untarred
+  // In the Low Poly Epic City pack's colours, so the far roads match the 3D ones near you (epicRoads.ts).
+  highway: { width: 14, walk: 2.5, colour: '#3f3c3c' },
+  major_road: { width: 10, walk: 2.5, colour: '#3f3c3c' },
+  minor_road: { width: 6.5, walk: 1.8, colour: '#3f3c3c' },
+  other: { width: 4.5, walk: 0, colour: '#4a4646' }, // lanes and service roads
   path: { width: 1.8, walk: 0, colour: '#a99f8c' },
 };
 const kindOf = (id: string) =>
@@ -55,7 +56,7 @@ export function applyStreetStyle(map: MapLibreMap) {
     if (/casing/.test(l.id)) {
       map.setPaintProperty(l.id, 'line-gap-width', metres(road.width));
       map.setPaintProperty(l.id, 'line-width', metres(0.25));
-      map.setPaintProperty(l.id, 'line-color', '#b8b1a3');
+      map.setPaintProperty(l.id, 'line-color', '#a7a19e');
     } else {
       map.setPaintProperty(l.id, 'line-width', metres(road.width));
       map.setPaintProperty(l.id, 'line-color', road.colour);
@@ -76,7 +77,7 @@ export function applyStreetStyle(map: MapLibreMap) {
         'source-layer': 'roads',
         filter,
         layout: { 'line-cap': 'butt', 'line-join': 'round' },
-        paint: { 'line-color': '#b9b2a4', 'line-width': metres(road.width + road.walk * 2 + 1.2) },
+        paint: { 'line-color': '#a7a19e', 'line-width': metres(road.width + road.walk * 2 + 1.2) },
       },
       firstRoad,
     );
@@ -88,7 +89,7 @@ export function applyStreetStyle(map: MapLibreMap) {
         'source-layer': 'roads',
         filter,
         layout: { 'line-cap': 'butt', 'line-join': 'round' },
-        paint: { 'line-color': '#4a463f', 'line-width': metres(road.width + 1.1) },
+        paint: { 'line-color': '#3f3c3c', 'line-width': metres(road.width + 1.1) },
       },
       firstRoad,
     );
@@ -99,7 +100,7 @@ export function applyStreetStyle(map: MapLibreMap) {
     source: 'accra',
     'source-layer': 'roads',
     filter: ['all', kinds(['highway', 'major_road']), ['!=', ['get', 'oneway'], 'yes']] as FilterSpecification,
-    paint: { 'line-color': '#e6e1d3', 'line-width': metres(0.15), 'line-dasharray': [10, 14] },
+    paint: { 'line-color': '#fdcf24', 'line-width': metres(0.3) },
   });
 
   // 4. Dusty ground.

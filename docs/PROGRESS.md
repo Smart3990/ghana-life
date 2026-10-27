@@ -338,7 +338,17 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
     - The catalogue page `/catalogue`: every model's picture by group, search, tap to spin it in 3D, Day and Night buttons (at night the windows, lamps and signs glow with the pack's own night glow), and the people walk, run and stand.
     - Found on the way: the pack's people all have light skin, so in step 5 they get a range of Ghanaian skin tones (the licence lets us change the models); the pack has no day and night system of its own (we build it in step 3); the pack has only about ten everyday road vehicles (taxi, car, bus, school bus, van, police, ambulance, trucks), so the trotro and okada come from the van and old motorbike, or our own, in step 4.
     - Licence recorded in `public/models/LICENSES.md`; the repository is now private.
-    - **Done when:** the owner opens `/street-test`'s sister page `/catalogue` on the test site on a phone and sees every model, spins a few, and sees the night glow.
+    - **Done when:** the owner opens `/catalogue` on the test site on a phone and sees every model, spins a few, and sees the night glow.
+
+  - **Epic City pack, step 2: the pack's road design on every real Accra road** (owner, 27 Oct):
+    - The pack's road pieces were measured (`src/game/epicKit.ts` keeps the colours): dark tarmac sunk 15 cm below a grey pavement with a kerb face between; main roads and highways with the pack's unbroken yellow centre line and white lane dashes (1.67 m, one every 5 m), stopping short of junctions; side roads without lines, as in the pack. Accra's real widths are kept (main road 11 m of tarmac, side road 7.6 m).
+    - `src/game/epicRoads.ts` lays this along every real road from the map, bends included. At every junction the kerb turns each corner in a smooth curve and the tarmac fills the middle; where roads cross without the map marking a junction, pavements and lines stop at the other road. Lanes and service roads are flat tarmac, with the pavement of the road they join running across their mouth like a driveway. Roundabouts get an island: grass when small, paved when big (Circle's, full of traders).
+    - Flyovers in the pack's bridge design (`flyovers.ts`): dark tarmac deck with the same lines, white barriers, grey concrete, flat blade piers.
+    - Zebra crossings in the pack's white, on the tarmac, and never two on top of each other. The flat map roads far away are in the same colours, so the distance matches.
+    - Vehicles, walkers crossing and the player step down onto the sunk tarmac (and back up onto the pavement).
+    - Phones: the roads are built in 120 m blocks and only the blocks near you are drawn (Light 260 m, Standard 380 m, Ultra 550 m); curvy roads keep only the points they need; each map square is built a little each frame (3 ms on Light), nearest first, so loading never freezes the game. In the test spot the whole scene went from about 305,000 to 264,000 triangles (the roads near you are about 7,600).
+    - The pack's own square road pieces are not placed as they are: they only fit a straight grid with the pack's widths, and our roads are built from their exact shapes and colours instead, so they look the same and follow Accra.
+    - **Done when:** on the test site, every street round Circle has the pack's tarmac, kerbs, pavements and lines, the flyovers look like the pack's bridges, and the game stays as smooth as before on the cheap Android.
 
 ## Waiting on the owner
 

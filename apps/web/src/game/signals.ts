@@ -4,6 +4,7 @@
 // crossing road has red, with amber in between. Vehicles stop at the line on red and amber
 // (vehicles3d.ts asks shouldStop), so people can cross on the zebra.
 import * as THREE from 'three';
+import { ROAD_DIP } from './epicRoads';
 import { box, merge, paint } from './vehicles3d';
 
 export type Arm = { angle: number; half: number }; // angle: direction from the centre out along the road (clockwise from north)
@@ -59,7 +60,7 @@ export class Signals {
     };
     this.stripes = new THREE.InstancedMesh(
       new THREE.PlaneGeometry(0.5, 3).rotateX(-Math.PI / 2),
-      new THREE.MeshStandardMaterial({ color: 0xf2f0e8, roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -2 }),
+      new THREE.MeshStandardMaterial({ color: 0xdbdbda, roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -2 }), // the Epic City pack's white
       maxArms * 16,
     );
     for (const mesh of [this.poles, this.stripes, ...Object.values(this.lamps)]) {
@@ -113,6 +114,7 @@ export class Signals {
     this.near = this.junctions.filter((j) => Math.hypot(j.x - x, j.z - z) < 170);
     let arms = 0;
     let stripes = 0;
+    const zebras: [number, number][] = []; // where zebras are already (two junction points close together share one)
     for (const j of this.near) {
       for (const arm of j.arms) {
         if (arms >= this.maxArms) break;
@@ -135,11 +137,14 @@ export class Signals {
         }
         // Zebra: only across the main road (its two arms), white bars side by side across its width.
         const zc = zebraAt(j);
-        const onMain = Math.abs(Math.cos(arm.angle - j.axis)) > 0.7;
+        let onMain = Math.abs(Math.cos(arm.angle - j.axis)) > 0.7;
+        const zx = j.x + ox * zc, zz = j.z + oz * zc;
+        if (onMain && zebras.some(([x2, z2]) => Math.hypot(x2 - zx, z2 - zz) < arm.half * 2)) onMain = false;
+        if (onMain) zebras.push([zx, zz]);
         const n = Math.min(16, Math.floor((arm.half * 2) / 1.0));
         for (let b = 0; onMain && b < n && stripes < this.stripes.instanceMatrix.count; b++) {
           const across = -arm.half + 0.5 + b * ((arm.half * 2 - 1) / Math.max(1, n - 1));
-          this.m.compose(this.p.set(j.x + ox * zc + rx * across, 0.025, j.z + oz * zc + rz * across), this.q, this.s.set(1, 1, 1));
+          this.m.compose(this.p.set(j.x + ox * zc + rx * across, -ROAD_DIP + 0.012, j.z + oz * zc + rz * across), this.q, this.s.set(1, 1, 1)); // on the sunk tarmac
           this.stripes.setMatrixAt(stripes++, this.m);
         }
         arms++;
