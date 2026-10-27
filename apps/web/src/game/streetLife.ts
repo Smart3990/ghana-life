@@ -6,7 +6,7 @@
 // People are drawn in big batches animated by the graphics card (crowd.ts).
 import type { Arm, Junction } from './signals';
 import * as THREE from 'three';
-import { epicGeometry, epicMaterial } from './epicKit';
+import { epicGeometry, epicGlowMaps, epicMaterial } from './epicKit';
 import { slidingAdMaterial, twoSidedFace } from './adScreens';
 import { AD_COUNT, adSheet } from './adPosters';
 import { box, merge, paint, shadowTexture } from './vehicles3d';
@@ -303,23 +303,36 @@ export class StreetLife {
     this.trees = make(neem(), true);
     this.palms = make(palm(), true);
     this.lights = make(streetLight(), false);
-    // The pack's road lamp in place of ours once it has loaded (its arm turned to reach over the road).
+    this.walkLights = make(streetLight(), false);
+    // The pack's road lamp in place of ours once it has loaded (its arm turned to reach over the road),
+    // and its city lamp on the pavements. They glow yellow at night, like sodium street lights.
+    this.lampMat = epicMaterial().clone();
     void epicGeometry('props/lamp-road.glb', -Math.PI / 2).then((g) => {
       this.lights.mesh.geometry = g;
-      this.lights.mesh.material = epicMaterial();
+      this.lights.mesh.material = this.lampMat;
     });
+    void epicGeometry('props/lamp-city.glb').then((g) => {
+      this.walkLights.mesh.geometry = g;
+      this.walkLights.mesh.material = epicMaterial();
+    });
+    // The pavement lamps' glass globes, lit yellow at night.
+    this.globes = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.36, 0).translate(0, 6.35, 0), new THREE.MeshBasicMaterial({ color: 0xffb54d, toneMapped: false }), opts.props);
+    this.globes.count = 0;
+    this.globes.frustumCulled = false;
+    this.globes.visible = false;
+    this.group.add(this.globes);
     // At night: a pool of light on the ground under every lamp near you, and real lights on the few nearest.
     this.pools = new THREE.InstancedMesh(
       new THREE.CircleGeometry(6.5, 20).rotateX(-Math.PI / 2).translate(0, 0.03, 3.4),
-      new THREE.MeshBasicMaterial({ map: poolTexture(), color: 0xffd9a0, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 }),
-      opts.props,
+      new THREE.MeshBasicMaterial({ map: poolTexture(), color: 0xffa83c, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 }),
+      opts.props * 2,
     );
     this.pools.count = 0;
     this.pools.frustumCulled = false;
     this.pools.visible = false;
     this.group.add(this.pools);
     for (let i = 0; i < (opts.people < 150 ? 0 : opts.people < 500 ? 4 : 8); i++) {
-      const l = new THREE.PointLight(0xffdcaa, 0, 22, 1.6);
+      const l = new THREE.PointLight(0xffb45a, 0, 22, 1.6);
       this.lampLights.push(l);
       this.group.add(l);
     }
@@ -590,13 +603,21 @@ export class StreetLife {
               }
             }
           }
-          // Street lights all round the city, at the kerb (the Epic City pack's road lamp): on both
-          // sides of main roads about every 30 m, on one side of side roads about every 36 m.
+          // Street lights all round the city, in pairs facing each other across the road (the Epic City
+          // pack's road lamp at the kerb, its arm over the road): every 20 m on main roads, every 27 m on
+          // side roads. Half way between the pairs, a pavement lamp on each side lights the walkway.
           const lampAt = Math.round(s / spacing);
-          for (const ls of road.kind === 'minor_road' ? (lampAt % 4 === 0 ? [1] : []) : lampAt % 3 === 0 ? [1, -1] : []) {
-            const [lx, lz] = [x - dz * (size.half + GUTTER + 0.3) * ls, z + dx * (size.half + GUTTER + 0.3) * ls];
+          const every = road.kind === 'minor_road' ? 3 : 2;
+          for (const ls of [1, -1]) {
             const lf = angle + (ls > 0 ? -Math.PI / 2 : Math.PI / 2);
-            if (!this.onRoad(lx, lz, 0.1)) this.lights.all.push({ x: lx, z: lz, angle: lf + Math.PI, scale: 1, colour: 0 });
+            if (lampAt % every === 0) {
+              const [lx, lz] = [x - dz * (size.half + GUTTER + 0.3) * ls, z + dx * (size.half + GUTTER + 0.3) * ls];
+              if (!this.onRoad(lx, lz, 0.1)) this.lights.all.push({ x: lx, z: lz, angle: lf + Math.PI, scale: 1, colour: 0 });
+            } else if (lampAt % every === 1) {
+              const back = size.half + GUTTER + size.walk - 0.35;
+              const [wx, wz] = [x - dz * back * ls, z + dx * back * ls];
+              if (!this.onRoad(wx, wz, 0.3)) this.walkLights.all.push({ x: wx, z: wz, angle: lf, scale: 1, colour: 0 });
+            }
           }
           // Accra's roadsides: trees, then kiosks and umbrella stalls almost everywhere.
           // Accra's roadsides, on both sides: hardly a gap. Kiosks in rows (shops behind shops),
@@ -786,13 +807,27 @@ export class StreetLife {
       b.mesh.count = n;
       b.mesh.instanceMatrix.needsUpdate = true;
       if (b.mesh.instanceColor) b.mesh.instanceColor.needsUpdate = true;
-      if (b === this.lights && this.night > 0.02) {
-        // The pools of light go where the lamps are drawn (the same matrices).
+      if (b === this.walkLights && this.night > 0.02) {
+        // Pavement lamps: a smaller pool on the walkway under each, and the glowing globe.
         for (let k = 0; k < n; k++) {
           b.mesh.getMatrixAt(k, this.m);
-          this.pools.setMatrixAt(k, this.m);
+          this.globes.setMatrixAt(k, this.m);
+          this.m.multiply(this.poolSmall);
+          this.pools.setMatrixAt(this.poolCount++, this.m);
         }
-        this.pools.count = n;
+        this.globes.count = n;
+        this.globes.instanceMatrix.needsUpdate = true;
+        this.pools.count = this.poolCount;
+        this.pools.instanceMatrix.needsUpdate = true;
+      }
+      if (b === this.lights && this.night > 0.02) {
+        // The pools of light go where the lamps are drawn (the same matrices).
+        this.poolCount = 0;
+        for (let k = 0; k < n; k++) {
+          b.mesh.getMatrixAt(k, this.m);
+          this.pools.setMatrixAt(this.poolCount++, this.m);
+        }
+        this.pools.count = this.poolCount;
         this.pools.instanceMatrix.needsUpdate = true;
         // Real light from the few lamps nearest you (warm white, on the road under the lamp head).
         const near = list.filter((q) => (q.x - x) ** 2 + (q.z - z) ** 2 < 60 * 60).sort((a, c) => (a.x - x) ** 2 + (a.z - z) ** 2 - ((c.x - x) ** 2 + (c.z - z) ** 2));
@@ -1019,7 +1054,7 @@ export class StreetLife {
   clearArea(x: number, z: number, r: number) {
     this.keepClear.push({ x, z, r }); // (and nothing new is put there when more streets arrive)
     const keep = (p: Spot) => Math.hypot(p.x - x, p.z - z) > r;
-    for (const b of this.batches) if (b !== this.poles && b !== this.lights) b.all = b.all.filter(keep);
+    for (const b of this.batches) if (b !== this.poles && b !== this.lights && b !== this.walkLights) b.all = b.all.filter(keep);
     this.gatherings = this.gatherings.filter((g) => Math.hypot(g.x - x, g.z - z) > r);
     this.refreshSoon();
   }
@@ -1058,13 +1093,29 @@ export class StreetLife {
   namePlates: { x: number; z: number; angle: number; name: string }[] = [];
 
   private pools: THREE.InstancedMesh;
+  private walkLights: Batch;
+  private globes: THREE.InstancedMesh;
+  private lampMat: THREE.MeshStandardMaterial;
   private lampLights: THREE.PointLight[] = [];
+  private poolCount = 0;
+  private lampsLit = false;
+  // A pavement lamp's pool: smaller, right under the lamp (the road lamp's pool is 3.4 m out over the road).
+  private poolSmall = new THREE.Matrix4().makeTranslation(0, 0, -3.4 * 0.62).multiply(new THREE.Matrix4().makeScale(0.62, 1, 0.62));
   private night = 0;
   /** 0 by day, 1 at night: lamp pools on the ground and the nearest lamps' real light. */
   setNight(n: number) {
     this.night = n;
-    this.pools.visible = n > 0.02;
+    this.pools.visible = this.globes.visible = n > 0.02;
     (this.pools.material as THREE.MeshBasicMaterial).opacity = 0.9 * n;
+    // Road lamp heads: the pack's night glow, tinted sodium yellow.
+    if ((n > 0.5) !== this.lampsLit) {
+      this.lampsLit = n > 0.5;
+      const glow = epicGlowMaps();
+      this.lampMat.emissiveMap = this.lampsLit ? glow.night : glow.day;
+      if (this.lampsLit) this.lampMat.emissive.setRGB(1.5, 0.9, 0.32);
+      else this.lampMat.emissive.setRGB(0.58, 0.58, 0.58);
+      this.lampMat.needsUpdate = true;
+    }
     for (const l of this.lampLights) l.intensity = 0;
   }
 

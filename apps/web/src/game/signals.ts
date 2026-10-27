@@ -5,6 +5,7 @@
 // (vehicles3d.ts asks shouldStop), so people can cross on the zebra.
 import * as THREE from 'three';
 import { ROAD_DIP } from './epicRoads';
+import { epicGeometry, epicMaterial } from './epicKit';
 import { box, merge, paint } from './vehicles3d';
 
 export type Arm = { angle: number; half: number }; // angle: direction from the centre out along the road (clockwise from north)
@@ -42,6 +43,9 @@ export class Signals {
   private up = new THREE.Vector3(0, 1, 0);
   private c = new THREE.Color();
   private lastRefresh = { x: Infinity, z: Infinity, n: -1 };
+  private packPole = false;
+  private local = new THREE.Matrix4();
+  private pole = new THREE.Matrix4();
 
   constructor(private maxArms = 60) {
     // A dark pole with the light box on top, facing the traffic that comes towards it (+z).
@@ -51,12 +55,20 @@ export class Signals {
       paint(box(0.5, 1.1, 0.03, 0, 3.5, -0.13), '#f2c230'), // the yellow back plate
     ]);
     this.poles = new THREE.InstancedMesh(pole, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6 }), maxArms);
-    const lamp = new THREE.CircleGeometry(0.11, 12);
+    // The Epic City pack's traffic light in place of ours once it has loaded: a tall pole with an arm
+    // over the road and a signal head above the lanes, and a second, low head for people at the kerb.
+    void epicGeometry('props/traffic-lights.glb').then((g) => {
+      this.poles.geometry = g;
+      this.poles.material = epicMaterial();
+      this.packPole = true;
+      this.lastRefresh = { x: Infinity, z: Infinity, n: -1 };
+    });
+    const lamp = new THREE.CircleGeometry(0.13, 12);
     const lampMat = () => new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
     this.lamps = {
-      red: new THREE.InstancedMesh(lamp, lampMat(), maxArms),
-      amber: new THREE.InstancedMesh(lamp, lampMat(), maxArms),
-      green: new THREE.InstancedMesh(lamp, lampMat(), maxArms),
+      red: new THREE.InstancedMesh(lamp, lampMat(), maxArms * 2),
+      amber: new THREE.InstancedMesh(lamp, lampMat(), maxArms * 2),
+      green: new THREE.InstancedMesh(lamp, lampMat(), maxArms * 2),
     };
     this.stripes = new THREE.InstancedMesh(
       new THREE.PlaneGeometry(0.5, 3).rotateX(-Math.PI / 2),
@@ -102,7 +114,11 @@ export class Signals {
         if (i >= this.maxArms) break;
         // The light facing traffic that comes in along this arm (driving towards the centre).
         const light = lightFor(j, arm.angle + Math.PI, t);
-        for (const k of ['red', 'amber', 'green'] as const) this.lamps[k].setColorAt(i, this.c.set(k === light ? LIT[k] : DIM[k]));
+        for (const k of ['red', 'amber', 'green'] as const) {
+          this.c.set(k === light ? LIT[k] : DIM[k]);
+          this.lamps[k].setColorAt(i * 2, this.c);
+          this.lamps[k].setColorAt(i * 2 + 1, this.c); // the low head shows the same
+        }
         i++;
       }
     }
@@ -128,13 +144,18 @@ export class Signals {
         this.q.setFromAxisAngle(this.up, Math.PI - arm.angle);
         this.m.compose(this.p.set(j.x + ox * d + rx * side, 0, j.z + oz * d + rz * side), this.q, this.s.set(1, 1, 1));
         this.poles.setMatrixAt(arms, this.m);
-        // Three lamps on the front of the box, red on top.
-        for (const [k, h] of [['red', 3.82], ['amber', 3.5], ['green', 3.18]] as const) {
-          const lx = j.x + ox * (d + 0.125) + rx * side;
-          const lz = j.z + oz * (d + 0.125) + rz * side;
-          this.m.compose(this.p.set(lx, h, lz), this.q, this.s.set(1, 1, 1));
-          this.lamps[k].setMatrixAt(arms, this.m);
-        }
+        this.pole.copy(this.m);
+        // Three lamps on the front of each signal head, red on top: on the pack's light, on the head
+        // over the lanes and on the low one; on ours, on its one box. (The pole's front is +z, its
+        // arm reaches over the road along -x.)
+        const heads: [number, number, number][] = this.packPole ? [[-1.75, 8.44, 0.33], [-0.09, 3.46, 0.37]] : [[0, 3.5, 0.125]];
+        heads.forEach(([hx, hy, hz], hi) => {
+          for (const [k, dy] of [['red', 0.34], ['amber', 0], ['green', -0.34]] as const) {
+            this.local.makeTranslation(hx, hy + (this.packPole ? dy : dy * 0.94), hz);
+            this.lamps[k].setMatrixAt(arms * 2 + hi, this.m.multiplyMatrices(this.pole, this.local));
+          }
+        });
+        if (heads.length === 1) for (const k of ['red', 'amber', 'green'] as const) this.lamps[k].setMatrixAt(arms * 2 + 1, this.m.makeScale(0, 0, 0));
         // Zebra: only across the main road (its two arms), white bars side by side across its width.
         const zc = zebraAt(j);
         let onMain = Math.abs(Math.cos(arm.angle - j.axis)) > 0.7;
@@ -152,7 +173,7 @@ export class Signals {
     }
     this.poles.count = arms;
     for (const l of Object.values(this.lamps)) {
-      l.count = arms;
+      l.count = arms * 2;
       l.instanceMatrix.needsUpdate = true;
     }
     this.stripes.count = stripes;

@@ -22,8 +22,9 @@ test, and goes live only after the owner has seen it work. Agreed with the owner
 3. **Day and night, and street lights.**
    - The sun follows the real Accra time and date: morning, midday, golden afternoon, sunset about
      6 pm, night.
-   - Street lights all round the city: the pack's road lamps along every road (both sides of main
-     roads, one side of side roads), at junctions and round roundabouts.
+   - Street lights all round the city: the pack's road lamps in pairs facing each other across every
+     road (close together), arms over the road; pavement lamps between them lighting the walkways.
+     Yellow light at night. The pack's tall traffic lights at the junctions, easy to see. (Done.)
    - At night every street light, window, sign, billboard and headlight is lit; real light pools on
      the road near you.
 4. **Vehicles and traffic.**
@@ -31,7 +32,7 @@ test, and goes live only after the owner has seen it work. Agreed with the owner
      Accra colours.
    - The pack's traffic rules: follow the car ahead, stop at red lights, give way, go round
      roundabouts, climb the flyovers.
-   - Crowded roads everywhere.
+   - Crowded roads everywhere; the main roads jammed in the evening rush hour.
 5. **People, the story characters included.**
    - The whole crowd from the pack's people, with Ghanaian skin tones and Accra clothes colours.
    - The player, Auntie Dede, Uncle Kwame, the thief and everyone in the story rebuilt from pack

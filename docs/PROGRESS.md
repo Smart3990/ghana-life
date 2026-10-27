@@ -359,6 +359,13 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
     - Still to do in later steps: pupils with school bags still walk at night (step 5 makes the crowd change with the hour); the pack's night glow turns car windows pink, handled when the pack's vehicles come in (step 4).
     - **Done when:** on the test site the light matches the real time outside (morning, afternoon, evening), and at night the street lights, windows and headlights are on and the people near you can still be seen, with the game as smooth as before on the cheap Android.
 
+  - **Street lights like a city, the pack's traffic lights** (owner, 27 Oct evening):
+    - Road lamps in pairs facing each other across every road (main roads every 20 m, side roads every 27 m), arms over the road; half way between the pairs, a pavement lamp (the pack's city lamp with a globe) on each side lights the walkway. They stand there by day too.
+    - Yellow sodium light at night: yellow lamp heads and globes, yellow pools on the road and smaller ones on the pavements, warm yellow real light from the nearest lamps on Standard and Ultra.
+    - Traffic lights: the pack's tall traffic light at every arm of the big junctions, with the signal head over the lanes and a low one for people at the kerb; both show the real red, amber and green.
+    - Cost on Light: about 30,000 more triangles in the test spot (now about 305,000 by day); no extra real lights.
+    - Asked for and planned for step 4: the main roads crowded in the evening (rush hour).
+
 ## Waiting on the owner
 
 - Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.

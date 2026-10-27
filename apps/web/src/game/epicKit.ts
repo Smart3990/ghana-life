@@ -34,6 +34,12 @@ export function epicMaterial() {
   return material;
 }
 
+/** The pack's two glow sheets (by day, at night), for materials made from the pack's. */
+export function epicGlowMaps() {
+  epicMaterial();
+  return { day: dayGlow!, night: nightGlow! };
+}
+
 /** Day or night look of the pack (the night glow sheet and the pack's night glow colour). */
 export function setEpicNight(on: boolean) {
   const m = epicMaterial();
