@@ -12,10 +12,10 @@ export type Arm = { angle: number; half: number }; // angle: direction from the 
 export type Junction = { x: number; z: number; axis: number; arms: Arm[]; half: number; phase: number };
 export type Light = 'green' | 'amber' | 'red';
 
-// (Owner, 28 Oct 2026: cars should stand at the lights longer: about half a minute on red.)
-const CYCLE = 60; // seconds for both roads to have their turn
-const GREEN = 25;
-const AMBER = 3;
+// (Owner, 28 Oct 2026: a wait at the lights of more than 6 s, but every wait under 10 s: 10 s on red.)
+const CYCLE = 18; // seconds for both roads to have their turn
+const GREEN = 6.5;
+const AMBER = 1.5;
 const GUTTER = 0.6;
 
 /** The light for traffic moving along `heading` at this junction, at time t (seconds of shared time). */

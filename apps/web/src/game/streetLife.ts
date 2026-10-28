@@ -501,21 +501,22 @@ export class StreetLife {
 
   // Road pieces in a grid of 25 m squares, so things are never put on a road.
   private roadGrid = new Map<string, number[]>();
-  private addToGrid(x1: number, z1: number, x2: number, z2: number, half: number) {
+  private railGrid = new Map<string, number[]>();
+  private addToGrid(x1: number, z1: number, x2: number, z2: number, half: number, grid = this.roadGrid) {
     const len = Math.hypot(x2 - x1, z2 - z1);
     for (let s = 0; s <= len; s += 10) {
       const k = `${Math.floor((x1 + ((x2 - x1) * s) / (len || 1)) / 25)},${Math.floor((z1 + ((z2 - z1) * s) / (len || 1)) / 25)}`;
-      const list = this.roadGrid.get(k) ?? [];
+      const list = grid.get(k) ?? [];
       if (list.length && list[list.length - 5] === x1 && list[list.length - 4] === z1) continue;
       list.push(x1, z1, x2, z2, half);
-      this.roadGrid.set(k, list);
+      grid.set(k, list);
     }
   }
-  private onRoad(x: number, z: number, margin: number) {
+  private onRoad(x: number, z: number, margin: number, grid = this.roadGrid) {
     const cx = Math.floor(x / 25);
     const cz = Math.floor(z / 25);
     for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
-      const list = this.roadGrid.get(`${cx + i},${cz + j}`);
+      const list = grid.get(`${cx + i},${cz + j}`);
       if (!list) continue;
       for (let k = 0; k < list.length; k += 5) {
         const [ax, az, bx, bz, half] = [list[k], list[k + 1], list[k + 2], list[k + 3], list[k + 4]];
@@ -528,7 +529,7 @@ export class StreetLife {
     return false;
   }
   private free(x: number, z: number, margin: number) {
-    return !this.blocked(x, z, margin) && !this.onRoad(x, z, margin) && !this.keptClear(x, z, margin);
+    return !this.blocked(x, z, margin) && !this.onRoad(x, z, margin) && !this.onRoad(x, z, margin, this.railGrid) && !this.keptClear(x, z, margin);
   }
   /** Places kept clear for the story (where you start, the bus stop, Auntie's stall, the compound). */
   private keepClear: { x: number; z: number; r: number }[] = [];
@@ -539,8 +540,8 @@ export class StreetLife {
   /** The railway: kept clear like a road (nothing stands on the track). */
   addRails(rails: StreetLine[]) {
     if (!rails.length) return;
-    for (const r of rails) for (let i = 0; i + 3 < r.pts.length; i += 2) this.addToGrid(r.pts[i], r.pts[i + 1], r.pts[i + 2], r.pts[i + 3], 1.8);
-    const clear = (list: Spot[], margin: number) => list.filter((p) => !this.onRoad(p.x, p.z, margin));
+    for (const r of rails) for (let i = 0; i + 3 < r.pts.length; i += 2) this.addToGrid(r.pts[i], r.pts[i + 1], r.pts[i + 2], r.pts[i + 3], 1.8, this.railGrid);
+    const clear = (list: Spot[], margin: number) => list.filter((p) => !this.onRoad(p.x, p.z, margin, this.railGrid));
     this.kiosks.all = clear(this.kiosks.all, 1.3);
     this.umbrellas.all = clear(this.umbrellas.all, 0.9);
     this.phones.all = clear(this.phones.all, 0.8);

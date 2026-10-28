@@ -479,6 +479,9 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
     - The railway: the real Accra lines from the map tiles near Circle are now on the ground as track (gravel bed, sleepers, two steel rails at Ghana's 1.067 m gauge), and kiosks, trees and boards are kept off it. About 3,600 triangles for all the track loaded around Circle, one draw per tile.
     - Done when: a tapped plain car opens the card; a vehicle is never seen to disappear; the railway can be walked up to near Circle; the full story still has 0 contacts.
 
+  - **Step 6a: short waits** (owner, 28 Oct): every wait in the traffic is under 10 s: the lights turn every 18 s, so a road waits 10 s on red (6.5 s green, 1.5 s amber). Uncle Kwame now arrives at Auntie's stall within about 10 s ("Forty minutes later", at most 7 s in the traffic, then he pulls in), and the drive home is two short glimpses of the way (4 s and 3 s) with a short "Twenty minutes later" between; at Nima he drives in within 10 s. The drive in at Nima now starts on the main road and curves into the quiet side street when one joins within 90 m (the house's street itself comes in 6c). The railway is kept apart from the roads in the game's own checks (only stalls and trees are kept off it).
+    - Done when: a car waits about 10 s at a red light; Uncle arrives within about 10 s of "Forty minutes later"; the ride home takes about 10 s.
+
 ## Waiting on the owner
 
 - Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.

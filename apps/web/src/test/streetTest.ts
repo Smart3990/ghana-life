@@ -3253,7 +3253,7 @@ async function playOpening(start: StartChoice) {
       // He drives in the traffic like everyone (owner, 28 Oct 2026: the lights, the queues, never
       // through a car) to about 10 m before his parking place; then eases off the road into it.
       const entry = pullIn(lane, park, -10);
-      const simCar = trafficSim?.addStory({ kind: 'car', type: 'car', colour: '#b3261e', x: entry.x, z: entry.z, heading: entry.heading, back: 30 }) ?? null;
+      const simCar = trafficSim?.addStory({ kind: 'car', type: 'car', colour: '#b3261e', x: entry.x, z: entry.z, heading: entry.heading, back: 16 }) ?? null;
       const follow = () => {
         const w = simCar !== null ? trafficSim?.where(simCar) : null;
         if (w) put(w);
@@ -3264,10 +3264,11 @@ async function playOpening(start: StartChoice) {
       if (simCar !== null && follow()) {
         uCar.shown = false; // (the traffic draws it while it drives)
         trafficSim!.stopAt(simCar, entry.x, entry.z);
-        while (gameClock - t0 < 25) {
+        // (Owner, 28 Oct 2026: under 10 s for him to arrive: at most 7 s in the traffic, then he pulls in.)
+        while (gameClock - t0 < 7) {
           follow();
           const st = trafficSim!.storyState(simCar);
-          if (!st || (st.stopped && (st.atStop || gameClock - t0 > 14))) break;
+          if (!st || (st.stopped && (st.atStop || gameClock - t0 > 5))) break;
           await pause(0.02);
         }
         follow();
@@ -3373,7 +3374,7 @@ async function playOpening(start: StartChoice) {
         return !trafficSim.vehicleNear(into.x, into.z, 3) && !(behind && trafficSim.vehicleNear(behind.x, behind.z, 7));
       };
       let going = false;
-      while (gameClock - t0 < 3.4) {
+      while (gameClock - t0 < 2.4) {
         const t = gameClock - t0;
         const dt = gameClock - last;
         last = gameClock;
@@ -3443,9 +3444,10 @@ async function rideFilm(way: Way, uCar: NonNullable<typeof streetTraffic>['story
   const SPEED = 15;
   // (The first 400 m of the way go up over the Kwame Nkrumah Interchange flyover: the ride starts just
   // past it, down on Ring Road Central, where the car is on the street.)
+  // (Owner, 28 Oct 2026: the drive home in under 10 s: two short glimpses of the way.)
   const parts: [number, number][] = [
-    [490, 14], // from (metres along the way), for (seconds)
-    [Math.max(490 + SPEED * 14 + 20, way.length - 20 - SPEED * 11), 11],
+    [490, 4], // from (metres along the way), for (seconds)
+    [Math.max(490 + SPEED * 4 + 20, way.length - 20 - SPEED * 3), 3],
   ];
   let next = 0;
   while (next < RIDE_SIGNS.length && RIDE_SIGNS[next].at < parts[0][0] - 30) next++; // (Circle's own signs: seen there already)
@@ -3537,12 +3539,9 @@ async function rideFilm(way: Way, uCar: NonNullable<typeof streetTraffic>['story
       const skip = parts[i + 1][0];
       const between: RideSign[] = [];
       while (next < RIDE_SIGNS.length && RIDE_SIGNS[next].at < skip) between.push(RIDE_SIGNS[next++]);
-      void cine.title('Twenty minutes later', between.filter((g) => g.kind !== 'road').map((g) => g.name).join(' · ') || 'Ring Road Central', 2.2);
-      for (const g of between) {
-        rideSign(g);
-        await pause(0.35);
-      }
-      await pause(Math.max(0, 2.2 - between.length * 0.35));
+      void cine.title('Twenty minutes later', between.filter((g) => g.kind !== 'road').map((g) => g.name).join(' · ') || 'Ring Road Central', 1.6);
+      for (const g of between) rideSign(g);
+      await pause(1.6);
     }
   }
   while (next < RIDE_SIGNS.length) rideSign(RIDE_SIGNS[next++]);
@@ -3584,7 +3583,7 @@ async function homeAtNima(uCar: NonNullable<typeof streetTraffic>['story'][numbe
       uCar.moving = true;
       [uCar.x, uCar.z, uCar.heading] = [drive.at(0).x, drive.at(0).z, drive.at(0).heading];
       // (At this cut: the traffic on his way along the road is let go.)
-      clearStoryPath([0, 8, 16, 24, 32, 40].map((d) => drive.at(Math.min(d, drive.length))), 3);
+      clearStoryPath(Array.from({ length: Math.ceil(drive.length / 8) + 1 }, (_, k) => drive.at(Math.min(k * 8, drive.length))), 3);
     }
     const gateIn = at(0, D - 2);
     story.shot = frameShot(gateIn.x, gateIn.z, (inward * 180) / Math.PI + 32, 17, 62);
@@ -3598,7 +3597,7 @@ async function homeAtNima(uCar: NonNullable<typeof streetTraffic>['story'][numbe
       let d = 0;
       let v = 6;
       let last = gameClock;
-      while (d < drive.length - 0.05 && gameClock - t0 < 20) {
+      while (d < drive.length - 0.05 && gameClock - t0 < 10) {
         const dt = Math.min(0.1, gameClock - last);
         last = gameClock;
         const here = drive.at(d);
@@ -3815,9 +3814,32 @@ function driveIn(home: { face: number }, at: (u: number, v: number) => { x: numb
   let T = { x: Math.cos(home.face), z: Math.sin(home.face) };
   const roadBehind = (t: { x: number; z: number }) => [6, 12, 18, 24].filter((j) => life?.roadAt(lanePt.x - t.x * j, lanePt.z - t.z * j, 0.5)).length;
   if (roadBehind(T) < roadBehind({ x: -T.x, z: -T.z })) T = { x: -T.x, z: -T.z };
+  // Where the quiet street meets a main road (owner, 28 Oct 2026: he comes along the main road and
+  // curves into the side street, never just standing on the road): back along it up to 90 m.
+  let lead: { x: number; z: number }[] = [{ x: lanePt.x - T.x * 34, z: lanePt.z - T.z * 34 }, { x: lanePt.x - T.x * 8, z: lanePt.z - T.z * 8 }];
+  for (let j = 6; j <= 90 && life; j += 2) {
+    const p = { x: lanePt.x - T.x * j, z: lanePt.z - T.z * j };
+    if (!life.roadAt(p.x, p.z, 0.5)) break; // (the side street ends)
+    if (life.roadDirNear(p.x, p.z, 6, 4.5) === null) continue;
+    // On the main road: its direction, across the side street's (a right turn into it, Ghana drives on the right).
+    const back = { x: lanePt.x - T.x * Math.max(0, j - 10), z: lanePt.z - T.z * Math.max(0, j - 10) };
+    const toMain = life.roadDirNear(back.x, back.z, 20, 4.5);
+    if (toMain === null) break;
+    let M = { x: Math.cos(toMain), z: Math.sin(toMain) }; // along the main road
+    if (-M.z * T.x + M.x * T.z < 0) M = { x: -M.x, z: -M.z };
+    const centre = { x: p.x - T.x * 3.5, z: p.z - T.z * 3.5 };
+    const lane = { x: centre.x + T.x * 2.2, z: centre.z + T.z * 2.2 }; // the right-hand lane, near the side street
+    lead = [
+      { x: lane.x - M.x * 26, z: lane.z - M.z * 26 },
+      { x: lane.x - M.x * 7, z: lane.z - M.z * 7 },
+      lane,
+      { x: p.x + T.x * 5, z: p.z + T.z * 5 },
+    ];
+    if (j > 16) lead.push({ x: lanePt.x - T.x * 8, z: lanePt.z - T.z * 8 });
+    break;
+  }
   const pts = [
-    { x: lanePt.x - T.x * 34, z: lanePt.z - T.z * 34 },
-    { x: lanePt.x - T.x * 8, z: lanePt.z - T.z * 8 },
+    ...lead,
     lanePt,
     at(0, D + Math.min(3, k)),
     at(0, D + 0.4),
