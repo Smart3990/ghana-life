@@ -14,7 +14,7 @@
 //     vehicles that drive far away are let go.
 // All of this is worked out on the phone itself, only for the streets around the player.
 import { KINDS, kindFor, type Kind, type Placed, type Vehicle } from './traffic';
-import { typeFor } from './vehicleTypes';
+import { TYPE_BY_KEY, typeFor } from './vehicleTypes';
 
 type V2 = [number, number];
 type Road = { pts: [number, number][]; lanes: 1 | 2; half?: number; bridge?: boolean; oneway?: boolean };
@@ -37,6 +37,10 @@ type Seg = {
   cx: number;
   cz: number;
   dead: boolean;
+  /** Runs through something solid (under a low flyover ramp, through a building): never used. */
+  walled?: boolean;
+  checked?: number; // the blockVersion it was last checked against
+  start?: Node; // lanes: the junction at its start
   edge: number; // the road piece it belongs to (lanes of the same edge and direction share it)
   dir: number; // +1 / -1 along the edge
   index: number; // lane number from the middle of the road (0 = inner)
@@ -57,6 +61,9 @@ type Car = {
   committed: boolean; // has the right of way through the junction ahead
   stuck: number; // seconds without moving
   special?: 'ambulance';
+  /** A story vehicle (the trotro you arrive in, Uncle Kwame's car): a real driver in the traffic,
+   *  steered to its stop and along its way; never let go until the story releases it. */
+  story?: { stop: { seg: Seg; s: number } | null; guide: Float32Array | null; released: boolean };
 };
 
 // Driving behaviour (intelligent driver model): comfortable, Accra-busy.
@@ -167,6 +174,62 @@ export class TrafficSim {
   playerFirst = false;
   /** Vehicles that must not move (a driver who got out). */
   hold = new Set<number>();
+  /**
+   * Is this point inside something solid (a low flyover ramp, a building)? Set by the game. A ground
+   * lane with any point inside is never used (owner, 28 Oct 2026: vehicles and riders never pass
+   * through walls, strictly). Change `blockVersion` when more of the solid things have loaded.
+   */
+  blocked: ((x: number, z: number) => boolean) | null = null;
+  blockVersion = 0;
+  private seenBlockVersion = -1;
+  /**
+   * Where the map has two roads drawn almost on top of each other, a lane of one runs right along a lane
+   * of the other the opposite way: vehicles on them would meet head-on and pass through each other.
+   * The second of each such pair is not used (the first carries the traffic).
+   */
+  private duplicate(seg: Seg) {
+    if (seg.link || seg.len < 6) return false;
+    let close = 0;
+    const N = 5;
+    for (let k = 0; k < N; k++) {
+      const p = this.pointAt(seg, ((k + 0.5) / N) * seg.len);
+      const cx = Math.floor(p.x / 60), cz = Math.floor(p.z / 60);
+      let found = false;
+      for (let i = -1; i <= 1 && !found; i++)
+        for (let j = -1; j <= 1 && !found; j++)
+          for (const o of this.laneGrid.get(`${cx + i},${cz + j}`) ?? []) {
+            if (o === seg || o.edge === seg.edge || o.bridge !== seg.bridge || o.id > seg.id || o.walled) continue;
+            if (Math.abs(o.cx - p.x) > o.len + 4 || Math.abs(o.cz - p.z) > o.len + 4) continue;
+            const pr = project(o, p.x, p.z);
+            if (pr.d > 1.6) continue;
+            const q = this.pointAt(o, pr.s);
+            if (q.fx * p.fx + q.fz * p.fz < -0.8) {
+              found = true;
+              break;
+            }
+          }
+      if (found) close++;
+    }
+    return close >= 3;
+  }
+  /** Lanes (and curves) closed because they pass through something solid, so far (for tests). */
+  walledCount = 0;
+  private isWalled(seg: Seg) {
+    if (seg.checked === this.blockVersion) return !!seg.walled;
+    seg.checked = this.blockVersion;
+    const was = !!seg.walled;
+    seg.walled = this.duplicate(seg);
+    if (!seg.walled && this.blocked && !seg.bridge) {
+      const step = 2;
+      for (let i = 1; i < seg.pts.length / 2 && !seg.walled; i++) {
+        const ax = seg.pts[i * 2 - 2], az = seg.pts[i * 2 - 1], bx = seg.pts[i * 2], bz = seg.pts[i * 2 + 1];
+        const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / step));
+        for (let k = 0; k <= n; k++) if (this.blocked(ax + ((bx - ax) * k) / n, az + ((bz - az) * k) / n)) { seg.walled = true; break; }
+      }
+    }
+    if (seg.walled !== was) this.walledCount += seg.walled ? 1 : -1;
+    return seg.walled;
+  }
 
   // ---------- Building the lanes ----------
 
@@ -241,6 +304,7 @@ export class TrafficSim {
           const cum = cumulative(pts);
           const mid = line[line.length >> 1];
           const seg: Seg = { id: this.segs.length, link: false, pts, cum, len: cum[cum.length - 1], next: [], node: to, conflicts: new Set(), from: null, speed: kindSpeed, bridge: !!p.r.bridge, cars: [], cx: mid[0], cz: mid[1], dead: false, edge, dir, index: i, lanes: n }; // (0: the inner lane, nearest the middle or the left edge)
+          seg.start = from;
           this.segs.push(seg);
           this.lanes.push(seg);
           from.outs.push(seg);
@@ -334,7 +398,8 @@ export class TrafficSim {
     for (let i = -cells; i <= cells; i++)
       for (let j = -cells; j <= cells; j++)
         for (const l of this.laneGrid.get(`${cx + i},${cz + j}`) ?? []) if (Math.hypot(l.cx - x, l.cz - z) < r) out.push(l);
-    this.active = out;
+    // Only lanes clear of anything solid are filled (their curves are checked when chosen).
+    this.active = out.filter((l) => !this.isWalled(l));
   }
 
   private newCar(seg: Seg, s: number, kind?: Kind): Car {
@@ -378,7 +443,7 @@ export class TrafficSim {
   /** Pick the way this driver will turn at the end of its lane (straight on most often). */
   private choose(car: Car) {
     const lane = car.seg;
-    const options = lane.next.filter((l) => !l.dead);
+    const options = lane.next.filter((l) => !l.dead && !this.isWalled(l) && !this.isWalled(l.next[0]));
     if (!options.length) {
       car.plan = null;
       return;
@@ -391,6 +456,18 @@ export class TrafficSim {
       const dot = dx * ox + dz * oz;
       return (dot > 0.7 ? 4 : dot > -0.5 ? 1.4 : 0.15) * (out.lanes > 1 ? 1.6 : 1); // straight on, then main roads
     };
+    // A story vehicle on its way: the turn whose next lane stays closest to the way.
+    const guide = car.story?.guide;
+    if (guide) {
+      let best = options[0], bestD = Infinity;
+      for (const l of options) {
+        const out = l.next[0];
+        const d = distToLine(guide, out.pts[out.pts.length - 2], out.pts[out.pts.length - 1]) + distToLine(guide, out.pts[(out.pts.length >> 2) * 2], out.pts[(out.pts.length >> 2) * 2 + 1]);
+        if (d < bestD) [best, bestD] = [l, d];
+      }
+      car.plan = best;
+      return;
+    }
     const total = options.reduce((s, l) => s + weight(l), 0);
     let r = hash(car.id * 13 + lane.id) * total;
     for (const l of options) if ((r -= weight(l)) <= 0) { car.plan = l; return; }
@@ -420,6 +497,11 @@ export class TrafficSim {
   update(dt: number, x: number, z: number) {
     dt = Math.min(0.1, Math.max(0, dt));
     this.time += dt;
+    if (this.seenBlockVersion !== this.blockVersion) {
+      // More solid things have loaded: which lanes are in use is worked out again.
+      this.seenBlockVersion = this.blockVersion;
+      this.activeAt = [1e9, 1e9];
+    }
     const t = this.time;
     this.refreshActive(x, z);
     this.keepFull(x, z);
@@ -442,7 +524,7 @@ export class TrafficSim {
       const cross = Math.sqrt(Math.max(0, 1 - dot * dot));
       const side = Math.abs(dx * -pa.fz + dz * pa.fx);
       if (side > a.halfW + b.halfW * Math.abs(dot) + (b.len / 2) * cross + 0.25) return null;
-      return { gap: along - a.len / 2 - ((b.len / 2) * Math.abs(dot) + b.halfW * cross), dot };
+      return { gap: along - a.len / 2 - ((b.len / 2) * Math.abs(dot) + b.halfW * cross), dot, side };
     };
     // Each driver: how hard to speed up or brake, from what is ahead.
     for (const car of this.cars) {
@@ -516,8 +598,15 @@ export class TrafficSim {
             if (other === car || other.seg.bridge !== seg.bridge) continue;
             const po = at.get(other)!;
             const f = inFront(car, me, other, po, 16);
-            if (!f || f.dot < -0.6) continue;
-            if (f.dot < 0.6) {
+            if (!f) continue;
+            // Already touching (a lane starting on top of another road, a junction curve over a lane):
+            // one of the two moves out of it (the lower number), the other waits, so it clears at once.
+            if (f.gap < -0.3 && car.id < other.id && f.dot < 0.6) continue;
+            // Oncoming in its own lane, passing beside: not in the way. Oncoming in this car's path (two
+            // roads drawn on top of each other, a narrow bend): it is.
+            if (f.dot < -0.85 && f.side > car.halfW + other.halfW - 0.5) continue;
+            // Crossing paths: the one further in goes first, but never into a vehicle it is about to touch.
+            if (f.dot < 0.6 && f.gap > 2.5) {
               const back = inFront(other, po, car, me, 16);
               if (back && (back.gap > f.gap + 0.5 || (Math.abs(back.gap - f.gap) <= 0.5 && car.id < other.id))) continue; // I go first
             }
@@ -536,6 +625,15 @@ export class TrafficSim {
         const g = along - car.len / 2 - o.r;
         if (g < gap) {
           gap = g;
+          lead = 0;
+        }
+      }
+      // 5. A story vehicle's stop: it comes to rest with its middle there.
+      if (car.story?.stop) {
+        const d = this.distAlong(car, car.story.stop);
+        if (d === null || d < -1) car.story.stop = null;
+        else if (d + MIN_GAP < gap) {
+          gap = Math.max(0, d + MIN_GAP - 0.05);
           lead = 0;
         }
       }
@@ -580,9 +678,11 @@ export class TrafficSim {
         this.insert(car, next);
       }
       // Drivers stuck at a dead end, and vehicles far away, leave (never where the player can see).
+      // A vehicle on a piece found to pass through something solid leaves at once (never seen in a wall).
       const p = this.pointAt(car.seg, car.s);
       const d2 = (p.x - x) ** 2 + (p.z - z) ** 2;
-      if (d2 > r2 || (car.stuck > 25 && !car.seg.link && !car.plan && d2 > this.opts.seen ** 2)) this.drop(car);
+      const keep = car.story && !car.story.released;
+      if (!keep && (this.isWalled(car.seg) || d2 > r2 || (car.stuck > 25 && !car.seg.link && !car.plan && d2 > this.opts.seen ** 2))) this.drop(car);
     }
     // Keep each piece's list in order (vehicles only move forward, so this is cheap).
     for (const seg of this.active) seg.cars.sort((a, b) => a.s - b.s);
@@ -674,6 +774,93 @@ export class TrafficSim {
     }
   }
 
+  /** How far along its way a car's middle is from a point on a lane ahead (null: not on its way). */
+  private distAlong(car: Car, t: { seg: Seg; s: number }): number | null {
+    if (car.seg === t.seg) return t.s - car.s;
+    let d = car.seg.len - car.s;
+    let next: Seg | null = car.seg.link ? car.seg.next[0] : car.plan;
+    for (let k = 0; k < 4 && next; k++) {
+      if (next === t.seg) return d + t.s;
+      d += next.len;
+      if (next.link) next = next.next[0];
+      else break; // (the turn after that is not chosen yet)
+    }
+    return null;
+  }
+  /** The ground lane nearest (x, z) going the way `heading` (clockwise from north), and where on it. */
+  private laneAt(x: number, z: number, heading: number, within = 25): { seg: Seg; s: number; d: number } | null {
+    const fx = Math.sin(heading), fz = -Math.cos(heading);
+    let best: { seg: Seg; s: number; d: number } | null = null;
+    for (const seg of this.lanes) {
+      if (seg.bridge || seg.dead || Math.abs(seg.cx - x) > seg.len + within || Math.abs(seg.cz - z) > seg.len + within || this.isWalled(seg)) continue;
+      const pr = project(seg, x, z);
+      if (pr.d > within) continue;
+      const p = this.pointAt(seg, pr.s);
+      if (p.fx * fx + p.fz * fz < 0.75) continue;
+      if (!best || pr.d < best.d) best = { seg, s: pr.s, d: pr.d };
+    }
+    return best;
+  }
+  /**
+   * A story vehicle that drives in the traffic like everyone (lights, queues, right of way): on the
+   * lane nearest (x, z) going the way `heading`, `back` metres before that point (at most to the
+   * lane's start). Vehicles in its place are let go (call it at a camera cut). `guide`: the way it
+   * should go at junctions. Returns its number, or null when there is no lane there.
+   */
+  addStory(o: { kind: Kind; type: string; colour: string; x: number; z: number; heading: number; back: number; guide?: [number, number][] }): number | null {
+    const at = this.laneAt(o.x, o.z, o.heading);
+    if (!at) return null;
+    const car = this.newCar(at.seg, 0, o.kind);
+    car.type = o.type;
+    car.colour = o.colour;
+    car.len = TYPE_BY_KEY.get(o.type)?.len ?? car.len;
+    car.halfW = (TYPE_BY_KEY.get(o.type)?.width ?? car.halfW * 2) / 2;
+    car.s = Math.max(car.len / 2 + 0.5, Math.min(at.seg.len - car.len / 2, at.s - o.back));
+    car.story = { stop: null, guide: o.guide ? Float32Array.from(o.guide.flat()) : null, released: false };
+    // Room for it: anyone where it appears is let go.
+    for (const c of [...at.seg.cars]) if (Math.abs(c.s - car.s) < (c.len + car.len) / 2 + 2) this.drop(c);
+    const p = this.pointAt(at.seg, car.s);
+    for (const c of [...this.cars]) {
+      const q = this.pointAt(c.seg, c.s);
+      if (!c.seg.bridge && Math.hypot(q.x - p.x, q.z - p.z) < (c.len + car.len) / 2 + 0.5) this.drop(c);
+    }
+    this.insert(car, at.seg);
+    this.cars.push(car);
+    return car.id;
+  }
+  /** A story vehicle stops with its middle level with (x, z), on its lane or the next ones. */
+  stopAt(id: number, x: number, z: number) {
+    const car = this.cars.find((c) => c.id === id);
+    if (!car?.story) return false;
+    const cands: Seg[] = [car.seg];
+    if (car.seg.link) cands.push(car.seg.next[0]);
+    else if (car.plan) cands.push(car.plan.next[0]);
+    for (const seg of cands) {
+      const pr = project(seg, x, z);
+      if (pr.d < 12 && (seg !== car.seg || pr.s > car.s)) {
+        car.story.stop = { seg, s: pr.s };
+        return true;
+      }
+    }
+    return false;
+  }
+  /** Has the story vehicle come to rest at its stop (or is it waiting in a queue)? */
+  storyState(id: number): { stopped: boolean; atStop: boolean; v: number } | null {
+    const car = this.cars.find((c) => c.id === id);
+    if (!car) return null;
+    const d = car.story?.stop ? this.distAlong(car, car.story.stop) : null;
+    return { stopped: car.v < 0.15, atStop: d !== null && Math.abs(d) < 0.8, v: car.v };
+  }
+  /** The story is done with it: it drives on as one of the traffic (and leaves when far away). */
+  release(id: number) {
+    const car = this.cars.find((c) => c.id === id);
+    if (car?.story) {
+      car.story.stop = null;
+      car.story.released = true;
+      car.story.guide = null;
+    }
+  }
+
   /** Where a vehicle is (x, z, heading), or null if it has gone. */
   where(id: number): { x: number; z: number; heading: number } | null {
     const car = this.cars.find((c) => c.id === id);
@@ -726,4 +913,28 @@ export class TrafficSim {
   get stats() {
     return { cars: this.cars.length, lanes: this.lanes.length, nodes: this.nodes.length, active: this.active.length, oneways: this.oneways };
   }
+}
+
+/** The nearest point of a piece to (x, z): how far along it, and how far away. */
+function project(seg: { pts: Float32Array; cum: Float32Array | number[] }, x: number, z: number) {
+  let best = { s: 0, d: Infinity };
+  for (let i = 1; i < seg.pts.length / 2; i++) {
+    const ax = seg.pts[i * 2 - 2], az = seg.pts[i * 2 - 1], bx = seg.pts[i * 2], bz = seg.pts[i * 2 + 1];
+    const dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz || 1;
+    const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2));
+    const d = Math.hypot(ax + dx * t - x, az + dz * t - z);
+    if (d < best.d) best = { s: seg.cum[i - 1] + t * Math.sqrt(l2), d };
+  }
+  return best;
+}
+/** How far (x, z) is from a line of points (x0, z0, x1, z1, ...). */
+function distToLine(pts: Float32Array, x: number, z: number) {
+  let best = Infinity;
+  for (let i = 1; i < pts.length / 2; i++) {
+    const ax = pts[i * 2 - 2], az = pts[i * 2 - 1], bx = pts[i * 2], bz = pts[i * 2 + 1];
+    const dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz || 1;
+    const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2));
+    best = Math.min(best, Math.hypot(ax + dx * t - x, az + dz * t - z));
+  }
+  return best;
 }

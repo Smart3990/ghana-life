@@ -467,6 +467,29 @@ export class StreetBuildings {
     return false;
   }
 
+  /**
+   * Is (x, z) well inside a building (more than `depth` metres in from its walls)? For traffic lanes:
+   * the map's building outlines are not exact, so only a lane that runs right through one counts.
+   */
+  deepInside(x: number, z: number, depth = 0.8) {
+    if (this.inPlot(x, z)) return false;
+    const cx = Math.floor(x / CELL_M), cz = Math.floor(z / CELL_M);
+    for (let i = -1; i <= 1; i++)
+      for (let j = -1; j <= 1; j++) {
+        const cell = this.cells.get(`${cx + i},${cz + j}`);
+        if (!cell) continue;
+        for (const f of cell.footprints) {
+          if (x < f.minX || x > f.maxX || z < f.minZ || z > f.maxZ) continue;
+          if (inside(f.ring, x, z) && !nearEdge(f.ring, x, z, depth)) return true;
+        }
+      }
+    return false;
+  }
+  /** How many map squares of buildings have loaded (it changes as more arrive). */
+  get loadedCells() {
+    return this.cells.size;
+  }
+
   /** True while new streets are still being built. */
   get loading() {
     return this.queue.length > 0 || this.inflight > 0;

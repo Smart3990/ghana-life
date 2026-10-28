@@ -1034,6 +1034,7 @@ function step(player: Player, dt: number, t: number) {
   }
   if (life) signals.junctions = life.junctions;
   signals.roadsVersion = epicRoads.tilesBuilt * 1000 + flyovers.version;
+  if (trafficSim) trafficSim.blockVersion = flyovers.version * 100000 + buildings.loadedCells;
   signals.update(state.x, state.z, Date.now() / 1000);
   flyovers.update();
   flyovers.updateLamps(state.x, state.z);
@@ -4155,6 +4156,9 @@ async function start() {
     const toLngLat = (x: number, z: number): [number, number] => [START[0] + x / M_LON, START[1] - z / M_LAT];
     trafficSim = new TrafficSim((lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT], toLngLat, { light: { max: 420, radius: 135, seen: 112 }, standard: { max: 650, radius: 200, seen: 170 }, ultra: { max: 900, radius: 260, seen: 220 } }[tier]);
     for (const b of simBatches.splice(0)) trafficSim.addRoads(b);
+    // Strict (owner, 28 Oct 2026): no lane on the ground runs under a low flyover ramp or through a
+    // building; such lanes are never used. Checked again as more flyovers and buildings load.
+    trafficSim.blocked = (x, z) => flyovers.lowRampAt(x, z) || buildings.deepInside(x, z, 0.8);
     trafficSim.redLight = (x, z, heading) => {
       // A traffic light at the junction this lane runs into: red or amber means stop at its line.
       const fx = Math.sin(heading), fz = -Math.cos(heading);

@@ -443,6 +443,12 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
     - The bus wrap covers the whole side: from just above the ground line to the roof edge, from the back to the driver's window (about 9.5 m by 2.2 m; it was 6.4 m by 1.4 m), with the two wheel arches cut out. The side was mapped on the model every 10 cm so the wrap lies only on its flat side; the advert is designed in that shape (4.3 to 1).
     - Prices made much cheaper, for Ghanaian businesses (cedis a week): side-street billboard 25, main road 40, busy station 60, airport 100; taxi roof screen 35, trotro 60, city bus 90 (were 300 to 1,500). The placeholder "your ad here" adverts show the new starting prices. When advert payments are built, the server must charge from this same list (all money is decided on the server).
 
+  - **Strict: no vehicle in a wall, none through another** (owner, 28 Oct; the rider seen through a wall under a bridge):
+    - Any ground lane with a point under a low flyover ramp (where it comes down solid to the ground) or well inside a building is never used: no vehicle joins it or turns into it, and one found on it is taken off. Checked again whenever more flyovers or buildings load (26 lanes closed on Light round Circle, 46 on Standard).
+    - Where the map has two roads drawn almost on top of each other, a lane of one ran along a lane of the other the opposite way and vehicles met head-on through each other: the second lane of each such pair is closed.
+    - Drivers mind everything in their path: oncoming vehicles are only ignored when they pass beside in their own lane; at crossings the one further in goes first but never into a vehicle it is about to touch; two that already touch (a lane starting on top of another road) separate at once.
+    - Measured at Circle in the evening rush (12 checks, about 4,000 vehicle sightings each tier): in a ramp or building 0 (none); overlapping 2 on Light and 2 on Standard, each clearing as one moves out (was 9 to 33); none stuck. About a third of the vehicles near you are up on the flyovers.
+
 ## Waiting on the owner
 
 - Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.
