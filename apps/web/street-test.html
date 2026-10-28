@@ -4,6 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
     <meta name="theme-color" content="#121A14" />
+    <!-- Added to the Home Screen, the game opens full screen and sideways (iPhones cannot go full screen otherwise). -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Ghanaverse" />
     <meta name="mobile-web-app-capable" content="yes" />
     <title>Street test · Ghanaverse</title>
     <style>
@@ -155,6 +161,7 @@
 
       /* Start: tap to play (goes full screen, sideways) */
       #gate, #turn { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: var(--night); text-align: center; padding: 24px; }
+      #gate { cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
       .brand { font-weight: 900; letter-spacing: 4px; font-size: 26px; color: var(--gold); }
       .bar { width: 150px; height: 6px; margin: 14px auto 18px; border-radius: 3px; }
       .lead { color: var(--soft); font-size: 15px; line-height: 1.45; }
@@ -508,7 +515,7 @@
 
     <p id="help"><span class="keys"><b>W A S D</b> move · <b>Shift</b> sprint · <b>Space</b> jump · <b>E</b> action (ride, greet, sit, dance) · <b>H</b> horn · <b>Tab</b> your details · drag to look around · controllers work too</span><span class="touchtip">Left side: move · right side: look around</span></p>
 
-    <div id="gate">
+    <div id="gate" role="button" tabindex="0" aria-label="Tap to play">
       <div>
         <svg class="phone-icon" viewBox="0 0 24 24" fill="none" stroke="#e3a92b" stroke-width="1.6" stroke-linecap="round"><rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M10.5 18.5h3"/></svg>
         <div class="brand">GHANAVERSE</div>
@@ -526,6 +533,37 @@
       </div>
     </div>
     <div id="loading">LOADING ACCRA…</div>
+    <script>
+      // "Tap to play" works from the first moment, before the game has finished downloading, and on
+      // iPhones (which do not send taps on plain boxes to the page unless asked). The tap also asks
+      // for full screen and sideways, in every browser's own way (Android); iPhones cannot do this
+      // for a web page, only when the game is added to the Home Screen (manifest).
+      (function () {
+        var gate = document.getElementById('gate');
+        window.__goFull = function () {
+          var d = document, el = d.documentElement;
+          if (d.fullscreenElement || d.webkitFullscreenElement) return;
+          var go = el.requestFullscreen || el.webkitRequestFullscreen || el.webkitRequestFullScreen || el.msRequestFullscreen;
+          try {
+            var p = go && go.call(el, { navigationUI: 'hide' });
+            var lock = function () { try { var o = screen.orientation; if (o && o.lock) o.lock('landscape').catch(function () {}); } catch (e) {} };
+            if (p && p.then) p.then(lock, function () {}); else lock();
+          } catch (e) {}
+        };
+        var tapped = function (e) {
+          if (window.__gateTap) return;
+          window.__gateTap = true;
+          window.__goFull();
+          var play = gate.querySelector('.play');
+          if (play) play.textContent = 'STARTING…';
+          if (window.__onGate) window.__onGate();
+        };
+        gate.addEventListener('pointerup', tapped);
+        gate.addEventListener('touchend', tapped);
+        gate.addEventListener('click', tapped);
+        gate.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') tapped(e); });
+      })();
+    </script>
 
     <script type="module" src="/src/test/streetTest.ts"></script>
   </body>

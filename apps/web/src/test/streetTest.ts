@@ -4099,6 +4099,7 @@ async function start() {
       return skipStory ? { body: female ?? 'male', hometown: 'Ada' } : startScreen({ body: female }, () => {
             // Black in the same moment as the tap: no glimpse of Circle (or a helicopter) before the film.
             cine.coverNow();
+            (window as Window & { __goFull?: () => void }).__goFull?.(); // (full screen again, if it was left)
             cine.prepareVideo('/film/opening-480.mp4', '/film/opening-poster.jpg');
           });
     })(),

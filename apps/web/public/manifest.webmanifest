@@ -1,0 +1,9 @@
+{
+  "name": "Ghanaverse",
+  "short_name": "Ghanaverse",
+  "start_url": "/street-test",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#121A14",
+  "theme_color": "#121A14"
+}
