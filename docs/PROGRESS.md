@@ -418,6 +418,8 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
     - The placeholder "your ad here" adverts show the real starting prices (billboards from ₵300 a week, trotros ₵1,200).
     - Done when: tap a passing trotro and a billboard, swipe through the adverts, the vehicle drives on (checked on the test machine: card opened, 8 adverts, the trotro moved on 3 m while the card was open).
 
+  - **The flash before the film, found and fixed for good** (owner, 28 Oct: "the flashes aren't gone"): measured inside the page every 50 ms from load to the film, it was the moment the film starts: the black faded out in 0.6 s while the film faded in over 0.9 s, so for half a second about 37% of the city (and the helicopter) showed through. Now the film's frame goes up at full strength behind the black, and the black goes at once only when the film's first picture is on screen (the same for the film's still pictures). Done when: 0 moments with any of the city visible from load to the "hours later" card (checked: 472 moments, 0).
+
 ## Waiting on the owner
 
 - Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.

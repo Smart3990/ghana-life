@@ -71,9 +71,10 @@ export class Cinema {
     if (this.skipping || !v) return false;
     this.pic.innerHTML = '';
     this.pic.append(v);
+    // The film's frame goes up at full strength at once, behind the black (it never fades in over the
+    // city: owner, 28 Oct 2026, "flashes of Circle and a helicopter before the video plays").
+    this.pic.style.transitionDuration = '0s';
     this.pic.classList.add('on');
-    this.card.style.transitionDuration = '0.6s';
-    this.card.classList.remove('on', 'black');
     try {
       await v.play();
     } catch {
@@ -83,9 +84,22 @@ export class Cinema {
         await v.play();
       } catch {
         this.pic.classList.remove('on');
+        this.pic.style.transitionDuration = '';
         return false;
       }
     }
+    // The black goes only once the film's first picture is really on screen, and at once.
+    await new Promise<void>((done) => {
+      const vv = v as HTMLVideoElement & { requestVideoFrameCallback?: (cb: () => void) => void };
+      let over = false;
+      const go = () => !over && ((over = true), done());
+      if (vv.requestVideoFrameCallback) vv.requestVideoFrameCallback(go);
+      else v.addEventListener('playing', () => requestAnimationFrame(() => requestAnimationFrame(go)), { once: true });
+      setTimeout(go, 1500); // never stuck on black
+    });
+    this.card.style.transitionDuration = '0s';
+    this.card.classList.remove('on', 'black');
+    this.pic.style.transitionDuration = '';
     // The words follow the clip's own clock: whichever line belongs to this moment of the clip is the
     // one on screen, so they stay in step with the picture even if the phone stutters.
     let showing = -1;
@@ -152,7 +166,11 @@ export class Cinema {
     img.style.backgroundImage = `url(${url})`;
     this.pic.innerHTML = '';
     this.pic.append(img);
+    // Up at once behind the title card (no fade over the city), then the card goes.
+    this.pic.style.transitionDuration = '0s';
     this.pic.classList.add('on');
+    void this.pic.offsetWidth;
+    this.pic.style.transitionDuration = '';
     // The picture has its own black behind it: take the title card away.
     this.card.style.transitionDuration = '0.9s';
     this.card.classList.remove('on', 'black');
