@@ -12,6 +12,7 @@ import { AD_COUNT, adSheet } from './adPosters';
 import { box, merge, paint, shadowTexture } from './vehicles3d';
 import type { Roof, StreetLine } from './streetBuildings';
 import { CrowdBatch, lookFor, MIX, type Clip, type CrowdBody, type Kind as PersonKind, type Look } from './crowd';
+import { PosedCrowd, type Pose } from './posedCrowd';
 import { StreetScenes } from './streetScenes';
 
 type Part = THREE.BufferGeometry;
@@ -167,6 +168,8 @@ type Agent = {
   speed: number;
   lateral: number;
   still: boolean;
+  /** Standing still: drawn as a still person in this pose (posedCrowd.ts), until they talk with you. */
+  pose?: Pose;
   leader: number; // school children walk in groups behind a leader (-1 = no group)
   // Waiting for a vehicle to pass: how many seconds they are behind their own timetable.
   held?: number;
@@ -255,9 +258,13 @@ export class StreetLife {
     // The places' people (the first slots) always stay; walkers thin out.
     for (const [body, b] of Object.entries(this.crowds) as [CrowdBody, CrowdBatch][]) {
       const reserved = this.sceneSlots[body];
-      b.mesh.count = reserved + Math.floor((b.count - reserved) * this.density);
+      this.shown[body] = reserved + Math.floor((b.count - reserved) * this.density);
+      b.mesh.count = this.shown[body];
     }
   }
+  /** How many of each batch's people are out (at the current density); the batch draws only up to the
+   *  last one that is moving (still people are drawn as statues, not as hidden moving people). */
+  private shown: Record<CrowdBody, number> = { male: 0, female: 0 };
   /** People at places: sellers, customers, people sitting, dancers, children playing football. */
   scenes: StreetScenes | null = null;
   private sceneSlots: Record<CrowdBody, number> = { male: 0, female: 0 };
@@ -273,7 +280,7 @@ export class StreetLife {
 
   constructor(
     private blocked: (x: number, z: number, margin: number) => boolean,
-    private opts: { radiusM: number; people: number; props: number; scenes: number; smoothCrowd?: boolean },
+    private opts: { radiusM: number; people: number; props: number; scenes: number; smoothCrowd?: boolean; still?: number },
   ) {
     const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0.05 });
     const make = (geometry: Part, tint: boolean) => {
@@ -406,12 +413,23 @@ export class StreetLife {
   private spans: number[] = []; // wires between neighbouring poles: x1, z1, x2, z2, angle
 
   // Everyone who will be out on the streets, with their looks fixed for the session.
+  /** The still crowd: people standing about in lively poses (statues: almost free to draw). */
+  posed: PosedCrowd | null = null;
+
   private async makePeople() {
     // The first slots of each batch are kept for the people at places (scenes), the rest walk.
     const reserve = Math.ceil(this.opts.scenes * 0.65);
+    // On top of the walkers, many more people standing about (owner, 28 Oct 2026: "the crowd a lot
+    // more than what we have"), drawn as still people (posedCrowd.ts).
+    const extra = this.opts.still ?? 0;
+    const everyone = this.opts.people + extra;
+    const posed = new PosedCrowd(Math.max(40, Math.ceil((extra + this.opts.people * 0.3) * 0.5)));
+    this.posed = posed;
+    this.group.add(posed.group);
     const [male, female] = await Promise.all([
-      CrowdBatch.create('male', this.opts.people + reserve, this.time, this.opts.smoothCrowd),
-      CrowdBatch.create('female', this.opts.people + reserve, this.time, this.opts.smoothCrowd),
+      CrowdBatch.create('male', everyone + reserve, this.time, this.opts.smoothCrowd),
+      CrowdBatch.create('female', everyone + reserve, this.time, this.opts.smoothCrowd),
+      posed.load().catch(() => undefined),
     ]);
     this.crowds = { male, female };
     this.group.add(male.mesh, female.mesh);
@@ -427,7 +445,18 @@ export class StreetLife {
     this.scenes.clear = (x, z) => !this.onRoad(x, z, 0.25) && !this.blocked(x, z, 0.2);
     this.group.add(this.scenes.group);
     const total = MIX.reduce((n, [, w]) => n + w, 0);
-    for (let i = 0; i < this.opts.people; i++) {
+    const STILL_KINDS: PersonKind[] = ['man', 'woman', 'muslimMan', 'muslimWoman', 'church', 'child', 'man', 'woman'];
+    for (let i = 0; i < everyone; i++) {
+      if (i >= this.opts.people) {
+        // The extra people: standing about, each in a pose that fits where they are.
+        const kind = STILL_KINDS[Math.floor(hash(i, 2) * STILL_KINDS.length)];
+        const look = lookFor(kind, (k) => hash(i, 40 + k));
+        const batch = this.crowds[look.body]!;
+        const slot = batch.count++;
+        batch.setLook(slot, look, hash(i, 5) < 0.6 ? 'talk' : 'idle', hash(i, 6) * 10, 1);
+        this.agents.push({ kind, look, batch: look.body, slot, run: null, spot: null, s0: hash(i, 7) * 500, speed: 1, lateral: (hash(i, 8) - 0.5) * 1.6, still: true, leader: -1 });
+        continue;
+      }
       // School children come in groups of three or four; friends walk together in twos and threes.
       const prev = this.agents[i - 1];
       const head = prev ? (prev.leader === -1 ? i - 1 : prev.leader) : -1;
@@ -1163,7 +1192,7 @@ export class StreetLife {
     for (const [i, a] of this.agents.entries()) {
       if (a.lastX === undefined || a.spot) continue;
       const batch = this.crowds[a.batch];
-      if (!batch || a.slot >= batch.mesh.count) continue;
+      if (!batch || a.slot >= this.shown[a.batch]) continue;
       const d = Math.hypot(a.lastX - px, a.lastZ! - pz);
       if (d < bestD) [best, bestD] = [{ i, x: a.lastX, z: a.lastZ!, kind: a.kind, height: (a.look.body === 'female' ? 1.85 : 1.95) * a.look.scale, body: a.look.scale < 0.85 ? 'child' : a.look.body }, d];
     }
@@ -1182,7 +1211,10 @@ export class StreetLife {
   /** Is a vehicle at this point? (Set by the street test, so people wait instead of walking through cars.) */
   vehicleAt: ((x: number, z: number, room: number) => { x: number; z: number; fx: number; fz: number; half: number; halfW: number } | null) | null = null;
 
+  private zeroM = new THREE.Matrix4().makeScale(0, 0, 0);
   private movePeople(x: number, z: number, t: number, dt: number) {
+    this.posed?.begin();
+    const lastMoving: Record<CrowdBody, number> = { male: this.sceneSlots.male - 1, female: this.sceneSlots.female - 1 };
     let shadows = this.propShadows;
     let close = 0;
     const loadCount = { basin: 0, tray: 0 };
@@ -1190,7 +1222,7 @@ export class StreetLife {
     const far = Math.min(85, this.opts.radiusM * 0.8);
     for (const [i, a] of this.agents.entries()) {
       const batch = this.crowds[a.batch];
-      if (!batch || a.slot >= batch.mesh.count) continue; // not shown at the current density
+      if (!batch || a.slot >= this.shown[a.batch]) continue; // not shown at the current density
       const leader = a.leader >= 0 ? this.agents[a.leader] : null;
       // Someone who has fallen far behind the player moves to a pavement (or a kiosk) nearby.
       if (leader) {
@@ -1319,8 +1351,22 @@ export class StreetLife {
       }
       this.q.setFromAxisAngle(this.up, Math.PI - heading);
       const gy = this.groundDip ? -this.groundDip(px, pz) : 0;
-      this.m.compose(this.p.set(px, gy, pz), this.q, this.sc.setScalar(a.look.scale));
-      batch.mesh.setMatrixAt(a.slot, this.m);
+      // Standing still (and not talking with you): a still person in a pose that fits the place.
+      const statue = a.still && !a.waiting && (a.talkUntil ?? 0) <= t && this.posed?.ready;
+      if (statue) {
+        a.pose ??= poseFor(a, i);
+        const d = Math.hypot(px - x, pz - z);
+        if (!this.posed!.place(a.look.body, a.spot && a.pose !== 'PickingUp' ? 'Standing' : a.pose, px, gy, pz, heading, a.look, d)) {
+          // (no room in that pose's batch: shown moving instead)
+          this.m.compose(this.p.set(px, gy, pz), this.q, this.sc.setScalar(a.look.scale));
+          batch.mesh.setMatrixAt(a.slot, this.m);
+          lastMoving[a.batch] = Math.max(lastMoving[a.batch], a.slot);
+        } else batch.mesh.setMatrixAt(a.slot, this.zeroM);
+      } else {
+        this.m.compose(this.p.set(px, gy, pz), this.q, this.sc.setScalar(a.look.scale));
+        batch.mesh.setMatrixAt(a.slot, this.m);
+        lastMoving[a.batch] = Math.max(lastMoving[a.batch], a.slot);
+      }
       if (Math.abs(px - x) < 25 && Math.abs(pz - z) < 25) close++;
       // School children always carry a bag on their back; some grown-ups too.
       const bag = !a.look.load && (a.kind === 'pupil' || (a.kind === 'child' && hash(i, 31) < 0.6) || ((a.kind === 'man' || a.kind === 'woman') && hash(i, 31) < 0.22));
@@ -1342,7 +1388,11 @@ export class StreetLife {
         this.shadowBatch.setMatrixAt(shadows++, this.m);
       }
     }
-    for (const b of Object.values(this.crowds)) b!.mesh.instanceMatrix.needsUpdate = true;
+    for (const [body, b] of Object.entries(this.crowds) as [CrowdBody, CrowdBatch][]) {
+      b.mesh.instanceMatrix.needsUpdate = true;
+      // Draw only up to the last moving person (the extra still people sit at the end of the batch).
+      b.mesh.count = Math.min(this.shown[body], lastMoving[body] + 1);
+    }
     this.bags.count = bagCount;
     this.bags.instanceMatrix.needsUpdate = true;
     if (this.bags.instanceColor) this.bags.instanceColor.needsUpdate = true;
@@ -1353,6 +1403,7 @@ export class StreetLife {
     this.shadowBatch.count = shadows;
     this.shadowBatch.instanceMatrix.needsUpdate = true;
     this.nearCount = close;
+    this.posed?.end();
   }
 
   // Far from the player now (checked a few times a second per person, not every frame).
@@ -1396,4 +1447,13 @@ export class StreetLife {
       a.rev = best.rev;
     } else a.rev = !a.rev; // a real dead end: back the way they came
   }
+}
+
+/** A pose for someone standing still, from where they are and who they are. */
+function poseFor(a: Agent, i: number): Pose {
+  const r = hash(i, 77);
+  if (a.spot) return r < 0.3 ? 'PickingUp' : r < 0.6 ? 'Standing_Hips' : 'Standing'; // at a kiosk or a seller's
+  if (a.look.scale < 0.85) return r < 0.4 ? 'Standing_Waving' : r < 0.7 ? 'Standing' : 'LookingUp'; // children
+  // On the pavement: chatting, waiting, looking up at the billboards, waving to a friend, a laugh.
+  return r < 0.26 ? 'Standing' : r < 0.5 ? 'Standing_Hips' : r < 0.64 ? 'LookingUp' : r < 0.76 ? 'Standing_Waving' : r < 0.9 ? 'PickingUp' : 'Standing_CoveringEyes';
 }
