@@ -185,6 +185,7 @@ type Agent = {
   rev?: boolean;
   /** Stepping across the pavement round a kiosk or stall, or apart from someone (metres to the right). */
   avoid?: number;
+  avoidT?: number; // where they are stepping to (smoothed, so they never shake)
   /** The way ahead is blocked right across the pavement: turn back. */
   turn?: boolean;
   legT?: number;
@@ -426,13 +427,12 @@ export class StreetLife {
     // more than what we have"), drawn as still people (posedCrowd.ts).
     const extra = this.opts.still ?? 0;
     const everyone = this.opts.people + extra;
-    const posed = new PosedCrowd(Math.max(40, Math.ceil((extra + this.opts.people * 0.3) * 0.5)));
-    this.posed = posed;
-    this.group.add(posed.group);
+    // (The still people in poses, posedCrowd.ts, were taken out: the owner found them odd, 28 Oct
+    // 2026. People standing about are the moving bodies, idling and chatting.)
+    this.posed = null;
     const [male, female] = await Promise.all([
       CrowdBatch.create('male', everyone + reserve, this.time, this.opts.smoothCrowd),
       CrowdBatch.create('female', everyone + reserve, this.time, this.opts.smoothCrowd),
-      posed.load().catch(() => undefined),
     ]);
     this.crowds = { male, female };
     this.group.add(male.mesh, female.mesh);
@@ -1385,31 +1385,33 @@ export class StreetLife {
           }
           // Someone close, or just ahead: a step apart (away from them, across the pavement). People
           // standing still stay where they are; walkers go round them.
+          // Only someone just in front (not beside: people walking side by side would push each other
+          // to and fro), and never their own group.
           if (a.lastX !== undefined && !a.still) {
             const cx = Math.floor(a.lastX), cz = Math.floor(a.lastZ!);
             let push = 0;
             for (let gx = cx - 2; gx <= cx + 2; gx++)
               for (let gz = cz - 2; gz <= cz + 2; gz++)
                 for (const j of near.get(gx * 100003 + gz) ?? []) {
-                  if (j === i || (leader && j === a.leader)) continue;
+                  if (j === i) continue;
                   const b = this.agents[j];
-                  // Now, and a metre on (where they are about to walk).
-                  for (const [ax, az, room] of [[a.lastX, a.lastZ!, 0.7], [a.lastX + fx, a.lastZ! + fz, 0.6]] as const) {
-                    const dx = ax - b.lastX!, dz = az - b.lastZ!;
-                    const d = Math.hypot(dx, dz);
-                    if (d >= room) continue;
-                    const side = Math.sign(dx * rx + dz * rz) || (i > j ? 1 : -1);
-                    push += side * (room - d) * (b.still ? 1.8 : 1.2);
-                  }
+                  if ((leader && (j === a.leader || b.leader === a.leader)) || b.leader === i) continue;
+                  const dx = b.lastX! - a.lastX, dz = b.lastZ! - a.lastZ!;
+                  const along = dx * fx + dz * fz;
+                  if (along < 0.1 || along > 1.8) continue;
+                  const lat = dx * rx + dz * rz;
+                  if (Math.abs(lat) > 0.62) continue;
+                  push += -(Math.sign(lat) || (i > j ? 1 : -1)) * (0.62 - Math.abs(lat)) * (b.still ? 1.3 : 0.9);
                 }
             if (push) {
               const o = Math.max(-2.3, Math.min(2.3, want + push));
               if (free(o)) want = o;
-              else if (free(want + Math.sign(push) * 0.45)) want += Math.sign(push) * 0.45;
             }
           }
-          // Smoothly (a step at a time), except for people standing still.
-          a.avoid = snap ? want : cur + Math.max(-2.4 * dt, Math.min(2.4 * dt, want - cur));
+          // Smoothly: where they head for changes gently, and they step over at walking pace (never a jump).
+          a.avoidT = (a.avoidT ?? cur) + (want - (a.avoidT ?? cur)) * Math.min(1, dt * 3.5);
+          const rate = snap ? 3 : 1.3;
+          a.avoid = cur + Math.max(-rate * dt, Math.min(rate * dt, a.avoidT - cur));
           px += rx * a.avoid;
           pz += rz * a.avoid;
         }

@@ -462,6 +462,11 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
     - Skip works: it stopped the film but the arrival then waited up to 25 s for the trotro and ran its own pauses, leaving a still view of Circle. Now Skip goes straight to you standing at Circle, and the story carries on (checked: Skip during the film, then the bag snatch).
     - The frame rate is no longer shown on screen (only with ?fps in the address, for tests).
 
+  - **No more statues; calm walkers; better walking** (owner, 28 Oct):
+    - The still people in poses (Posed Background Characters) are taken out (the owner found them odd); people standing about are the moving bodies again, idling and chatting (Light 50 of them, Standard 160, Ultra 260, on top of the walkers). The pack files stay in the repo unused.
+    - Walkers no longer shake: their stepping aside reacted to every neighbour, every frame, and sometimes jumped them out of a kiosk in one go. Now where they head for is smoothed, they step over at walking pace (never a jump), and they only react to someone just in front of them, not beside them. Measured frame to frame within 30 m: sideways jerks of 22.7 cm for one walker in ten and 180 cm for one in a hundred before; 2.9 cm and 16 cm now.
+    - Your walking: push the stick the way you want to go, as seen on the screen (it used to turn you on the spot and walk you backwards); you turn smoothly to face it, slow a little for a sharp turn, and walk on; the camera eases round behind you as you walk and stays put while you stand. Walking into a car, a kiosk or a wall at an angle, you step round it instead of stopping dead.
+
 ## Waiting on the owner
 
 - Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.

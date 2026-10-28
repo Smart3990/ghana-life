@@ -68,7 +68,7 @@ const PLAYER_SCREEN_DROP = 0.3;
 // Movement, in metres and seconds.
 const WALK_SPEED = 1.7;
 const RUN_SPEED = 4.6;
-const WALK_TURN = 2.8; // radians per second at full stick
+const WALK_TURN_RATE = 9; // how fast you turn to face the way you push (radians per second)
 const OKADA_TOP_SPEED = 15; // about 54 km/h
 const OKADA_ACCEL = 4;
 const OKADA_BRAKE = 9;
@@ -836,9 +836,21 @@ function step(player: Player, dt: number, t: number) {
   } else {
     const sprinting = input.sprint && me.energy > 0;
     const top = sprinting ? RUN_SPEED : me.energy < 1 ? WALK_SPEED * 0.8 : WALK_SPEED;
-    const target = input.y >= 0 ? Math.hypot(input.x, input.y) > 0.2 ? Math.max(input.y, Math.abs(input.x) * 0.4) * top : 0 : input.y * 1.0;
-    state.speed += (target - state.speed) * Math.min(1, dt * 8);
-    state.heading += input.x * WALK_TURN * dt;
+    const push = Math.min(1, Math.hypot(input.x, input.y));
+    let target = 0;
+    if (story.autoRun) target = input.y * top; // (the story steers)
+    else if (push > 0.2) {
+      // Walking (owner, 28 Oct 2026: "the walking has to really improve"): push the stick the way you
+      // want to go, as seen on the screen; you turn smoothly to face it and walk that way, slowing for
+      // a sharp turn the way a person steps round, then on at full pace.
+      const want = state.camHeading + look.yaw + Math.atan2(input.x, input.y);
+      const diff = angleDiff(want, state.heading);
+      state.heading += Math.max(-WALK_TURN_RATE * dt, Math.min(WALK_TURN_RATE * dt, diff));
+      const facing = Math.abs(diff);
+      target = push * top * (facing > 1.7 ? 0.25 : facing > 0.9 ? 0.65 : 1);
+    }
+    // Gently up to speed, a little quicker to slow down.
+    state.speed += (target - state.speed) * Math.min(1, dt * (target > state.speed ? 5 : 8));
     state.lean = 0;
     if (me.doing === 'sit' || me.doing === 'dance') state.speed = 0;
     if (me.doing === 'sit' && me.seat) [state.x, state.z, state.heading] = [me.seat.x, me.seat.z, me.seat.face];
@@ -850,9 +862,17 @@ function step(player: Player, dt: number, t: number) {
   const room = state.onOkada ? 0.7 : 0.3;
   // Already inside something (a kiosk put down where you stand): you can always walk out.
   const stuck = solidAt(state.x, state.z, room);
+  // On foot, never stopped dead by a car, a kiosk or a wall: you step round it (the nearest way
+  // past, a little to one side and then the other).
+  const round = !state.onOkada && !stuck && solidAt(state.x + stepX, state.z + stepZ, room)
+    ? [0.45, -0.45, 0.9, -0.9, 1.3, -1.3].find((off) => !solidAt(state.x + Math.sin(state.heading + off) * state.speed * dt, state.z - Math.cos(state.heading + off) * state.speed * dt, room))
+    : undefined;
   if (stuck || !solidAt(state.x + stepX, state.z + stepZ, room)) {
     state.x += stepX;
     state.z += stepZ;
+  } else if (round !== undefined) {
+    state.x += Math.sin(state.heading + round) * state.speed * dt * Math.cos(round);
+    state.z -= Math.cos(state.heading + round) * state.speed * dt * Math.cos(round);
   } else if (!solidAt(state.x + stepX, state.z, room)) {
     state.x += stepX;
     state.speed *= 0.9;
@@ -932,7 +952,10 @@ function step(player: Player, dt: number, t: number) {
   placeBag(player);
 
   // Camera: follows behind the player, turning a little after them, closer on foot.
-  state.camHeading += angleDiff(state.heading, state.camHeading) * Math.min(1, dt * (state.onOkada ? 2.6 : 3.2));
+  // The camera: behind the okada as you ride; on foot it eases round behind you as you walk (and stays
+  // where it is while you stand, so the stick's directions stay put).
+  const camRate = state.onOkada ? 2.6 : story.autoRun || story.frozen ? 3.2 : Math.abs(state.speed) > 0.4 ? 1.1 : 0;
+  state.camHeading += angleDiff(state.heading, state.camHeading) * Math.min(1, dt * camRate);
   const view = state.onOkada ? VIEW.okada : VIEW.walk;
   const speedPull = state.onOkada ? Math.min(0.5, state.speed / 30) : 0; // pull back a little at speed
   state.zoom += (view.zoom - speedPull - state.zoom) * Math.min(1, dt * 2.5);
@@ -4070,10 +4093,10 @@ scene.add(buildings.group);
 life = new StreetLife((x, z, m) => buildings.blocked(x, z, m), { ...{
   // Packed, chaotic Circle (owner, 2026-10-27: "very crowded", kiosks and stalls everywhere).
   // On a struggling phone the walkers thin out automatically (busy %), the shops stay.
-  // still: people standing about on top of the walkers (still people: almost free to draw).
-  light: { radiusM: 140, people: 170, props: 520, scenes: 42, still: 160 },
-  standard: { radiusM: 200, people: 520, props: 1300, scenes: 100, still: 420 },
-  ultra: { radiusM: 280, people: 850, props: 2000, scenes: 150, still: 700 },
+  // still: people standing about on top of the walkers (idling and chatting).
+  light: { radiusM: 140, people: 170, props: 520, scenes: 42, still: 50 },
+  standard: { radiusM: 200, people: 520, props: 1300, scenes: 100, still: 160 },
+  ultra: { radiusM: 280, people: 850, props: 2000, scenes: 150, still: 260 },
 }[tier], smoothCrowd: PRESET.smoothCrowd, light: tier === 'light' });
 scene.add(life.group);
 life.groundDip = (x, z) => epicRoads.dipAt(x, z); // walkers step down onto the tarmac
