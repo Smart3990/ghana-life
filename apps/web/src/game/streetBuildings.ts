@@ -28,7 +28,7 @@ export type StreetLine = { kind: string; pts: Float32Array; edge?: boolean; brid
 export type Roof = { x: number; z: number; top: number; id: number };
 /** A place from the map (a filling station, bank, school...): its kind, name and where it is. */
 export type Poi = { kind: string; name: string; x: number; z: number };
-export type StreetsListener = (roads: StreetLine[], roofs: Roof[], pois: Poi[]) => void;
+export type StreetsListener = (roads: StreetLine[], roofs: Roof[], pois: Poi[], rails: StreetLine[]) => void;
 
 /** The part of the piece from (ax, ay) to (bx, by) inside the tile, and whether it leaves the tile at its end. */
 function clipToTile(ax: number, ay: number, bx: number, by: number): [number, number, number, number, boolean] | null {
@@ -272,16 +272,20 @@ export class StreetBuildings {
     if (roadsLayer && this.onStreets) {
       this.queue.push(() => {
         const roads: StreetLine[] = [];
+        const rails: StreetLine[] = [];
         for (let i = 0; i < roadsLayer.length; i++) {
           const f = roadsLayer.feature(i);
           const kind = String(f.properties.kind);
-          if (!['highway', 'major_road', 'minor_road', 'other'].includes(kind) || f.properties.is_tunnel) continue;
+          // The railway (the main lines, sidings and yards; not the ones in tunnels).
+          const rail = kind === 'rail' && f.properties.kind_detail === 'rail';
+          if ((!rail && !['highway', 'major_road', 'minor_road', 'other'].includes(kind)) || f.properties.is_tunnel) continue;
           const edge = kind === 'other' || !!f.properties.is_bridge;
           for (const line of f.loadGeometry()) {
             // Only the part inside this tile (the border is repeated in the next tile).
             let run: number[] = [];
             const flush = () => {
-              if (run.length >= 4) roads.push({ kind, pts: new Float32Array(run), edge, bridge: !!f.properties.is_bridge, name: f.properties.name ? String(f.properties.name) : undefined, oneway: f.properties.oneway === 'yes' || f.properties.oneway === true });
+              if (run.length >= 4 && rail) rails.push({ kind, pts: new Float32Array(run), bridge: !!f.properties.is_bridge });
+              else if (run.length >= 4) roads.push({ kind, pts: new Float32Array(run), edge, bridge: !!f.properties.is_bridge, name: f.properties.name ? String(f.properties.name) : undefined, oneway: f.properties.oneway === 'yes' || f.properties.oneway === true });
               run = [];
             };
             // Each piece is cut exactly at the tile's border (a long straight road can cross it in
@@ -317,7 +321,7 @@ export class StreetBuildings {
             pois.push({ kind: String(f.properties.kind), name: f.properties.name ? String(f.properties.name) : '', x, z });
           }
         }
-        this.onStreets!(roads, roofs, pois);
+        this.onStreets!(roads, roofs, pois, rails);
       });
     }
   }

@@ -3,6 +3,7 @@
 // keyboard or controller, who can get on an okada and ride through Accra, while staying smooth
 // on a cheap phone? The map, buildings and traffic are the game's own; this page adds the
 // follow camera, the 3D player and okada (through a three.js layer inside the map) and the controls.
+import { Railway } from '../game/railway';
 import * as THREE from 'three';
 import * as maplibregl from 'maplibre-gl';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
@@ -1096,6 +1097,7 @@ function step(player: Player, dt: number, t: number) {
     placeRetry = 3;
     places.retry(placeFor, state.x, state.z);
   }
+  if (streetTraffic) streetTraffic.walkers = life?.crossers ?? [];
   streetTraffic?.update(here[0], here[1], Date.now() / 1000, TRAFFIC_LANE_M, story.hidePlayer ? undefined : state);
   updateStats(dt);
   updateButtons();
@@ -3953,10 +3955,9 @@ function tapVehicle(sx: number, sy: number) {
   if (!best || !streetTraffic) return;
   const info = streetTraffic.vehicleInfo(best.p.v);
   const name = KIND_NAME[best.p.v.kind] ?? 'Vehicle';
-  if (info.ad === null) {
-    toast(name, 'No advert space on this one');
-    return;
-  }
+  // Every vehicle opens the card (owner, 28 Oct 2026: never "no advert space"): one with no advert of its
+  // own starts at a free space in the same set, where your advert can go.
+  if (info.ad === null) info.ad = best.p.v.id % AD_ROWS;
   // The card shows every advert that rides the city's vehicles, starting with the one on this one
   // now; the vehicle carries on driving (owner, 28 Oct 2026: it "doesn't affect the cars movement").
   const traffic = streetTraffic;
@@ -4134,7 +4135,10 @@ let trafficSim: TrafficSim | null = null;
 const buildings = new StreetBuildings(
   (lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT],
   { light: 220, standard: 320, ultra: 450 }[tier],
-  (roads, roofs, pois) => {
+  (roads, roofs, pois, rails) => {
+    // The railway first, so nothing is placed on the track.
+    railway.add(rails);
+    life?.addRails(rails);
     life?.add(roads, roofs);
     // The roads themselves, in the Epic City pack's design (tarmac, kerbs, pavements, lines).
     epicRoads.add(roads);
@@ -4419,6 +4423,8 @@ let screenCheck = 0;
 
 // Flyovers built from the map's bridges.
 const flyovers = new Flyovers();
+const railway = new Railway();
+scene.add(railway.group);
 flyovers.maxLamps = { light: 40, standard: 90, ultra: 140 }[tier];
 scene.add(flyovers.group);
 const epicRoads = new EpicRoads();
@@ -4522,7 +4528,7 @@ async function start() {
     };
     streetTraffic.sim = trafficSim;
     void loadDriver();
-    if (debug) Object.assign(window, { __street: { state, sky, look, life, story, thief, signals, lightFor, flyovers, pinch, bigScreen, roadSigns, getStation: () => station, places, fuelWhy, bag, driver, shove, uncle, compound, props, camera3d, adCard, frameShot, placeCompound, buildings, nimaRoute, rideSign, RIDE_SIGNS, map, placeCarTag, fullMap, phone, camAvoid, camAt, viewBlocked, heightAtView, solidAt, traffic: streetTraffic, driveIn, parkingNear, pullIn, pullOut, roadLineNear, compoundAt, music, streetSound, epicRoads, THREE, horns: () => hornsPlayed, people: () => ({ player: playerPerson, thief: thief.person, auntie, uncle }), vehicleAt: (x: number, z: number, r: number) => vehicleAt(x, z, r), placesSolid: (x: number, z: number, r: number) => places.solid(x, z, r), trafficSim: () => trafficSim, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
+    if (debug) Object.assign(window, { __street: { state, sky, look, life, story, thief, signals, lightFor, flyovers, pinch, bigScreen, roadSigns, getStation: () => station, places, fuelWhy, bag, driver, shove, uncle, compound, props, camera3d, adCard, frameShot, placeCompound, buildings, nimaRoute, rideSign, RIDE_SIGNS, map, placeCarTag, fullMap, phone, camAvoid, camAt, viewBlocked, heightAtView, solidAt, traffic: streetTraffic, railway, driveIn, parkingNear, pullIn, pullOut, roadLineNear, compoundAt, music, streetSound, epicRoads, THREE, horns: () => hornsPlayed, people: () => ({ player: playerPerson, thief: thief.person, auntie, uncle }), vehicleAt: (x: number, z: number, r: number) => vehicleAt(x, z, r), placesSolid: (x: number, z: number, r: number) => places.solid(x, z, r), trafficSim: () => trafficSim, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
   }
 
   document.getElementById('loading')!.remove();

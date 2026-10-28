@@ -39,6 +39,7 @@ type Seg = {
   dead: boolean;
   /** Runs through something solid (under a low flyover ramp, through a building): never used. */
   walled?: boolean;
+  wallAt?: number; // how far along it the first solid point is
   checked?: number; // the blockVersion it was last checked against
   start?: Node; // lanes: the junction at its start
   edge: number; // the road piece it belongs to (lanes of the same edge and direction share it)
@@ -219,12 +220,18 @@ export class TrafficSim {
     seg.checked = this.blockVersion;
     const was = !!seg.walled;
     seg.walled = this.duplicate(seg);
+    seg.wallAt = undefined;
     if (!seg.walled && this.blocked && !seg.bridge) {
       const step = 2;
       for (let i = 1; i < seg.pts.length / 2 && !seg.walled; i++) {
         const ax = seg.pts[i * 2 - 2], az = seg.pts[i * 2 - 1], bx = seg.pts[i * 2], bz = seg.pts[i * 2 + 1];
         const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / step));
-        for (let k = 0; k <= n; k++) if (this.blocked(ax + ((bx - ax) * k) / n, az + ((bz - az) * k) / n)) { seg.walled = true; break; }
+        for (let k = 0; k <= n; k++)
+          if (this.blocked(ax + ((bx - ax) * k) / n, az + ((bz - az) * k) / n)) {
+            seg.walled = true;
+            seg.wallAt = seg.cum[i - 1] + (Math.hypot(bx - ax, bz - az) * k) / n;
+            break;
+          }
       }
     }
     if (seg.walled !== was) this.walledCount += seg.walled ? 1 : -1;
@@ -651,6 +658,15 @@ export class TrafficSim {
           lead = 0;
         }
       }
+      // A lane found to run into something solid (more buildings loaded): stop before it (the vehicle
+      // is taken away once out of sight, never in front of you).
+      if (seg.walled && seg.wallAt !== undefined && seg.wallAt > car.s) {
+        const g = seg.wallAt - car.s - car.len / 2 - 1;
+        if (g < gap) {
+          gap = Math.max(0, g);
+          lead = 0;
+        }
+      }
       // 5. A story vehicle's stop: it comes to rest with its middle there.
       if (car.story?.stop) {
         const d = this.distAlong(car, car.story.stop);
@@ -705,7 +721,12 @@ export class TrafficSim {
       const p = this.pointAt(car.seg, car.s);
       const d2 = (p.x - x) ** 2 + (p.z - z) ** 2;
       const keep = car.story && !car.story.released;
-      if (!keep && (this.isWalled(car.seg) || d2 > r2 || (car.stuck > 25 && !car.seg.link && !car.plan && d2 > this.opts.seen ** 2))) this.drop(car);
+      const seen = d2 <= this.opts.seen ** 2;
+      // Taken away only out of sight: far away, stuck at a dead end, or on a lane closed since it joined
+      // (unless it is already inside something solid, where nobody may see it).
+      const walledNow = this.isWalled(car.seg);
+      const inside = walledNow && car.seg.wallAt !== undefined && Math.abs(car.seg.wallAt - car.s) < car.len / 2;
+      if (!keep && ((walledNow && (!seen || inside)) || d2 > r2 || (car.stuck > 25 && !car.seg.link && !car.plan && !seen))) this.drop(car);
     }
     // Keep each piece's list in order (vehicles only move forward, so this is cheap).
     for (const seg of this.active) seg.cars.sort((a, b) => a.s - b.s);

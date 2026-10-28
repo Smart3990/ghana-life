@@ -536,6 +536,19 @@ export class StreetLife {
     return this.keepClear.some((k) => Math.hypot(k.x - x, k.z - z) < k.r + margin);
   }
 
+  /** The railway: kept clear like a road (nothing stands on the track). */
+  addRails(rails: StreetLine[]) {
+    if (!rails.length) return;
+    for (const r of rails) for (let i = 0; i + 3 < r.pts.length; i += 2) this.addToGrid(r.pts[i], r.pts[i + 1], r.pts[i + 2], r.pts[i + 3], 1.8);
+    const clear = (list: Spot[], margin: number) => list.filter((p) => !this.onRoad(p.x, p.z, margin));
+    this.kiosks.all = clear(this.kiosks.all, 1.3);
+    this.umbrellas.all = clear(this.umbrellas.all, 0.9);
+    this.phones.all = clear(this.phones.all, 0.8);
+    this.trees.all = clear(this.trees.all, 0.5);
+    this.palms.all = clear(this.palms.all, 0.5);
+    this.poles.all = clear(this.poles.all, 0.3);
+    this.boards.all = clear(this.boards.all, 2.5);
+  }
   /** New roads and roofs from a tile: place things along them. */
   add(allRoads: StreetLine[], roofs: Roof[]) {
     let roads = allRoads;
@@ -799,6 +812,8 @@ export class StreetLife {
   }
 
   /** Call every frame. */
+  /** People out on the road crossing it this frame (the drivers stop for them). */
+  crossers: { x: number; z: number }[] = [];
   update(x: number, z: number, dt: number, t: number) {
     this.time.value = t;
     if (Math.hypot(x - this.lastRefresh.x, z - this.lastRefresh.z) > 30) this.refresh(x, z);
@@ -1223,6 +1238,7 @@ export class StreetLife {
   vehicleAt: ((x: number, z: number, room: number) => { x: number; z: number; fx: number; fz: number; half: number; halfW: number } | null) | null = null;
 
   private movePeople(x: number, z: number, t: number, dt: number) {
+    this.crossers.length = 0;
     this.posed?.begin();
     for (const b of Object.values(this.crowds)) b!.begin();
     const FAR_WALKER = 25; // beyond this, walkers are drawn with the simpler shape
@@ -1325,6 +1341,8 @@ export class StreetLife {
             }
             const k = Math.max(0, Math.min(1, d / (c.len || 1)));
             [qx, qz] = [c.ax + (c.bx - c.ax) * k, c.az + (c.bz - c.az) * k];
+            // Out on the road: the drivers stop for them (vehicles3d.ts, walkers).
+            if (d > 0.3 && d < c.len - 0.3) this.crossers.push({ x: qx, z: qz });
             dir = Math.atan2(c.bx - c.ax, -(c.bz - c.az));
           } else {
             const w = a.run;

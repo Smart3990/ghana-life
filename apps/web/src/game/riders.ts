@@ -10,20 +10,24 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 
 /** Where riders sit on each vehicle type, in the vehicle's own metres (front is +z, its left is +x). */
-export const SEATS: Record<string, { at: [number, number, number][]; extra?: number }> = {
+/** How a person sits: astride a bike (shins straight down), in a car seat (feet forward on the floor),
+ * or low in a cockpit (legs out flat). (Owner, 28 Oct 2026: drivers' legs showed under the cars.) */
+export type SitPose = 'bike' | 'car' | 'low';
+export const SIT_POSES: SitPose[] = ['bike', 'car', 'low'];
+export const SEATS: Record<string, { at: [number, number, number][]; extra?: number; pose?: SitPose }> = {
   // The okada rider, and a passenger behind in about half of them.
   okada: { at: [[0, 0.72, -0.12], [0, 0.8, -0.62]], extra: 0.5 },
-  golfcart: { at: [[0.27, 0.55, -0.25], [-0.27, 0.55, -0.25]], extra: 0.5 },
-  jeep: { at: [[0.42, 0.62, -0.25], [-0.42, 0.62, -0.25]], extra: 0.6 },
-  suvjeep: { at: [[0.42, 0.62, -0.25], [-0.42, 0.62, -0.25]], extra: 0.6 },
-  roller: { at: [[0, 1.45, -0.7]] },
-  bulldozer: { at: [[0, 1.35, -0.9]] },
-  forklift: { at: [[0, 0.95, -0.45]] },
+  golfcart: { at: [[0.27, 0.6, -0.25], [-0.27, 0.6, -0.25]], extra: 0.5, pose: 'car' },
+  jeep: { at: [[0.42, 0.66, -0.25], [-0.42, 0.66, -0.25]], extra: 0.6, pose: 'car' },
+  suvjeep: { at: [[0.42, 0.66, -0.25], [-0.42, 0.66, -0.25]], extra: 0.6, pose: 'car' },
+  roller: { at: [[0, 1.45, -0.7]], pose: 'car' },
+  bulldozer: { at: [[0, 1.35, -0.9]], pose: 'car' },
+  forklift: { at: [[0, 0.95, -0.45]], pose: 'car' },
   // Our tricycles: the pragya's driver, and passengers on the bench behind in most of them; the
   // cargo tricycle's rider. The formula car's driver in the open cockpit.
-  tricycle: { at: [[0, 1.0, 0.22], [0.3, 1.12, -0.8], [-0.3, 1.12, -0.8]], extra: 0.6 },
+  tricycle: { at: [[0, 1.06, 0.22], [0.3, 1.14, -0.8], [-0.3, 1.14, -0.8]], extra: 0.6 }, // (feet inside the front body and the tub, not below them)
   motorking: { at: [[0, 1.0, 0.58]] },
-  formula: { at: [[0, 0.3, -0.35]] },
+  formula: { at: [[0, 0.34, -0.45]], pose: 'low' },
 };
 
 // The pack's skin colour cells (the top row of the texture sheet): from the lightest, used by the
@@ -48,7 +52,7 @@ function aim(bone: THREE.Object3D, child: THREE.Object3D, dir: THREE.Vector3) {
 }
 
 /** One sitting person, frozen into a plain shape with its seat (hips) at the origin, facing +z. */
-async function sitting(file: string, skin: number): Promise<THREE.BufferGeometry | null> {
+async function sitting(file: string, skin: number, how: SitPose): Promise<THREE.BufferGeometry | null> {
   const loader = new GLTFLoader();
   loader.setMeshoptDecoder(MeshoptDecoder);
   const g = await loader.loadAsync('/models/epic/' + file);
@@ -64,12 +68,16 @@ async function sitting(file: string, skin: number): Promise<THREE.BufferGeometry
   const B = (n: string) => bones.get(n);
   const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
   // Sitting: thighs forward, shins down, a little lean, arms reaching forward to the handlebars.
+  // In a car seat the shins slope forward to the pedals; low in a cockpit the legs lie out in front.
+  const shin = how === 'bike' ? v(0, -1, 0.15) : how === 'car' ? v(0, -0.6, 0.8) : v(0, -0.12, 1);
+  const thigh = how === 'low' ? v(0, 0.08, 1) : v(0, -0.2, 1);
+  const lean = how === 'low' ? v(0, 1, -0.25) : v(0, 1, 0.12);
   const pose: [string, string, THREE.Vector3][] = [
-    ['Spine', 'Spine1', v(0, 1, 0.12)],
-    ['LeftUpLeg', 'LeftLeg', v(0.12, -0.2, 1)],
-    ['RightUpLeg', 'RightLeg', v(-0.12, -0.2, 1)],
-    ['LeftLeg', 'LeftFoot', v(0.05, -1, 0.15)],
-    ['RightLeg', 'RightFoot', v(-0.05, -1, 0.15)],
+    ['Spine', 'Spine1', lean],
+    ['LeftUpLeg', 'LeftLeg', v(0.12, thigh.y, thigh.z)],
+    ['RightUpLeg', 'RightLeg', v(-0.12, thigh.y, thigh.z)],
+    ['LeftLeg', 'LeftFoot', v(0.05, shin.y, shin.z)],
+    ['RightLeg', 'RightFoot', v(-0.05, shin.y, shin.z)],
     ['LeftArm', 'LeftForeArm', v(0.25, -0.55, 0.8)],
     ['RightArm', 'RightForeArm', v(-0.25, -0.55, 0.8)],
     ['LeftForeArm', 'LeftHand', v(0.05, -0.15, 1)],
@@ -118,9 +126,13 @@ async function sitting(file: string, skin: number): Promise<THREE.BufferGeometry
   return out;
 }
 
-let made: Promise<THREE.BufferGeometry[]> | null = null;
-/** A few different sitting people (different clothes and skin tones). */
-export function riderShapes(): Promise<THREE.BufferGeometry[]> {
-  made ??= Promise.all(FILES.map((f, i) => sitting(f, i % 3).catch(() => null))).then((list) => list.filter((g): g is THREE.BufferGeometry => !!g));
-  return made;
+const made = new Map<SitPose, Promise<THREE.BufferGeometry[]>>();
+/** A few different sitting people (different clothes and skin tones), in one way of sitting. */
+export function riderShapes(how: SitPose = 'bike'): Promise<THREE.BufferGeometry[]> {
+  let p = made.get(how);
+  if (!p) {
+    p = Promise.all(FILES.map((f, i) => sitting(f, i % 3, how).catch(() => null))).then((list) => list.filter((g): g is THREE.BufferGeometry => !!g));
+    made.set(how, p);
+  }
+  return p;
 }

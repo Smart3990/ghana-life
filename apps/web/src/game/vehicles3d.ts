@@ -12,7 +12,7 @@ import { slidingAdMaterial } from './adScreens';
 import { epicGeometry, epicGlowMaps, epicMaterial } from './epicKit';
 import type { TrafficSim } from './trafficSim';
 import { TYPE_BY_KEY, VEHICLE_TYPES, typeFor } from './vehicleTypes';
-import { SEATS, riderShapes } from './riders';
+import { SEATS, SIT_POSES, riderShapes } from './riders';
 
 // Modern vehicles (public/models/vehicles): small models of today's Accra traffic (Corolla-size
 // sedans, Vitz-size hatchbacks, RAV4-size SUVs, Hilux-size pickups, Hiace-size trotros, buses and
@@ -902,10 +902,14 @@ export class StreetTraffic {
   private riderKinds = 0;
   private seat = new THREE.Matrix4();
   private async loadRiders() {
-    const near = await riderShapes();
-    const far = await Promise.all(near.map((g) => simpler(g, 0.35, true)));
-    const shapes = [...near, ...far];
-    this.riderKinds = near.length;
+    // For each way of sitting (bike, car, low): the people near, then the same people simpler (far).
+    const shapes: THREE.BufferGeometry[] = [];
+    for (const how of SIT_POSES) {
+      const near = await riderShapes(how);
+      const far = await Promise.all(near.map((g) => simpler(g, 0.35, true)));
+      this.riderKinds = near.length;
+      shapes.push(...near, ...far);
+    }
     const mat = dayLookMaterial(); // (keeps the day glow at night)
     this.riders = shapes.map((g) => {
       const m = new THREE.InstancedMesh(g, mat, this.limit);
@@ -919,16 +923,30 @@ export class StreetTraffic {
     this.riderCounts = shapes.map(() => 0);
   }
   /** The pack's vehicles in place of ours, as each one arrives. */
+  /** The pack models that have arrived (until one has, a vehicle of that type borrows another of its kind). */
+  private packReady = new Set<string>();
+  /** Which model to draw for a type: its own once downloaded, otherwise one of the same kind that is. */
+  private drawKey(key: BatchKey): BatchKey {
+    if (this.packReady.has(key) || !PACK[key] || !this.packReady.size) return key;
+    const kind = TYPE_BY_KEY.get(key)?.kind;
+    for (const t of VEHICLE_TYPES) if (t.kind === kind && this.packReady.has(t.key)) return t.key as BatchKey;
+    return key;
+  }
   private async loadPack() {
     const atlas = await atlasPixels();
     if (!atlas) return;
     const fixedMat = dayLookMaterial(); // (its own copy: it keeps the day glow at night, so windows stay glass)
-    for (const [key, spec] of Object.entries(PACK) as [BatchKey, NonNullable<(typeof PACK)[BatchKey]>][]) {
+    // The most common types first, four at a time (owner, 28 Oct 2026: boxy cars on a slow network
+    // were the shapes drawn while the models downloaded one by one).
+    const order = (Object.entries(PACK) as [BatchKey, NonNullable<(typeof PACK)[BatchKey]>][]).sort(
+      (a, b) => (TYPE_BY_KEY.get(b[0])?.weight ?? 0) - (TYPE_BY_KEY.get(a[0])?.weight ?? 0),
+    );
+    const one = async ([key, spec]: (typeof order)[number]) => {
       let geo: THREE.BufferGeometry;
       try {
         geo = await epicGeometry(`vehicles/${spec.file}.glb`);
       } catch {
-        continue;
+        return;
       }
       const { paint, fixed } = splitPaint(geo, atlas, spec.paint, spec.white ?? []);
       const b = this.batches[key];
@@ -949,7 +967,12 @@ export class StreetTraffic {
         ads.geometry = g;
       }
       if (key === 'taxi') this.packTaxi = true;
-    }
+      this.packReady.add(key);
+    };
+    let next = 0;
+    await Promise.all(Array.from({ length: 4 }, async () => {
+      while (next < order.length) await one(order[next++]);
+    }));
   }
 
   private async loadModern() {
@@ -1081,6 +1104,8 @@ export class StreetTraffic {
   }
   /** Vehicles told to stay where they are (a driver who got out). */
   hold = new Set<number>();
+  /** People out on the road (streetLife.ts crossers), set each frame. */
+  walkers: { x: number; z: number }[] = [];
   private blockedTotal = new Map<number, number>();
 
   /** The traffic drivers (trafficSim.ts): when set, vehicles drive by the rules instead of the timetable. */
@@ -1100,9 +1125,13 @@ export class StreetTraffic {
     this.storyAt = { lon, lat, t };
     for (const q of this.story) if (q.shown) sim.obstacles.push({ x: q.x, z: q.z, r: KIND_LENGTH[q.kind] / 2, heading: q.heading, half: (TYPE_BY_KEY.get(q.key)?.len ?? KIND_LENGTH[q.kind]) / 2, halfW: (TYPE_BY_KEY.get(q.key)?.width ?? 2) / 2 });
     for (const q of this.parked) sim.obstacles.push({ x: q.x, z: q.z, r: 2.6 });
+    // People crossing the road: drivers stop for them (owner, 28 Oct 2026: never through each other).
+    for (const w of this.walkers) sim.obstacles.push({ x: w.x, z: w.z, r: 0.5 });
     sim.hold = this.hold;
     sim.update(dt, mx, mz);
-    const placed = sim.near(mx, mz, this.radiusM, this.limit).filter((p) => !this.hide.has(p.v.id) && this.routeOk(p));
+    // (No lane of the traffic runs through a low ramp any more, trafficSim.ts: nothing is hidden for
+    // touching one, so nothing blinks out passing a ramp's foot.)
+    const placed = sim.near(mx, mz, this.radiusM, this.limit).filter((p) => !this.hide.has(p.v.id));
     this.placed = placed;
     this.boxes = [];
     for (const p of placed) {
@@ -1353,11 +1382,11 @@ export class StreetTraffic {
       // On a flyover: at the deck's height.
       // Off it: on the tarmac, which sits a little below the pavement.
       const ground = p.bridge && this.deckHeight ? this.deckHeight(x, z) : -(this.groundDip?.(x, z) ?? 0);
-      draws.push({ key, id: p.v.id, x, z, ground, heading: p.heading, colour: p.v.colour, bounce: true });
+      draws.push({ key: this.drawKey(key), id: p.v.id, x, z, ground, heading: p.heading, colour: p.v.colour, bounce: true });
     }
-    for (const q of this.parked) draws.push({ ...q, ground: -(this.groundDip?.(q.x, q.z) ?? 0), bounce: false });
+    for (const q of this.parked) draws.push({ ...q, key: this.drawKey(q.key), ground: -(this.groundDip?.(q.x, q.z) ?? 0), bounce: false });
     // The story's own vehicles first, so they are always drawn even when a batch is full.
-    for (const q of this.story) if (q.shown) draws.unshift({ key: q.key, id: q.id, x: q.x, z: q.z, heading: q.heading, colour: q.colour, ground: -(this.groundDip?.(q.x, q.z) ?? 0), bounce: q.moving });
+    for (const q of this.story) if (q.shown) draws.unshift({ key: this.drawKey(q.key), id: q.id, x: q.x, z: q.z, heading: q.heading, colour: q.colour, ground: -(this.groundDip?.(q.x, q.z) ?? 0), bounce: q.moving });
     const [px, pz] = this.toLocal(lon, lat);
     const farCounts: Partial<Record<BatchKey, number>> = {};
     this.riderCounts.fill(0);
@@ -1393,7 +1422,8 @@ export class StreetTraffic {
       if (seats && this.riders.length) {
         seats.at.forEach(([sx, sy, sz], si) => {
           if (si > 0 && ((d.id * 2654435761 + si * 40503) >>> 0) / 4294967296 > (seats.extra ?? 1)) return;
-          const r = ((d.id + si * 7) % this.riderKinds) + (isFar ? this.riderKinds : 0);
+          const how = Math.max(0, SIT_POSES.indexOf(seats.pose ?? 'bike'));
+          const r = how * this.riderKinds * 2 + ((d.id + si * 7) % this.riderKinds) + (isFar ? this.riderKinds : 0);
           const mesh = this.riders[r];
           if (this.riderCounts[r] >= mesh.instanceMatrix.count) return;
           mesh.setMatrixAt(this.riderCounts[r]++, this.seat.makeTranslation(sx, sy, sz).premultiply(this.m));

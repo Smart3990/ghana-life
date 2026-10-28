@@ -469,6 +469,16 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
 
   - **Talk to anyone, and ask for help** (owner, 28 Oct): besides people on the pavements and at places, you can greet riders and drivers right beside you while their vehicle is stopped or crawling in the traffic (okada riders, tricycle and open-jeep drivers, taxi drivers, trotro mates, other drivers); their vehicle waits while you talk. Every conversation offers "Please, I am new in Accra. Can you help me?": about six in ten help, telling you which way to go (straight ahead, on your left or right, behind you) and roughly how far: to where the story is sending you (Auntie Dede, with a word about the zebra), or else to somewhere useful nearby (bus stop, chop bar, mobile money, pharmacy, market, police station, lorry station); the others are not from here and send you to ask someone else. New talk lines for riders and drivers.
 
+  - **Vehicles put right, and the railway** (owner, 28 Oct):
+    - No more vanishing (the ambulance and others): when more buildings load and a lane turns out to run into something solid, the vehicles on it now stop before that point and are only taken away once you can no longer see them. Vehicles are no longer hidden for touching the foot of a flyover ramp.
+    - Longer at the lights: each light now turns every 60 s, so a road waits about half a minute on red (it was about 19 s).
+    - Every vehicle you tap opens the advert card (never "No advert space on this one"); one without an advert starts at a free space where yours can go.
+    - Legs no longer show under vehicles: drivers in open cars, golf carts, jeeps, forklifts, rollers and bulldozers sit with their feet forward on the floor; the open-wheel racer's driver lies low with legs out in front; the pragya driver sits a little higher, so his feet stay inside. (Measured: feet 0.47 m below the seat in a car, 0.16 m in the racer, instead of 0.62 m.)
+    - People crossing the road: once a walker steps off the kerb, every driver stops for them, so cars and people no longer pass through each other on the road.
+    - No more boxy stand-in cars on a slow connection: the vehicle models now download four at a time, the most common first, and until a type has arrived it is drawn with another downloaded model of the same kind (not the old plain box shape). The pack's own police car, ambulance and the rest are kept.
+    - The railway: the real Accra lines from the map tiles near Circle are now on the ground as track (gravel bed, sleepers, two steel rails at Ghana's 1.067 m gauge), and kiosks, trees and boards are kept off it. About 3,600 triangles for all the track loaded around Circle, one draw per tile.
+    - Done when: a tapped plain car opens the card; a vehicle is never seen to disappear; the railway can be walked up to near Circle; the full story still has 0 contacts.
+
 ## Waiting on the owner
 
 - Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.

@@ -12,8 +12,9 @@ export type Arm = { angle: number; half: number }; // angle: direction from the 
 export type Junction = { x: number; z: number; axis: number; arms: Arm[]; half: number; phase: number };
 export type Light = 'green' | 'amber' | 'red';
 
-const CYCLE = 36; // seconds for both roads to have their turn
-const GREEN = 14;
+// (Owner, 28 Oct 2026: cars should stand at the lights longer: about half a minute on red.)
+const CYCLE = 60; // seconds for both roads to have their turn
+const GREEN = 25;
 const AMBER = 3;
 const GUTTER = 0.6;
 
