@@ -36,11 +36,14 @@ type Look = {
   shade: number; // shadow strength
 };
 // From deep night to high noon. In between, everything is blended.
+// (Owner, 28 Oct 2026: "people and cars should never lose their colours at any time of day, just a
+// little shade so we can tell the difference." So the night light is a soft, nearly white moonlight
+// at about three quarters of the day's; the dark sky, lit windows and street lights say it is night.)
 const LOOKS: Look[] = [
-  { el: -14, sun: '#9fb2e8', sunI: 0.45, sky: '#4a5f96', ground: '#141822', skyI: 0.6, env: 0.12, mapSky: '#060c1c', horizon: '#131f3c', fog: '#0f182c', dim: 0.55, shade: 0.12 },
-  { el: -6, sun: '#7f86c8', sunI: 0.3, sky: '#56619a', ground: '#18141a', skyI: 0.55, env: 0.25, mapSky: '#23305a', horizon: '#c0684a', fog: '#3a3550', dim: 0.32, shade: 0.12 },
-  { el: -1, sun: '#ff8a50', sunI: 0.6, sky: '#d99a86', ground: '#3a2a24', skyI: 0.7, env: 0.5, mapSky: '#5d5a8a', horizon: '#f59a5a', fog: '#d8a080', dim: 0.14, shade: 0.18 },
-  { el: 4, sun: '#ffa868', sunI: 1.6, sky: '#ffd8b0', ground: '#5a4232', skyI: 0.85, env: 0.8, mapSky: '#e8935a', horizon: '#ffd09a', fog: '#f0c49a', dim: 0.08, shade: 0.26 },
+  { el: -14, sun: '#e4eaff', sunI: 1.35, sky: '#d6ddf2', ground: '#5d5c66', skyI: 0.95, env: 0.7, mapSky: '#060c1c', horizon: '#131f3c', fog: '#0f182c', dim: 0.32, shade: 0.14 },
+  { el: -6, sun: '#ece2f2', sunI: 1.3, sky: '#dfd4e4', ground: '#5e5052', skyI: 0.94, env: 0.74, mapSky: '#23305a', horizon: '#c0684a', fog: '#3a3550', dim: 0.2, shade: 0.15 },
+  { el: -1, sun: '#ffb488', sunI: 1.4, sky: '#f2cbb8', ground: '#5c463a', skyI: 0.92, env: 0.78, mapSky: '#5d5a8a', horizon: '#f59a5a', fog: '#d8a080', dim: 0.1, shade: 0.2 },
+  { el: 4, sun: '#ffa868', sunI: 1.8, sky: '#ffd8b0', ground: '#5a4232', skyI: 0.92, env: 0.85, mapSky: '#e8935a', horizon: '#ffd09a', fog: '#f0c49a', dim: 0.05, shade: 0.26 },
   { el: 16, sun: '#ffcb94', sunI: 2.3, sky: '#fff1dc', ground: '#6b4f3a', skyI: 1, env: 1, mapSky: '#f2b36b', horizon: '#f7d9b0', fog: '#f1d7b6', dim: 0, shade: 0.3 },
   { el: 40, sun: '#fff2df', sunI: 2.7, sky: '#f4f6ff', ground: '#7a6450', skyI: 1.08, env: 1.1, mapSky: '#8ec1e6', horizon: '#e4edf2', fog: '#e8eef0', dim: 0, shade: 0.32 },
 ];
