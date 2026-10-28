@@ -397,6 +397,13 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
     - Not used: the "ARCADE Ultimate Vehicles Pack" file the owner sent has a note inside saying it was uploaded by unityassetcollection.com, a site that gives out paid packs without the makers' permission, so it is not licensed for the game; the unpacked copy was deleted. Bought from the Unity Asset Store, it can be added.
     - Scene on Light: about 315,000 to 325,000 triangles.
 
+  - **Riders on the bikes, story vehicles that respect traffic, nothing disappearing** (owner, 28 Oct):
+    - Okadas have their rider, and about half a passenger behind; open jeeps, golf carts, road rollers, bulldozers and forklifts have their driver (`src/game/riders.ts`). They are the pack's people, sat down: the rigged person is posed (thighs forward, knees bent, hands on the handlebars) and frozen into a plain shape, so hundreds draw in one go; their skin is moved to the pack's darker skin colours (Ghanaian tones). Far away they are drawn simpler, like the vehicles.
+    - The story's own vehicles (the trotro you arrive in, the chase taxi, Uncle Kwame's car) drove on fixed timings and went through the traffic. Now their way is cleared of traffic at the camera cut that starts each scene (nobody sees cars go), traffic waits behind them, and when they drive off they wait behind whatever is in front (never through it) and are let go once out of sight.
+    - Vehicle windows stay glass at night (their material keeps the day glow even when it is made at night).
+    - Nothing blinks out: the crowd is never thinned below 85% on a struggling phone (it was down to 30%), and many more vehicles may be drawn (Light 260, Standard 420, Ultra 560) than are ever near you, so the ones at the edge no longer blink in and out. Vehicles switch to their simpler shape from 30 m.
+    - Cost on Light at the test spot: about 430,000 triangles, most of it the crowd (our people models, about 1,100 to 1,300 triangles each, about 165,000 in all); step 5 replaces them with the pack's people (about 450 each). Needs the owner's frame-rate check on the cheap Android.
+
 ## Waiting on the owner
 
 - Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.

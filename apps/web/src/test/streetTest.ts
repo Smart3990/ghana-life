@@ -1696,6 +1696,42 @@ function ambulanceId() {
   // A number with no advert space on it (the vehicles' adverts are picked by number).
   for (let id = 900100; ; id++) if (((id * 2246822519) >>> 0) / 4294967296 >= 0.8) return id;
 }
+/** Is there a vehicle (of the traffic) just in front of a story vehicle at (x, z) facing `heading`? */
+function storyBlocked(x: number, z: number, heading: number, half: number) {
+  if (!streetTraffic) return false;
+  const fx = Math.sin(heading), fz = -Math.cos(heading);
+  for (const b of streetTraffic.boxes) {
+    if (streetTraffic.story.some((q) => q.x === b.x && q.z === b.z)) continue; // (story vehicles themselves)
+    const dx = b.x - x, dz = b.z - z;
+    const along = dx * fx + dz * fz;
+    if (along <= 0 || along > half + b.half + 2) continue;
+    if (Math.abs(dx * -fz + dz * fx) < 1.05 + b.halfW) return true;
+  }
+  return false;
+}
+/** Clear the traffic off a story vehicle's path (at a camera cut). */
+function clearStoryPath(pts: { x: number; z: number }[], width = 3.4) {
+  trafficSim?.clearAlong(pts.map((p) => [p.x, p.z] as [number, number]), width);
+}
+/** Drive a story vehicle along `at(d)` from d0, speeding up to `speed`, waiting behind traffic; done when far from you or after `seconds`. */
+function driveAway(car: { x: number; z: number; heading: number }, at: (d: number) => { x: number; z: number; heading: number }, d0: number, speed: number, seconds: number, done: () => void, accel = 2.4) {
+  let d = d0, v = 0, t = 0, last = gameClock;
+  const step = () => {
+    const dt = Math.min(0.1, gameClock - last);
+    last = gameClock;
+    t += dt;
+    const ahead = at(d + 1);
+    if (storyBlocked(ahead.x, ahead.z, ahead.heading, 2.6)) v = 0;
+    else v = Math.min(speed, v + accel * dt);
+    d += v * dt;
+    const q = at(d);
+    [car.x, car.z, car.heading] = [q.x, q.z, q.heading];
+    if (Math.hypot(q.x - state.x, q.z - state.z) > 75 || t > seconds) done();
+    else requestAnimationFrame(step);
+  };
+  step();
+}
+
 function ambulanceLook() {
   const g = new THREE.Group();
   const red = new THREE.MeshBasicMaterial({ color: '#ff2a2a' });
@@ -2435,6 +2471,8 @@ async function runChase(gone: Promise<void>) {
   while (reach > 8 && !life?.roadAt(stopAt.x - T.x * from * reach, stopAt.z - T.z * from * reach, 0.3)) reach -= 2;
   const car = { key: 'taxi' as const, kind: 'taxi' as const, id: 900001, x: stopAt.x - T.x * from * reach, z: stopAt.z - T.z * from * reach, heading: Math.atan2(T.x * from, -T.z * from), colour: '#f2efe6', shown: true, moving: true };
   streetTraffic?.story.push(car);
+  // Its way across is clear when the scene cuts to it (no car under it).
+  clearStoryPath([{ x: car.x, z: car.z }, stopAt, { x: stopAt.x + T.x * from * 12, z: stopAt.z + T.z * from * 12 }]);
   // The camera: from the side, you and the taxi's side filling the picture.
   cine.begin();
   story.shot = frameShot(kerb.x + H.x * 0.8, kerb.z + H.z * 0.8, ((Math.atan2(T.x, -T.z) + Math.PI / 2 + 0.5) * 180) / Math.PI, 6, 74);
@@ -2483,15 +2521,10 @@ async function runChase(gone: Promise<void>) {
   document.body.classList.remove('auto');
   // The taxi drives on.
   car.moving = true;
-  const t1 = gameClock;
-  const on = () => {
-    const d = (gameClock - t1) * 8;
-    car.x = stopAt.x + T.x * d * from;
-    car.z = stopAt.z + T.z * d * from;
-    if (d < 70) requestAnimationFrame(on);
-    else if (streetTraffic) streetTraffic.story = streetTraffic.story.filter((q) => q !== car);
-  };
-  on();
+  // It drives on, behind whatever is ahead of it (never through it), and is let go once out of sight.
+  driveAway(car, (d) => ({ x: stopAt.x + T.x * d * from, z: stopAt.z + T.z * d * from, heading: car.heading }), 0, 8, 30, () => {
+    if (streetTraffic) streetTraffic.story = streetTraffic.story.filter((q) => q !== car);
+  });
   blocker.on = false;
   await Promise.race([gone, pause(3)]);
   if (thief.on && thief.person) {
@@ -2613,6 +2646,8 @@ async function arriveByBus(): Promise<number | null> {
   };
   put(STOP - 45);
   streetTraffic.story.unshift(bus);
+  // Its lane is clear when the scene starts (no car under it as it comes in and stops).
+  clearStoryPath([-55, -30, -10, STOP, STOP + 12].map((d) => lane(d)));
   story.hidePlayer = true;
   // Seen from further along the kerb, looking back at the traffic: the trotro comes in and stops.
   const T = { x: Math.sin(lane(0).heading), z: -Math.cos(lane(0).heading) };
@@ -2645,14 +2680,10 @@ async function arriveByBus(): Promise<number | null> {
   [state.x, state.z] = [spot.x, spot.z];
   // The trotro pulls away and is gone.
   bus.moving = true;
-  const t1 = gameClock;
-  const go = () => {
-    const t = gameClock - t1;
-    put(STOP + 1.2 * t * t);
-    if (t < 7) requestAnimationFrame(go);
-    else streetTraffic!.story = streetTraffic!.story.filter((q) => q !== bus);
-  };
-  go();
+  // It pulls away down its lane, behind whatever is ahead (never through it), and is let go out of sight.
+  driveAway(bus, lane, STOP, 12, 40, () => {
+    streetTraffic!.story = streetTraffic!.story.filter((q) => q !== bus);
+  });
   state.heading = state.camHeading = lane(0).heading; // watching it go
   await pause(1.9);
   // Then you stand there taking it in, amazed by Accra's noise and crowds: you look one way down the
@@ -2872,6 +2903,8 @@ async function playOpening(start: StartChoice) {
       if (park.off > 0) life?.clearArea(park.x, park.z, 4.6); // kiosks there make room (the whole car length)
       const put = (q: { x: number; z: number; heading: number }) => ([uCar!.x, uCar!.z, uCar!.heading] = [q.x, q.z, q.heading]);
       put(pullIn(lane, park, -40));
+      // While the screen is black: his way in (and out again later) is clear of traffic.
+      clearStoryPath([-48, -30, -15, -5, 0].map((d) => pullIn(lane, park, d)));
       story.shot = frameShot((park.x + stall.chair.x) / 2, (park.z + stall.chair.z) / 2, sideBearing, 12, 70);
       await cine.black(false, 0.6);
       const t0 = gameClock;
@@ -2945,9 +2978,15 @@ async function playOpening(start: StartChoice) {
       const t0 = gameClock;
       uCar.moving = true;
       void cine.say('', 'Uncle Kwame drives you home to Nima.', 2.6);
+      let d = 0;
+      let last = gameClock;
       while (gameClock - t0 < 3.4) {
         const t = gameClock - t0;
-        const d = t < 2.5 ? 1.4 * t * t : 8.75 + (t - 2.5) * 7;
+        // Out into the road, waiting for a gap if a car is passing in front.
+        const want = t < 2.5 ? 1.4 * t * t : 8.75 + (t - 2.5) * 7;
+        const ahead = pullOut(lane, park, d + 1);
+        if (!storyBlocked(ahead.x, ahead.z, ahead.heading, 2.4)) d = Math.min(want, d + 8 * (gameClock - last));
+        last = gameClock;
         const q = pullOut(lane, park, d);
         [uCar.x, uCar.z, uCar.heading] = [q.x, q.z, q.heading];
         [state.x, state.z, state.heading] = [q.x, q.z, q.heading];
@@ -3937,7 +3976,7 @@ async function start() {
     trafficModel = traffic;
     for (const b of pendingBatches.splice(0)) traffic.addRoads(b);
     // Busy roads (raised from the first budget of 15 / 40 / 100: they are drawn in batches, so they cost little).
-    const limit = { light: 170, standard: 320, ultra: 420 }[tier];
+    const limit = { light: 260, standard: 420, ultra: 560 }[tier]; // (well above what is ever near you: nothing blinks out)
     streetTraffic = new StreetTraffic(traffic, (lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT], limit, { light: 105, standard: 170, ultra: 220 }[tier]);
     scene.add(streetTraffic.group);
     streetTraffic.deckHeight = (x, z) => flyovers.heightAt(x, z);
@@ -4035,7 +4074,8 @@ async function start() {
       const cap = PRESET.fps;
       if (fps < cap * 0.72 && density > 0.3) density *= 0.8;
       else if (fps > cap * 0.9 && density < 1) density = Math.min(1, density * 1.15);
-      life?.setDensity(density);
+      // The crowd stays (owner: people must not disappear): a struggling phone thins it only a little.
+      life?.setDensity(Math.max(0.85, density));
       // Vehicles are cheap to draw (a few batches): the roads always stay at least three-quarters full.
       // Rush hours fill the roads; a struggling phone thins them a little (never below three-quarters).
       if (streetTraffic) streetTraffic.density = roadFill(day.hour) * Math.max(0.75, density);

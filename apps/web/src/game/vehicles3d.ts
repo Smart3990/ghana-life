@@ -9,9 +9,10 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import type { Kind, Placed, Traffic } from './traffic';
 import { slidingAdMaterial } from './adScreens';
-import { epicGeometry, epicMaterial } from './epicKit';
+import { epicGeometry, epicGlowMaps, epicMaterial } from './epicKit';
 import type { TrafficSim } from './trafficSim';
 import { TYPE_BY_KEY, VEHICLE_TYPES, typeFor } from './vehicleTypes';
+import { SEATS, riderShapes } from './riders';
 
 // Modern vehicles (public/models/vehicles): small models of today's Accra traffic (Corolla-size
 // sedans, Vitz-size hatchbacks, RAV4-size SUVs, Hilux-size pickups, Hiace-size trotros, buses and
@@ -687,14 +688,37 @@ export class StreetTraffic {
     this.shadows.renderOrder = -1;
     this.group.add(this.shadows);
     void this.loadPack(); // (the earlier downloaded models, loadModern, are no longer used)
+    void this.loadRiders();
   }
 
   private packTaxi = false;
+  // People riding and driving the vehicles you can see into (riders.ts).
+  private riders: THREE.InstancedMesh[] = []; // near ones, then the same people simpler (far), in one list
+  private riderCounts: number[] = [];
+  private riderKinds = 0;
+  private seat = new THREE.Matrix4();
+  private async loadRiders() {
+    const near = await riderShapes();
+    const far = await Promise.all(near.map((g) => simpler(g, 0.35, true)));
+    const shapes = [...near, ...far];
+    this.riderKinds = near.length;
+    const mat = dayLookMaterial(); // (keeps the day glow at night)
+    this.riders = shapes.map((g) => {
+      const m = new THREE.InstancedMesh(g, mat, Math.ceil(this.limit * 0.6));
+      m.count = 0;
+      m.frustumCulled = false;
+      m.castShadow = true;
+      m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      this.group.add(m);
+      return m;
+    });
+    this.riderCounts = shapes.map(() => 0);
+  }
   /** The pack's vehicles in place of ours, as each one arrives. */
   private async loadPack() {
     const atlas = await atlasPixels();
     if (!atlas) return;
-    const fixedMat = epicMaterial().clone(); // (its own copy: it keeps the day glow at night, so windows stay glass)
+    const fixedMat = dayLookMaterial(); // (its own copy: it keeps the day glow at night, so windows stay glass)
     for (const [key, spec] of Object.entries(PACK) as [BatchKey, NonNullable<(typeof PACK)[BatchKey]>][]) {
       let geo: THREE.BufferGeometry;
       try {
@@ -1124,6 +1148,7 @@ export class StreetTraffic {
     for (const q of this.story) if (q.shown) draws.unshift({ key: q.key, id: q.id, x: q.x, z: q.z, heading: q.heading, colour: q.colour, ground: -(this.groundDip?.(q.x, q.z) ?? 0), bounce: q.moving });
     const [px, pz] = this.toLocal(lon, lat);
     const farCounts: Partial<Record<BatchKey, number>> = {};
+    this.riderCounts.fill(0);
     for (const d of draws) {
       const near = this.batches[d.key];
       const isFar = !!this.far[d.key] && (d.x - px) ** 2 + (d.z - pz) ** 2 > FAR_M * FAR_M;
@@ -1150,6 +1175,17 @@ export class StreetTraffic {
         (ads.geometry.getAttribute('aAd') as THREE.InstancedBufferAttribute).setX(n, Math.floor(r * 1.25 * AD_ROWS) % AD_ROWS);
       }
       if (d.key === 'taxi' && !this.packTaxi) this.taxiSigns.setMatrixAt(signs++, this.m);
+      // The rider (and passenger) or driver, where you can see them.
+      const seats = SEATS[d.key];
+      if (seats && this.riders.length) {
+        seats.at.forEach(([sx, sy, sz], si) => {
+          if (si > 0 && ((d.id * 2654435761 + si * 40503) >>> 0) / 4294967296 > (seats.extra ?? 1)) return;
+          const r = ((d.id + si * 7) % this.riderKinds) + (isFar ? this.riderKinds : 0);
+          const mesh = this.riders[r];
+          if (this.riderCounts[r] >= mesh.instanceMatrix.count) return;
+          mesh.setMatrixAt(this.riderCounts[r]++, this.seat.makeTranslation(sx, sy, sz).premultiply(this.m));
+        });
+      }
       if (this.night > 0.02) {
         // Lights at the front and back, sized to the vehicle (its model's front is +z).
         const type = TYPE_BY_KEY.get(d.key);
@@ -1184,6 +1220,11 @@ export class StreetTraffic {
     AD_TIME.value = t;
     this.taxiSigns.count = signs;
     this.taxiSigns.instanceMatrix.needsUpdate = true;
+    this.riders.forEach((m, i) => {
+      m.count = this.riderCounts[i];
+      m.visible = m.count > 0;
+      m.instanceMatrix.needsUpdate = true;
+    });
     this.headlights.count = this.taillights.count = lit;
     this.headlights.instanceMatrix.needsUpdate = this.taillights.instanceMatrix.needsUpdate = true;
   }
@@ -1219,6 +1260,14 @@ function taillightShape() {
   return g;
 }
 
+/** The pack's material with its day glow always (even when made at night): vehicles' windows stay glass. */
+function dayLookMaterial() {
+  const m = epicMaterial().clone();
+  m.emissiveMap = epicGlowMaps().day;
+  m.emissive.setRGB(0.58, 0.58, 0.58);
+  m.emissiveIntensity = 1;
+  return m;
+}
 /** The pack's texture sheet as pixels (to tell which parts of a model are which colour). */
 async function atlasPixels(): Promise<{ w: number; h: number; data: Uint8ClampedArray } | null> {
   try {
@@ -1236,7 +1285,7 @@ async function atlasPixels(): Promise<{ w: number; h: number; data: Uint8Clamped
   }
 }
 const WHITE_UV = [0.8241, 0.6677]; // a white cell of the pack's texture sheet
-const FAR_M = 38; // beyond this, vehicles are drawn with their simpler shape
+const FAR_M = 30; // beyond this, vehicles (and their riders) are drawn with their simpler shape
 /** A simpler copy of a shape (about `ratio` of its triangles), keeping its outline and colour edges. */
 async function simpler(g: THREE.BufferGeometry, ratio: number, uv = false): Promise<THREE.BufferGeometry> {
   try {

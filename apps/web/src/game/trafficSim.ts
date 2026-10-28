@@ -654,6 +654,26 @@ export class TrafficSim {
     this.cars.push(car);
     return car.id;
   }
+  /**
+   * Clear a path for the story's own vehicles (the trotro you arrive in, the chase taxi, Uncle's car):
+   * vehicles within `width` metres of the line are let go. Called when the scene starts, at a camera
+   * cut, so nobody sees them go.
+   */
+  clearAlong(pts: [number, number][], width: number) {
+    for (const car of [...this.cars]) {
+      const p = this.pointAt(car.seg, car.s);
+      for (let i = 1; i < pts.length; i++) {
+        const [ax, az] = pts[i - 1], [bx, bz] = pts[i];
+        const dx = bx - ax, dz = bz - az;
+        const t = Math.max(0, Math.min(1, ((p.x - ax) * dx + (p.z - az) * dz) / (dx * dx + dz * dz || 1)));
+        if (Math.hypot(ax + dx * t - p.x, az + dz * t - p.z) < width + car.len / 2) {
+          this.drop(car);
+          break;
+        }
+      }
+    }
+  }
+
   /** Where a vehicle is (x, z, heading), or null if it has gone. */
   where(id: number): { x: number; z: number; heading: number } | null {
     const car = this.cars.find((c) => c.id === id);
