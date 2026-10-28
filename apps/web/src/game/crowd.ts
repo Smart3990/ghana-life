@@ -193,7 +193,7 @@ void main() {
     // The eyes (owner, 28 Oct 2026: close up, everyone has a face): drawn here from the eye's own
     // map position, the same picture as the pack's eye: a dark brown iris with a black pupil and a
     // glint, the white round it, and the eyelids in the person's own skin tone.
-    vec2 e = vMapUv - vec2(0.492, 0.497);
+    vec2 e = fract(vMapUv) - vec2(0.492, 0.497);
     float iris = length(e) / 0.112;
     float white = length(e / vec2(0.3, 0.14));
     vec3 col = vSkinC * 0.82; // eyelids, a little darker than the face

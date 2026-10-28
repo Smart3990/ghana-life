@@ -117,16 +117,44 @@ function bodyMaterial(source: THREE.MeshStandardMaterial) {
   return { material, uniforms };
 }
 
+/**
+ * The eyes: the pack's eye picture has light-pink eyelids round the white; they take the person's own
+ * skin tone instead (a little darker), so the eyes sit right in every Ghanaian skin tone.
+ */
+function eyeMaterial(source: THREE.MeshStandardMaterial, skin: { value: THREE.Color }) {
+  const material = source.clone();
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uSkin = skin;
+    shader.fragmentShader = shader.fragmentShader
+      .replace('void main() {', 'uniform vec3 uSkin;\nvoid main() {')
+      .replace(
+        '#include <map_fragment>',
+        `#include <map_fragment>
+#ifdef USE_MAP
+  {
+    vec2 e = fract(vMapUv) - vec2(0.492, 0.497);
+    float w = length(e / vec2(0.27, 0.125));
+    diffuseColor.rgb = mix(diffuseColor.rgb, uSkin * 0.82, smoothstep(0.9, 1.02, w));
+  }
+#endif`,
+      );
+  };
+  material.customProgramCacheKey = () => 'ghanaverse-eyes';
+  return material;
+}
+
 export async function createPerson(outfit: Partial<Outfit> = {}, bodyType: Body = 'male', detail: Detail = 'full'): Promise<Person> {
   const gltf = await loadModel(bodyType, detail);
   const model = cloneSkinned(gltf.scene);
   let body: ReturnType<typeof bodyMaterial> | null = null;
   const hairMaterials: THREE.MeshStandardMaterial[] = [];
+  const eyes: THREE.SkinnedMesh[] = [];
   model.traverse((o) => {
     const mesh = o as THREE.SkinnedMesh;
     if (!mesh.isMesh) return;
     mesh.frustumCulled = false; // animated people move away from their stored bounds
     const m = mesh.material as THREE.MeshStandardMaterial;
+    if (m.name === 'eyes') eyes.push(mesh);
     if (m.name === 'body') {
       body = bodyMaterial(m);
       mesh.material = body.material;
@@ -139,6 +167,10 @@ export async function createPerson(outfit: Partial<Outfit> = {}, bodyType: Body 
     }
   });
 
+  if (body) {
+    const skin = (body as ReturnType<typeof bodyMaterial>).uniforms.uSkin;
+    for (const e of eyes) e.material = eyeMaterial(e.material as THREE.MeshStandardMaterial, skin);
+  }
   const setOutfit = (change: Partial<Outfit>) => {
     Object.assign(current, change);
     if (body) {

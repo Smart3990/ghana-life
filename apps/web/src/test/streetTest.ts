@@ -1666,7 +1666,10 @@ const uncle = {
   heading: 0,
   target: null as { x: number; z: number } | null,
   async load() {
-    const p = await createPerson({ shirt: '#4f6f8f', trousers: '#3a3430', shoes: '#2b2018', hair: '#3a3632', skin: '#6e625b' }, 'male', 'full');
+    // An older man (the brief: your uncle in Nima, a compound tenant who always has advice): hair going
+    // grey, a long pale kaftan, a little heavier than the young newcomer.
+    const p = await createPerson({ shirt: '#cdbf9f', trousers: '#cdbf9f', shoes: '#3a2a1c', hair: '#8f8a83', skin: '#6e625b' }, 'male', 'full');
+    p.model.scale.multiplyScalar(1.04);
     act(p, 'idle', 0);
     p.model.traverse((o) => (o.castShadow = PRESET.shadows));
     this.person = p;
@@ -1938,7 +1941,7 @@ const auntie = {
   x: 0,
   z: 0,
   async load() {
-    // A woman in an orange top and a green wrap skirt with a matching head wrap colour.
+    // A woman in an orange top and a green wrap skirt.
     const p = await createPerson({ shirt: '#e2731f', trousers: '#2f8f57', shoes: '#3a2a20', hair: '#141110', skin: '#6e625b' }, 'female', 'full'); // story people: always full detail
     act(p, 'idle', 0);
     p.model.traverse((o) => (o.castShadow = PRESET.shadows));
@@ -4166,7 +4169,7 @@ async function start() {
     };
     streetTraffic.sim = trafficSim;
     void loadDriver();
-    if (debug) Object.assign(window, { __street: { state, sky, look, life, story, thief, signals, lightFor, flyovers, pinch, bigScreen, roadSigns, getStation: () => station, places, fuelWhy, bag, driver, shove, uncle, compound, props, camera3d, adCard, frameShot, placeCompound, buildings, nimaRoute, rideSign, RIDE_SIGNS, map, placeCarTag, fullMap, phone, camAvoid, camAt, viewBlocked, heightAtView, solidAt, traffic: streetTraffic, driveIn, parkingNear, pullIn, pullOut, roadLineNear, compoundAt, music, streetSound, epicRoads, THREE, horns: () => hornsPlayed, trafficSim: () => trafficSim, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
+    if (debug) Object.assign(window, { __street: { state, sky, look, life, story, thief, signals, lightFor, flyovers, pinch, bigScreen, roadSigns, getStation: () => station, places, fuelWhy, bag, driver, shove, uncle, compound, props, camera3d, adCard, frameShot, placeCompound, buildings, nimaRoute, rideSign, RIDE_SIGNS, map, placeCarTag, fullMap, phone, camAvoid, camAt, viewBlocked, heightAtView, solidAt, traffic: streetTraffic, driveIn, parkingNear, pullIn, pullOut, roadLineNear, compoundAt, music, streetSound, epicRoads, THREE, horns: () => hornsPlayed, people: () => ({ player: playerPerson, thief: thief.person, auntie, uncle }), trafficSim: () => trafficSim, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
   }
 
   document.getElementById('loading')!.remove();
