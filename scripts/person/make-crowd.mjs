@@ -20,8 +20,8 @@ const KEEP = ['Idle_Loop', 'Walk_Loop', 'Idle_Talking_Loop'];
 const MASS_KEEP = [...KEEP, 'Jog_Fwd_Loop', 'Idle_TalkingPhone_Loop', 'Consume', 'Idle_FoldArms_Loop', 'Walk_Carry_Loop', 'Yes', 'Idle_No_Loop',
   'Idle_Rail_Call', 'Sitting_Idle_Loop', 'Sitting_Talking_Loop', 'Dance_Loop', 'PickUp_Table', 'Farm_Harvest', 'Push_Loop', 'Fixing_Kneeling', 'Interact'];
 if (!lite) for (const a of root.listAnimations()) if (!(mass ? MASS_KEEP : KEEP).includes(a.getName())) a.dispose();
-// The eyes are tiny at crowd distance: drop them.
-if (!lite) for (const n of root.listNodes()) if (n.getMesh() && /Face\.001/.test(n.getMesh().getName())) n.getMesh().dispose();
+// The eyes are kept (owner, 28 Oct 2026: close up, the crowd must have faces); the simplifier makes
+// them a few dozen triangles. The game draws their white, iris and eyelids itself (crowd.ts).
 await doc.transform(
   weld(),
   simplify({ simplifier: MeshoptSimplifier, ratio: lite ? 0.33 : mass ? (/female/.test(src) ? 0.03 : 0.055) : 0.16, error: lite ? 0.002 : mass ? 0.03 : 0.004, lockBorder: false }),

@@ -84,8 +84,10 @@ async function bake(body: CrowdBody): Promise<Baked> {
     g.setAttribute('skinIndex', new THREE.Float32BufferAttribute(remapped, 4));
     const sw = g.getAttribute('skinWeight');
     g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(Float32Array.from({ length: sw.count * 4 }, (_, i) => sw.getComponent(Math.floor(i / 4), i % 4)), 4));
-    const isHair = (m.material as THREE.Material).name !== 'body';
-    g.setAttribute('part', new THREE.Float32BufferAttribute(new Float32Array(g.getAttribute('position').count).fill(isHair ? 1 : 0), 1));
+    // Parts: 0 skin and clothes (the body texture's mask), 1 hair (and eyebrows, caps, scarves), 2 eyes.
+    const name = (m.material as THREE.Material).name;
+    const part = name === 'body' ? 0 : name === 'eyes' ? 2 : 1;
+    g.setAttribute('part', new THREE.Float32BufferAttribute(new Float32Array(g.getAttribute('position').count).fill(part), 1));
     return g;
   });
   const geometry = mergeGeometries(parts, false)!;
@@ -186,7 +188,20 @@ void main() {
       .replace(
         '#include <map_fragment>',
         `#ifdef USE_MAP
-  if (vPart > 0.5) {
+  if (vPart > 1.5) {
+    // The eyes (owner, 28 Oct 2026: close up, everyone has a face): drawn here from the eye's own
+    // map position, the same picture as the pack's eye: a dark brown iris with a black pupil and a
+    // glint, the white round it, and the eyelids in the person's own skin tone.
+    vec2 e = vMapUv - vec2(0.492, 0.497);
+    float iris = length(e) / 0.112;
+    float white = length(e / vec2(0.3, 0.14));
+    vec3 col = vSkinC * 0.82; // eyelids, a little darker than the face
+    if (white < 1.0) col = vec3(0.80, 0.76, 0.70);
+    if (iris < 1.0) col = mix(vec3(0.045, 0.022, 0.01), vec3(0.11, 0.055, 0.025), smoothstep(0.35, 0.9, iris));
+    if (iris < 0.42) col = vec3(0.008);
+    if (length(e - vec2(0.026, 0.028)) < 0.02) col = vec3(0.9); // the glint
+    diffuseColor.rgb = col;
+  } else if (vPart > 0.5) {
     diffuseColor.rgb *= vHairC; // hair, caps and headscarves
   } else {
     vec4 texel = texture2D(map, vMapUv);
@@ -201,7 +216,7 @@ void main() {
   }
 #endif`,
       )
-      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n  roughnessFactor = vPart > 0.5 ? 0.9 : dot(partWeights, vec4(0.55, 0.85, 0.92, 0.6)) + soleWeight * 0.8;');
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n  roughnessFactor = vPart > 1.5 ? 0.25 : vPart > 0.5 ? 0.9 : dot(partWeights, vec4(0.55, 0.85, 0.92, 0.6)) + soleWeight * 0.8;');
   };
   material.customProgramCacheKey = () => `ghanaverse-crowd-${smooth}`;
   return material;
