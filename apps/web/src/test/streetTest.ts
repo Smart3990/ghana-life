@@ -3615,11 +3615,11 @@ function tapVehicle(sx: number, sy: number) {
   const shape = traffic.adShapeOf(info.key);
   adCard.open({
     kind: 'vehicle',
-    title: `${name} · full-side advert, both sides`,
+    title: shape === 'roof' ? `${name} · roof screen, both sides` : `${name} · full-side advert, both sides`,
     picture: traffic.vehicleAdPicture(info.ad, shape),
     aspect: AD_ASPECT[shape],
     place: vehiclePlace(best.p.v.kind),
-    note: 'Adverts ride trotros, buses and lorries on their real routes all day, past everyone on the road. Each one changes every few seconds.',
+    note: shape === 'roof' ? 'Every taxi carries a bright screen on its roof, seen from both sides all over the city. Each advert shows for a few seconds, then the next.' : 'Adverts ride trotros, buses and lorries on their real routes all day, past everyone on the road. Each one changes every few seconds.',
     own: ownAds.vehicle.get(info.ad) ?? null,
     slides: Array.from({ length: AD_ROWS }, (_, r) => ({ picture: traffic.vehicleAdPicture(r, shape), own: ownAds.vehicle.get(r) ?? null })),
     start: liveAd(info.ad, AD_ROWS, 8),

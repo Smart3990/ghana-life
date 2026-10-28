@@ -7,7 +7,7 @@ import { box, merge, paint } from './vehicles3d';
 const PAGES: { bg: string; title: string; lines: string[]; accent: string }[] = [
   { bg: '#121a14', title: 'GHANAVERSE NEWS', lines: ['Bag thief seen running at Circle', 'Trotro fares steady this week', 'New okada race record in Osu'], accent: '#e3a92b' },
   { bg: '#3a0d0d', title: 'MOST WANTED', lines: ['No one is wanted right now.', 'Keep it that way, chale!'], accent: '#ff5a3c' },
-  { bg: '#0f6b3a', title: 'SIKA MOBILE MONEY', lines: ['Send money home in seconds', 'Your ad here: from ₵350 a week'], accent: '#f2c21a' },
+  { bg: '#0f6b3a', title: 'SIKA MOBILE MONEY', lines: ['Send money home in seconds', 'Your ad here: from ₵25 a week'], accent: '#f2c21a' },
   { bg: '#1f2f5c', title: 'TONIGHT IN GHANAVERSE', lines: ['Highlife night at Osu, 8 pm', 'Football at Kaneshie park'], accent: '#e3a92b' },
 ];
 
@@ -89,7 +89,7 @@ export class BigScreen {
     g.fillRect(0, 344, 768, 40);
     g.fillStyle = p.bg;
     g.font = '800 24px system-ui, sans-serif';
-    const ticker = 'GHANAVERSE NEWS  ·  Trotro fares steady  ·  Highlife night at Osu  ·  Sika Mobile Money: send home in seconds  ·  Your ad here from ₵350 a week  ·  ';
+    const ticker = 'GHANAVERSE NEWS  ·  Trotro fares steady  ·  Highlife night at Osu  ·  Sika Mobile Money: send home in seconds  ·  Your ad here from ₵25 a week  ·  ';
     const tw = g.measureText(ticker).width;
     const x0 = -((tt * 90) % tw);
     g.fillText(ticker, x0, 372);

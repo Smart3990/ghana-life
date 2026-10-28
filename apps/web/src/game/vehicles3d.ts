@@ -36,7 +36,7 @@ const PACK: Record<BatchKey, { file: string; paint: string[]; white?: string[] }
 // follows the side's own shape, 1.5 cm out from it, from back to front and from bottom to top.
 // profile: [height, distance out from the middle] up the side; z0..z1: back to front; shape: which
 // advert picture it carries (adverts are designed in each wrap's own proportions, never stretched).
-type Wrap = { profile: [number, number][]; z0: number; z1: number; shape: AdShape };
+type Wrap = { profile: [number, number][]; z0: number; z1: number; shape: AdShape; bands?: [number, number, [number, number][]][] };
 const VAN_WRAP: Wrap = {
   // The van: the lower body (x 0.84), the flat belt (x 0.86) and the windows sloping in (x 0.78 at 1.83).
   profile: [[0.46, 0.862], [0.83, 0.862], [0.85, 0.9], [1.34, 0.9], [1.8, 0.8]], // (clear of the door handles, which reach 0.894)
@@ -44,12 +44,39 @@ const VAN_WRAP: Wrap = {
   z1: 1.64,
   shape: 'tall',
 };
+// The taxi's roof screen (owner, 28 Oct 2026: the advert on the taxi's roof sign, like the LED roof
+// screens on taxis): a slim dark box over the pack's roof light (which is 1.1 m long, 0.36 m wide,
+// up to 1.74 m), with a bright advert screen on each side, inside a thin border.
+const TAXI_ROOF: Wrap = { profile: [[1.475, 0.212], [1.835, 0.212]], z0: -0.94, z1: 0.21, shape: 'roof' };
+function taxiRoofBox() {
+  return merge([
+    box(0.4, 0.43, 1.21, 0, 1.655, -0.365), // the screen's case
+    box(0.34, 0.06, 0.09, 0, 1.43, -0.82), // two feet on the roof
+    box(0.34, 0.06, 0.09, 0, 1.43, 0.09),
+  ]);
+}
 const PACK_WRAPS: Partial<Record<BatchKey, Wrap>> = {
+  taxi: TAXI_ROOF,
   trotro: VAN_WRAP,
   sprinter: VAN_WRAP,
-  // The city bus: its whole flat side (x 1.32) above the wheel-arch lips (which reach 1.27) to the roof
-  // edge (2.78), from the back to the front door.
-  bus: { profile: [[1.3, 1.335], [2.74, 1.335]], z0: -5.4, z1: 2.6, shape: 'wide' },
+  // The city bus (owner, 28 Oct 2026: "full side, bigger in both length and width"): its whole flat
+  // side (x 1.32), from just above the ground line to the roof edge and from the back to the driver's
+  // window, with the two wheel arches cut out (mapped on the model every 10 cm: bands of height, and
+  // the stretches along each band where the side is flat).
+  bus: {
+    profile: [[0.55, 1.335], [2.75, 1.335]],
+    z0: -5.45,
+    z1: 4.0,
+    shape: 'wide',
+    bands: [
+      [0.55, 0.75, [[-5.45, -3.35], [-1.75, 2.45]]],
+      [0.75, 0.95, [[-5.45, -3.25], [-1.75, 2.55]]],
+      [0.95, 1.05, [[-5.45, -3.15], [-1.85, 2.65]]],
+      [1.05, 1.15, [[-5.45, -3.05], [-1.95, 2.75]]],
+      [1.15, 1.25, [[-5.45, -2.95], [-2.15, 2.85], [3.75, 4.0]]],
+      [1.25, 2.75, [[-5.45, 4.0]]],
+    ],
+  },
   // The box lorry: its whole cargo box (x 1.04, y 0.88 to 2.81, z -3.03 to 1.42).
   truck: { profile: [[0.9, 1.066], [2.79, 1.066]], z0: -3.01, z1: 1.4, shape: 'tall' }, // (clear of the fittings at 1.058)
 };
@@ -133,17 +160,17 @@ const paintPart = (g: THREE.BufferGeometry, colour: string) => paint(g, colour);
 // One picture holds all the adverts, one per row; each vehicle shows the row its number picks.
 // Placeholder brands only (the game's own), until real advertisers buy the space.
 export const AD_ROWS = 8;
-/** The two advert shapes: 'tall' (vans and lorry boxes, about 2.35 wide to 1 high), 'wide' (buses, about 5.5 to 1). */
-export type AdShape = 'tall' | 'wide';
-export const AD_ASPECT: Record<AdShape, number> = { tall: 2.36, wide: 5.55 };
-const SHAPE_OF: Partial<Record<string, AdShape>> = { trotro: 'tall', sprinter: 'tall', truck: 'tall', bus: 'wide' };
+/** The two advert shapes: 'tall' (vans and lorry boxes, about 2.35 wide to 1 high), 'wide' (buses, about 4.3 to 1), 'roof' (the taxis' roof screens, 3.2 to 1). */
+export type AdShape = 'tall' | 'wide' | 'roof';
+export const AD_ASPECT: Record<AdShape, number> = { tall: 2.36, wide: 4.3, roof: 3.2 };
+const SHAPE_OF: Partial<Record<string, AdShape>> = { trotro: 'tall', sprinter: 'tall', truck: 'tall', bus: 'wide', taxi: 'roof' };
 export type VehicleAd = { title: string; line: string; bg: [string, string]; accent: string; ink?: string; cta?: string };
 // Placeholder adverts (the game's own brands). Advertisers' own adverts come from /data/ads.json
 // (the same fields), so new ones can be added without changing the game.
 const DEFAULT_ADS: VehicleAd[] = [
   { title: 'SIKA MOBILE MONEY', line: 'Send money home in seconds', bg: ['#0f6b3a', '#1c9b57'], accent: '#f2c21a', cta: 'Open the Sika app' },
   { title: 'GHANAVERSE FM 98.5', line: 'The sound of the city, all day', bg: ['#4a1d6e', '#7a3fb0'], accent: '#ffd25a', cta: 'Tune in now' },
-  { title: 'YOUR AD HERE', line: 'Ride the whole city · from ₵1,200 a week', bg: ['#f2efe6', '#e3dccb'], accent: '#c8442e', ink: '#121a14', cta: 'Tap this vehicle' },
+  { title: 'YOUR AD HERE', line: 'Ride the whole city · from ₵35 a week', bg: ['#f2efe6', '#e3dccb'], accent: '#c8442e', ink: '#121a14', cta: 'Tap this vehicle' },
   { title: 'KELEWELE AT CIRCLE', line: 'Hot and spicy every evening', bg: ['#c2410c', '#f08a24'], accent: '#fff3c4', cta: 'By the lorry station' },
   { title: 'COOL SACHET WATER', line: 'Clean, cold, everywhere', bg: ['#0b4f8a', '#2a86d1'], accent: '#ffffff', cta: 'Ask for it by name' },
   { title: 'GHANAVERSE NEWS', line: 'Tonight at 8 on every big screen', bg: ['#8e1b1b', '#c8442e'], accent: '#ffffff', cta: 'Every night at 8' },
@@ -286,6 +313,32 @@ function wrapGeometry(w: Wrap) {
   const pos: number[] = [];
   const uv: number[] = [];
   const nor: number[] = [];
+  if (w.bands) {
+    // A flat side with cut-outs: one advert over the whole rectangle, drawn only on the bands.
+    const x = w.profile[0][1];
+    const Y0 = w.profile[0][0], Y1 = w.profile[w.profile.length - 1][0];
+    const L = w.z1 - w.z0, H = Y1 - Y0;
+    for (const side of [1, -1]) {
+      const order = side > 0 ? [0, 2, 1, 0, 3, 2] : [0, 1, 2, 0, 2, 3];
+      for (const [y0, y1, runs] of w.bands) {
+        for (const [z0, z1] of runs) {
+          const quad = [[side * x, y0, z0], [side * x, y0, z1], [side * x, y1, z1], [side * x, y1, z0]];
+          for (const k of order) {
+            const [qx, qy, qz] = quad[k];
+            pos.push(qx, qy, qz);
+            const u = side > 0 ? (w.z1 - qz) / L : (qz - w.z0) / L;
+            uv.push(u, (qy - Y0) / H);
+            nor.push(side, 0, 0);
+          }
+        }
+      }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+    return g;
+  }
   const P = w.profile;
   const cum = [0];
   for (let i = 1; i < P.length; i++) cum.push(cum[i - 1] + Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]));
@@ -740,14 +793,15 @@ export class StreetTraffic {
     const adMats: Record<AdShape, THREE.MeshBasicMaterial> = {
       tall: adMaterial(adAtlas(DEFAULT_ADS, this.adCanvases.tall, 'tall', AW)),
       wide: adMaterial(adAtlas(DEFAULT_ADS, this.adCanvases.wide, 'wide', AW)),
+      roof: adMaterial(adAtlas(DEFAULT_ADS, this.adCanvases.roof, 'roof', Math.round(AW * 0.6))),
     };
     // Advertisers' adverts, when there are any.
     fetch('/data/ads.json')
       .then((r) => (r.ok ? r.json() : null))
       .then((list: VehicleAd[] | null) => {
         if (!Array.isArray(list) || !list.length) return;
-        for (const shape of ['tall', 'wide'] as const) {
-          adMats[shape].map = adAtlas([...list, ...DEFAULT_ADS].slice(0, AD_ROWS), this.adCanvases[shape], shape, AW);
+        for (const shape of ['tall', 'wide', 'roof'] as const) {
+          adMats[shape].map = adAtlas([...list, ...DEFAULT_ADS].slice(0, AD_ROWS), this.adCanvases[shape], shape, shape === 'roof' ? Math.round(AW * 0.6) : AW);
           adMats[shape].needsUpdate = true;
         }
       })
@@ -770,6 +824,12 @@ export class StreetTraffic {
       signGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
       signGeo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
     }
+    this.roofBoxes = new THREE.InstancedMesh(taxiRoofBox(), new THREE.MeshStandardMaterial({ color: '#16181b', roughness: 0.45, metalness: 0.3 }), limit);
+    this.roofBoxes.count = 0;
+    this.roofBoxes.frustumCulled = false;
+    this.roofBoxes.castShadow = true;
+    this.roofBoxes.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.group.add(this.roofBoxes);
     this.taxiSigns = new THREE.InstancedMesh(signGeo, new THREE.MeshBasicMaterial({ map: taxiSignTexture() }), limit);
     this.taxiSigns.count = 0;
     this.taxiSigns.frustumCulled = false;
@@ -810,8 +870,8 @@ export class StreetTraffic {
         this.far[kind] = { body: fb, fixed: ff };
       }
       const panel = AD_PANELS[kind];
-      if (panel) {
-        const geo = adPanels(panel);
+      if (panel || kind === 'taxi') {
+        const geo = kind === 'taxi' ? wrapGeometry(TAXI_ROOF) : adPanels(panel!);
         geo.setAttribute('aAd', new THREE.InstancedBufferAttribute(new Float32Array(limit), 1));
         const ads = new THREE.InstancedMesh(geo, adMats[SHAPE_OF[kind] ?? 'tall'], limit);
         ads.count = 0;
@@ -936,6 +996,7 @@ export class StreetTraffic {
   signals: { shouldStop: (x: number, z: number, heading: number, half: number, t: number) => boolean } | null = null;
   private ads: Partial<Record<BatchKey, THREE.InstancedMesh>> = {};
   private taxiSigns!: THREE.InstancedMesh;
+  private roofBoxes!: THREE.InstancedMesh;
   private headlights!: THREE.InstancedMesh;
   private taillights!: THREE.InstancedMesh;
   private night = 0;
@@ -982,7 +1043,7 @@ export class StreetTraffic {
   /** Vehicles not drawn (the story has taken their place on the road). */
   hide = new Set<number>();
   private lane = 1.35;
-  private adCanvases: Record<AdShape, HTMLCanvasElement> = { tall: document.createElement('canvas'), wide: document.createElement('canvas') };
+  private adCanvases: Record<AdShape, HTMLCanvasElement> = { tall: document.createElement('canvas'), wide: document.createElement('canvas'), roof: document.createElement('canvas') };
   /** Where a vehicle's route goes at a distance s (in the scene's metres), for driving along it. */
   routeAt(v: Placed['v'], s: number) {
     const p = this.traffic.at(v, s, this.lane);
@@ -993,7 +1054,7 @@ export class StreetTraffic {
   vehicleInfo(v: Placed['v']) {
     const key = keyOf(v);
     const r = ((v.id * 2246822519) >>> 0) / 4294967296;
-    const ad = this.ads[key] && r < 0.8 ? Math.floor(r * 1.25 * AD_ROWS) % AD_ROWS : null;
+    const ad = this.ads[key] && (r < 0.8 || key === 'taxi') ? Math.floor(r * 1.25 * AD_ROWS) % AD_ROWS : null;
     return { key, ad };
   }
   /** The advert shape a vehicle type carries ('tall' vans and lorries, 'wide' buses). */
@@ -1278,6 +1339,7 @@ export class StreetTraffic {
   private draw(placed: Placed[], t: number, lon: number, lat: number) {
     const adCount: Partial<Record<BatchKey, number>> = {};
     let signs = 0;
+    let roofBoxes = 0;
     const counts: Record<BatchKey, number> = Object.fromEntries(Object.keys(this.batches).map((k) => [k, 0]));
     let shadowCount = 0;
     type Draw = { key: BatchKey; id: number; x: number; z: number; ground: number; heading: number; colour: string; bounce: boolean };
@@ -1315,16 +1377,17 @@ export class StreetTraffic {
       b.body.setMatrixAt(i, this.m);
       b.fixed.setMatrixAt(i, this.m);
       b.body.setColorAt(i, this.c.set(d.colour));
-      // Most commercial vehicles carry an advert along both sides; taxis have the roof sign.
+      // Most commercial vehicles carry an advert along both sides; every taxi has its roof screen.
       const ads = this.ads[d.key];
       const r = ((d.id * 2246822519) >>> 0) / 4294967296;
-      if (ads && r < 0.8) {
+      if (d.key === 'taxi') this.roofBoxes.setMatrixAt(roofBoxes++, this.m);
+      if (ads && (r < 0.8 || d.key === 'taxi')) {
         const n = adCount[d.key] ?? 0;
         adCount[d.key] = n + 1;
         ads.setMatrixAt(n, this.m);
         (ads.geometry.getAttribute('aAd') as THREE.InstancedBufferAttribute).setX(n, Math.floor(r * 1.25 * AD_ROWS) % AD_ROWS);
       }
-      if (d.key === 'taxi' && !this.packTaxi) this.taxiSigns.setMatrixAt(signs++, this.m);
+      // (The old painted "TAXI" sign is replaced by the roof screen.)
       // The rider (and passenger) or driver, where you can see them.
       const seats = SEATS[d.key];
       if (seats && this.riders.length) {
@@ -1370,6 +1433,8 @@ export class StreetTraffic {
     AD_TIME.value = t;
     this.taxiSigns.count = signs;
     this.taxiSigns.instanceMatrix.needsUpdate = true;
+    this.roofBoxes.count = roofBoxes;
+    this.roofBoxes.instanceMatrix.needsUpdate = true;
     this.riders.forEach((m, i) => {
       m.count = this.riderCounts[i];
       m.visible = m.count > 0;
