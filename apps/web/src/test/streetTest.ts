@@ -3816,10 +3816,10 @@ life = new StreetLife((x, z, m) => buildings.blocked(x, z, m), { ...{
   // Packed, chaotic Circle (owner, 2026-10-27: "very crowded", kiosks and stalls everywhere).
   // On a struggling phone the walkers thin out automatically (busy %), the shops stay.
   // still: people standing about on top of the walkers (still people: almost free to draw).
-  light: { radiusM: 140, people: 110, props: 520, scenes: 42, still: 130 },
-  standard: { radiusM: 200, people: 380, props: 1300, scenes: 100, still: 360 },
-  ultra: { radiusM: 280, people: 650, props: 2000, scenes: 150, still: 600 },
-}[tier], smoothCrowd: PRESET.smoothCrowd });
+  light: { radiusM: 140, people: 170, props: 520, scenes: 42, still: 160 },
+  standard: { radiusM: 200, people: 520, props: 1300, scenes: 100, still: 420 },
+  ultra: { radiusM: 280, people: 850, props: 2000, scenes: 150, still: 700 },
+}[tier], smoothCrowd: PRESET.smoothCrowd, light: tier === 'light' });
 scene.add(life.group);
 life.groundDip = (x, z) => epicRoads.dipAt(x, z); // walkers step down onto the tarmac
 // The sound of Accra (starts on the first tap), with a button to switch it off.

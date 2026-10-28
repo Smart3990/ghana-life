@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { MeshoptSimplifier } from 'three/examples/jsm/libs/meshopt_simplifier.module.js';
 import { SKIN_TONES } from './person';
 
 export type CrowdBody = 'male' | 'female';
@@ -227,25 +228,75 @@ const packColour = (css: string, c = new THREE.Color()) => {
   return Math.round(c.r * 255) * 65536 + Math.round(c.g * 255) * 256 + Math.round(c.b * 255);
 };
 
-/** One body's crowd: up to `capacity` people. */
+/** The same person with fewer triangles (for far away): only the triangle list changes, so every
+ *  point keeps its bones, its part and its map position. */
+async function farShape(g: THREE.BufferGeometry, ratio: number) {
+  await MeshoptSimplifier.ready;
+  const pos = g.getAttribute('position');
+  const positions = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) positions.set([pos.getX(i), pos.getY(i), pos.getZ(i)], i * 3);
+  const index = g.index ? new Uint32Array(g.index.array as ArrayLike<number>) : Uint32Array.from({ length: pos.count }, (_, i) => i);
+  const target = Math.max(3, Math.floor((index.length * ratio) / 3) * 3);
+  const [kept] = MeshoptSimplifier.simplify(index, positions, 3, target, 0.05, ['LockBorder']);
+  const out = g.clone();
+  out.setIndex(new THREE.BufferAttribute(kept, 1));
+  return out;
+}
+
+type Draw = { mesh: THREE.InstancedMesh; anim: THREE.InstancedBufferAttribute; colA: THREE.InstancedBufferAttribute; hair: THREE.InstancedBufferAttribute; n: number };
+
+/**
+ * One body's crowd: up to `capacity` people. The first `fixed` slots are drawn where they are (the
+ * people at places, streetScenes.ts, set with mesh.setMatrixAt). Everyone else is drawn each frame
+ * with draw(): only the people actually out (no hidden ones costing the graphics card), near ones in
+ * full and far ones (draw(..., true)) with about 40% of the triangles.
+ */
 export class CrowdBatch {
   readonly mesh: THREE.InstancedMesh;
-  private anim: THREE.InstancedBufferAttribute;
-  private colA: THREE.InstancedBufferAttribute;
-  private hair: THREE.InstancedBufferAttribute;
+  private near: Draw;
+  private far: Draw | null = null;
+  // Each person's look and move, by slot (copied into the frame's list when drawn).
+  private sAnim: Float32Array;
+  private sCol: Float32Array;
+  private sHair: Float32Array;
   count = 0;
+  /** Slots drawn where they are (the people at places). */
+  fixed = 0;
 
-  private constructor(private baked: Baked, capacity: number, time: { value: number }, smooth: boolean) {
-    const g = baked.geometry.clone();
-    this.anim = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 4), 4);
-    this.colA = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 4), 4);
-    this.hair = new THREE.InstancedBufferAttribute(new Float32Array(capacity), 1);
-    g.setAttribute('aAnim', this.anim);
-    g.setAttribute('aColA', this.colA);
-    g.setAttribute('aHair', this.hair);
-    this.mesh = new THREE.InstancedMesh(g, crowdMaterial(baked, time, smooth), capacity);
-    this.mesh.count = 0;
-    this.mesh.frustumCulled = false;
+  private constructor(private baked: Baked, private capacity: number, time: { value: number }, smooth: boolean) {
+    this.sAnim = new Float32Array(capacity * 4);
+    this.sCol = new Float32Array(capacity * 4);
+    this.sHair = new Float32Array(capacity);
+    const material = crowdMaterial(baked, time, smooth);
+    this.near = this.drawList(baked.geometry, material, capacity);
+    this.mesh = this.near.mesh;
+    void farShape(baked.geometry, 0.4)
+      .then((g) => {
+        this.far = this.drawList(g, material, capacity);
+        this.farReady?.(this.far.mesh);
+      })
+      .catch(() => undefined);
+  }
+  /** Called with the far mesh once it is made (to add it to the scene). */
+  farReady: ((mesh: THREE.InstancedMesh) => void) | null = null;
+  get farMesh() {
+    return this.far?.mesh ?? null;
+  }
+
+  private drawList(geometry: THREE.BufferGeometry, material: THREE.Material, capacity: number): Draw {
+    const g = geometry.clone();
+    const anim = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 4), 4);
+    const colA = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 4), 4);
+    const hair = new THREE.InstancedBufferAttribute(new Float32Array(capacity), 1);
+    for (const a of [anim, colA, hair]) a.setUsage(THREE.DynamicDrawUsage);
+    g.setAttribute('aAnim', anim);
+    g.setAttribute('aColA', colA);
+    g.setAttribute('aHair', hair);
+    const mesh = new THREE.InstancedMesh(g, material, capacity);
+    mesh.count = 0;
+    mesh.frustumCulled = false;
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    return { mesh, anim, colA, hair, n: 0 };
   }
 
   /** smooth: blend between stored frames (costs twice the bone lookups; off on Light phones). */
@@ -253,13 +304,44 @@ export class CrowdBatch {
     return new CrowdBatch(await bake(body), capacity, time, smooth);
   }
 
-  /** Sets person i's look and move (only when they change: it's a buffer upload). */
+  /** Sets person i's look and move (only when they change). */
   setLook(i: number, look: Look, clip: Clip, startTime: number, rate = 1) {
     const c = this.baked.clips[clip];
-    this.anim.setXYZW(i, c.row, c.frames, c.fps * rate, startTime);
-    this.colA.setXYZW(i, packColour(look.skin), packColour(look.top), packColour(look.bottom), packColour(look.shoes));
-    this.hair.setX(i, packColour(look.hair));
-    this.anim.needsUpdate = this.colA.needsUpdate = this.hair.needsUpdate = true;
+    this.sAnim.set([c.row, c.frames, c.fps * rate, startTime], i * 4);
+    this.sCol.set([packColour(look.skin), packColour(look.top), packColour(look.bottom), packColour(look.shoes)], i * 4);
+    this.sHair[i] = packColour(look.hair);
+    if (i < this.fixed) {
+      // A person at a place: straight into their own slot.
+      this.copy(this.near, i, i);
+      this.near.anim.needsUpdate = this.near.colA.needsUpdate = this.near.hair.needsUpdate = true;
+    }
+  }
+  private copy(d: Draw, to: number, from: number) {
+    d.anim.setXYZW(to, this.sAnim[from * 4], this.sAnim[from * 4 + 1], this.sAnim[from * 4 + 2], this.sAnim[from * 4 + 3]);
+    d.colA.setXYZW(to, this.sCol[from * 4], this.sCol[from * 4 + 1], this.sCol[from * 4 + 2], this.sCol[from * 4 + 3]);
+    d.hair.setX(to, this.sHair[from]);
+  }
+
+  /** Start the frame's list of walkers (after the people at places). */
+  begin() {
+    this.near.n = this.fixed;
+    if (this.far) this.far.n = 0;
+  }
+  /** Draw person `slot` this frame at `matrix` (far: with the simpler shape, if it is ready). */
+  draw(slot: number, matrix: THREE.Matrix4, far = false) {
+    const d = far && this.far ? this.far : this.near;
+    if (d.n >= this.capacity) return;
+    const i = d.n++;
+    d.mesh.setMatrixAt(i, matrix);
+    this.copy(d, i, slot);
+  }
+  /** Done: send the frame's lists to the graphics card. */
+  end() {
+    for (const d of this.far ? [this.near, this.far] : [this.near]) {
+      d.mesh.count = d.n;
+      d.mesh.instanceMatrix.needsUpdate = true;
+      d.anim.needsUpdate = d.colA.needsUpdate = d.hair.needsUpdate = true;
+    }
   }
 
   /** How many seconds one walking step cycle lasts (to match feet to speed). */

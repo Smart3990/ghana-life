@@ -259,7 +259,6 @@ export class StreetLife {
     for (const [body, b] of Object.entries(this.crowds) as [CrowdBody, CrowdBatch][]) {
       const reserved = this.sceneSlots[body];
       this.shown[body] = reserved + Math.floor((b.count - reserved) * this.density);
-      b.mesh.count = this.shown[body];
     }
   }
   /** How many of each batch's people are out (at the current density); the batch draws only up to the
@@ -280,7 +279,7 @@ export class StreetLife {
 
   constructor(
     private blocked: (x: number, z: number, margin: number) => boolean,
-    private opts: { radiusM: number; people: number; props: number; scenes: number; smoothCrowd?: boolean; still?: number },
+    private opts: { radiusM: number; people: number; props: number; scenes: number; smoothCrowd?: boolean; still?: number; light?: boolean },
   ) {
     const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0.05 });
     const make = (geometry: Part, tint: boolean) => {
@@ -300,7 +299,7 @@ export class StreetLife {
     this.walkLights = make(streetLight(), false);
     // On Light phones only the nearest lamps are drawn (each is about 150 triangles); their light on
     // the ground is drawn for all of them.
-    if (opts.people < 150) {
+    if (!!opts.light) {
       this.lights.max = 200;
       this.walkLights.max = 110;
     }
@@ -326,7 +325,7 @@ export class StreetLife {
     this.pools.frustumCulled = false;
     this.pools.visible = false;
     this.group.add(this.pools);
-    for (let i = 0; i < (opts.people < 150 ? 0 : opts.people < 500 ? 4 : 8); i++) {
+    for (let i = 0; i < (!!opts.light ? 0 : opts.people < 700 ? 4 : 8); i++) {
       const l = new THREE.PointLight(0xffb45a, 0, 22, 1.6);
       this.lampLights.push(l);
       this.group.add(l);
@@ -342,7 +341,7 @@ export class StreetLife {
     // Advert faces: every billboard is two-sided and changes advert every few seconds (sliding),
     // all from one picture of the adverts (one draw for all the billboards of each kind).
     // The advert sheet: photos and graphics like real campaigns (adPosters.ts); smaller on Light phones.
-    const atlas = adSheet(opts.people < 150 ? 512 : 768, () => (atlasTex.needsUpdate = true));
+    const atlas = adSheet(!!opts.light ? 512 : 768, () => (atlasTex.needsUpdate = true));
     const atlasTex = new THREE.CanvasTexture(atlas);
     this.adSheetCanvas = atlas;
     this.adTex = atlasTex;
@@ -433,6 +432,12 @@ export class StreetLife {
     ]);
     this.crowds = { male, female };
     this.group.add(male.mesh, female.mesh);
+    // The people at places keep their own slots; everyone else is drawn per frame, near or far.
+    for (const b of [male, female]) {
+      b.fixed = reserve;
+      b.farReady = (mesh) => this.group.add(mesh);
+      if (b.farMesh) this.group.add(b.farMesh);
+    }
     this.sceneSlots = { male: reserve, female: reserve };
     male.count = female.count = reserve;
     const freeSlots = { male: Array.from({ length: reserve }, (_, i) => reserve - 1 - i), female: Array.from({ length: reserve }, (_, i) => reserve - 1 - i) };
@@ -822,7 +827,7 @@ export class StreetLife {
     }
     const r2 = this.opts.radiusM ** 2;
     let shadows = 0;
-    const boardR2 = Math.max(r2, (this.opts.people < 150 ? 250 : 320) ** 2); // (a little nearer on Light phones)
+    const boardR2 = Math.max(r2, (!!this.opts.light ? 250 : 320) ** 2); // (a little nearer on Light phones)
     this.poolCount = 0;
     this.globeCount = 0;
     for (const b of this.batches) {
@@ -1211,10 +1216,10 @@ export class StreetLife {
   /** Is a vehicle at this point? (Set by the street test, so people wait instead of walking through cars.) */
   vehicleAt: ((x: number, z: number, room: number) => { x: number; z: number; fx: number; fz: number; half: number; halfW: number } | null) | null = null;
 
-  private zeroM = new THREE.Matrix4().makeScale(0, 0, 0);
   private movePeople(x: number, z: number, t: number, dt: number) {
     this.posed?.begin();
-    const lastMoving: Record<CrowdBody, number> = { male: this.sceneSlots.male - 1, female: this.sceneSlots.female - 1 };
+    for (const b of Object.values(this.crowds)) b!.begin();
+    const FAR_WALKER = 25; // beyond this, walkers are drawn with the simpler shape
     let shadows = this.propShadows;
     let close = 0;
     const loadCount = { basin: 0, tray: 0 };
@@ -1344,9 +1349,7 @@ export class StreetLife {
         a.lastX = px;
         a.lastZ = pz;
       } else {
-        // No pavements nearby yet: hide.
-        this.m.makeScale(0, 0, 0);
-        batch.mesh.setMatrixAt(a.slot, this.m);
+        // No pavements nearby yet: not drawn.
         continue;
       }
       this.q.setFromAxisAngle(this.up, Math.PI - heading);
@@ -1359,13 +1362,11 @@ export class StreetLife {
         if (!this.posed!.place(a.look.body, a.spot && a.pose !== 'PickingUp' ? 'Standing' : a.pose, px, gy, pz, heading, a.look, d)) {
           // (no room in that pose's batch: shown moving instead)
           this.m.compose(this.p.set(px, gy, pz), this.q, this.sc.setScalar(a.look.scale));
-          batch.mesh.setMatrixAt(a.slot, this.m);
-          lastMoving[a.batch] = Math.max(lastMoving[a.batch], a.slot);
-        } else batch.mesh.setMatrixAt(a.slot, this.zeroM);
+          batch.draw(a.slot, this.m, d > FAR_WALKER);
+        }
       } else {
         this.m.compose(this.p.set(px, gy, pz), this.q, this.sc.setScalar(a.look.scale));
-        batch.mesh.setMatrixAt(a.slot, this.m);
-        lastMoving[a.batch] = Math.max(lastMoving[a.batch], a.slot);
+        batch.draw(a.slot, this.m, Math.hypot(px - x, pz - z) > FAR_WALKER);
       }
       if (Math.abs(px - x) < 25 && Math.abs(pz - z) < 25) close++;
       // School children always carry a bag on their back; some grown-ups too.
@@ -1388,11 +1389,7 @@ export class StreetLife {
         this.shadowBatch.setMatrixAt(shadows++, this.m);
       }
     }
-    for (const [body, b] of Object.entries(this.crowds) as [CrowdBody, CrowdBatch][]) {
-      b.mesh.instanceMatrix.needsUpdate = true;
-      // Draw only up to the last moving person (the extra still people sit at the end of the batch).
-      b.mesh.count = Math.min(this.shown[body], lastMoving[body] + 1);
-    }
+    for (const b of Object.values(this.crowds)) b!.end();
     this.bags.count = bagCount;
     this.bags.instanceMatrix.needsUpdate = true;
     if (this.bags.instanceColor) this.bags.instanceColor.needsUpdate = true;
