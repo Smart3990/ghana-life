@@ -183,6 +183,10 @@ type Agent = {
   // Walking on and on (never back and forth): along which way, from which time, and the bit of road
   // being crossed to the next pavement.
   rev?: boolean;
+  /** Stepping across the pavement round a kiosk or stall, or apart from someone (metres to the right). */
+  avoid?: number;
+  /** The way ahead is blocked right across the pavement: turn back. */
+  turn?: boolean;
   legT?: number;
   cross?: { ax: number; az: number; bx: number; bz: number; len: number } | null;
 };
@@ -459,7 +463,9 @@ export class StreetLife {
         const batch = this.crowds[look.body]!;
         const slot = batch.count++;
         batch.setLook(slot, look, hash(i, 5) < 0.6 ? 'talk' : 'idle', hash(i, 6) * 10, 1);
-        this.agents.push({ kind, look, batch: look.body, slot, run: null, spot: null, s0: hash(i, 7) * 500, speed: 1, lateral: (hash(i, 8) - 0.5) * 1.6, still: true, leader: -1 });
+        // Standing at the sides of the pavement (by the shops or the kerb), leaving the middle to walkers.
+        const edge = (hash(i, 8) < 0.5 ? -1 : 1) * (0.85 + hash(i, 9) * 0.35);
+        this.agents.push({ kind, look, batch: look.body, slot, run: null, spot: null, s0: hash(i, 7) * 500, speed: 1, lateral: edge, still: true, leader: -1 });
         continue;
       }
       // School children come in groups of three or four; friends walk together in twos and threes.
@@ -1220,6 +1226,13 @@ export class StreetLife {
     this.posed?.begin();
     for (const b of Object.values(this.crowds)) b!.begin();
     const FAR_WALKER = 25; // beyond this, walkers are drawn with the simpler shape
+    // Where everyone near was last frame (1 m squares), so people who come too close step apart.
+    const near = new Map<number, number[]>();
+    for (const [i, a] of this.agents.entries()) {
+      if (a.lastX === undefined || Math.abs(a.lastX - x) > 70 || Math.abs(a.lastZ! - z) > 70) continue;
+      const k = Math.floor(a.lastX) * 100003 + Math.floor(a.lastZ!);
+      (near.get(k) ?? near.set(k, []).get(k)!).push(i);
+    }
     let shadows = this.propShadows;
     let close = 0;
     const loadCount = { basin: 0, tray: 0 };
@@ -1245,8 +1258,14 @@ export class StreetLife {
       let pz: number;
       let heading: number;
       if (a.spot) {
-        // Standing at a kiosk or a vendor's umbrella, facing it.
-        const ang = hash(i, 21) * Math.PI * 2;
+        // Standing at a kiosk or a vendor's umbrella, facing it (on a free side of it: never inside the
+        // next kiosk, never on the road).
+        let ang = hash(i, 21) * Math.PI * 2;
+        for (let k = 0; k < 8; k++) {
+          const ax = a.spot.x + Math.sin(ang) * 1.6, az = a.spot.z - Math.cos(ang) * 1.6;
+          if (!this.solid(ax, az, 0.3) && !this.onRoad(ax, az, 0.05)) break;
+          ang += Math.PI / 4;
+        }
         px = a.spot.x + Math.sin(ang) * 1.6;
         pz = a.spot.z - Math.cos(ang) * 1.6;
         heading = ang + Math.PI;
@@ -1274,6 +1293,13 @@ export class StreetLife {
             a.cross = null;
           }
           let d = (tt - a.legT) * a.speed;
+          if (a.turn && !a.cross) {
+            // Back the way they came, from where they stand.
+            a.turn = false;
+            a.rev = !a.rev;
+            a.legT = tt - (a.run.total - Math.max(0, Math.min(a.run.total, d))) / a.speed;
+            d = (tt - a.legT) * a.speed;
+          }
           for (let guard = 0; guard < 4; guard++) {
             if (a.cross) {
               if (d < a.cross.len) break;
@@ -1314,6 +1340,79 @@ export class StreetLife {
         px = qx + Math.cos(dir) * side;
         pz = qz + Math.sin(dir) * side;
         if (a.still) heading = dir + (a.lateral > 0 ? Math.PI / 2 : -Math.PI / 2);
+        // Never through a kiosk, stall or umbrella, and never through each other (owner, 28 Oct 2026):
+        // walkers step across the pavement round anything in their way, looking a little ahead, and
+        // people who come too close step apart. Never out onto the road.
+        if (Math.abs(px - x) < 70 && Math.abs(pz - z) < 70) {
+          const rx = Math.cos(dir), rz = Math.sin(dir); // across the pavement
+          const fx = Math.sin(heading), fz = -Math.cos(heading); // the way they face
+          const ahead = a.still ? 0 : 2.0;
+          // (Crossing a road to the next pavement they are on the road anyway: only kiosks count.)
+          const ok = (ox: number, oz: number) => !this.solid(ox, oz, 0.28) && (!!a.cross || !this.onRoad(ox, oz, 0.05));
+          const free = (o: number) => ok(px + rx * o, pz + rz * o) && (ahead === 0 || ok(px + rx * o + fx * ahead, pz + rz * o + fz * ahead));
+          const cur = a.avoid ?? 0;
+          const OFFS = [0.45, -0.45, 0.9, -0.9, 1.35, -1.35, 1.8, -1.8, 2.3, -2.3];
+          let want = 0;
+          let snap = a.still;
+          if (!ok(px + rx * cur, pz + rz * cur)) {
+            snap = true;
+            // Already inside something: out to the nearest clear spot beside, at once; with none beside,
+            // keep walking (out the other side in a step or two).
+            let best = Infinity;
+            for (const o of OFFS) if (Math.abs(o - cur) < best && ok(px + rx * o, pz + rz * o)) [want, best] = [o, Math.abs(o - cur)];
+            if (best === Infinity) want = cur;
+          } else if (!free(0)) {
+            want = cur;
+            if (!free(cur)) {
+              let best = Infinity;
+              for (const o of OFFS) if (Math.abs(o - cur) < best && free(o)) [want, best] = [o, Math.abs(o - cur)];
+              // Blocked right across, ahead: walkers turn back (people in a group follow their leader).
+              if (best === Infinity) {
+                want = cur;
+                if (!a.still && !leader) a.turn = true;
+              }
+            }
+          }
+          // Standing people never on top of each other: the later one moves along a little.
+          if (a.still && a.lastX !== undefined && !a.spot) {
+            const cx = Math.floor(a.lastX), cz = Math.floor(a.lastZ!);
+            for (let gx = cx - 1; gx <= cx + 1; gx++)
+              for (let gz = cz - 1; gz <= cz + 1; gz++)
+                for (const j of near.get(gx * 100003 + gz) ?? []) {
+                  const b = this.agents[j];
+                  if (j < i && b.still && Math.hypot(a.lastX - b.lastX!, a.lastZ! - b.lastZ!) < 0.75) a.s0 += 0.9;
+                }
+          }
+          // Someone close, or just ahead: a step apart (away from them, across the pavement). People
+          // standing still stay where they are; walkers go round them.
+          if (a.lastX !== undefined && !a.still) {
+            const cx = Math.floor(a.lastX), cz = Math.floor(a.lastZ!);
+            let push = 0;
+            for (let gx = cx - 2; gx <= cx + 2; gx++)
+              for (let gz = cz - 2; gz <= cz + 2; gz++)
+                for (const j of near.get(gx * 100003 + gz) ?? []) {
+                  if (j === i || (leader && j === a.leader)) continue;
+                  const b = this.agents[j];
+                  // Now, and a metre on (where they are about to walk).
+                  for (const [ax, az, room] of [[a.lastX, a.lastZ!, 0.7], [a.lastX + fx, a.lastZ! + fz, 0.6]] as const) {
+                    const dx = ax - b.lastX!, dz = az - b.lastZ!;
+                    const d = Math.hypot(dx, dz);
+                    if (d >= room) continue;
+                    const side = Math.sign(dx * rx + dz * rz) || (i > j ? 1 : -1);
+                    push += side * (room - d) * (b.still ? 1.8 : 1.2);
+                  }
+                }
+            if (push) {
+              const o = Math.max(-2.3, Math.min(2.3, want + push));
+              if (free(o)) want = o;
+              else if (free(want + Math.sign(push) * 0.45)) want += Math.sign(push) * 0.45;
+            }
+          }
+          // Smoothly (a step at a time), except for people standing still.
+          a.avoid = snap ? want : cur + Math.max(-2.4 * dt, Math.min(2.4 * dt, want - cur));
+          px += rx * a.avoid;
+          pz += rz * a.avoid;
+        }
         a.lastH = heading;
         // Talking with the player: stand still, face them, talk with the hands.
         if ((a.talkUntil ?? 0) > t) {
