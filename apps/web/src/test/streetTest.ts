@@ -10,7 +10,7 @@ import { createMap } from '../map/createMap';
 import { detectTier, measureFps } from '../map/tier';
 import type { Traffic } from '../game/traffic';
 import { createStreetNetwork } from '../game/streetNetwork';
-import { AD_ROWS, StreetTraffic } from '../game/vehicles3d';
+import { AD_ASPECT, AD_ROWS, StreetTraffic } from '../game/vehicles3d';
 import { StreetBuildings } from '../game/streetBuildings';
 import { applyStreetStyle } from '../map/streetStyle';
 import { StreetLife } from '../game/streetLife';
@@ -3503,14 +3503,16 @@ function tapVehicle(sx: number, sy: number) {
   // The card shows every advert that rides the city's vehicles, starting with the one on this one
   // now; the vehicle carries on driving (owner, 28 Oct 2026: it "doesn't affect the cars movement").
   const traffic = streetTraffic;
+  const shape = traffic.adShapeOf(info.key);
   adCard.open({
     kind: 'vehicle',
-    title: `${name} · advert on both sides`,
-    picture: traffic.vehicleAdPicture(info.ad),
+    title: `${name} · full-side advert, both sides`,
+    picture: traffic.vehicleAdPicture(info.ad, shape),
+    aspect: AD_ASPECT[shape],
     place: vehiclePlace(best.p.v.kind),
     note: 'Adverts ride trotros, buses and lorries on their real routes all day, past everyone on the road. Each one changes every few seconds.',
     own: ownAds.vehicle.get(info.ad) ?? null,
-    slides: Array.from({ length: AD_ROWS }, (_, r) => ({ picture: traffic.vehicleAdPicture(r), own: ownAds.vehicle.get(r) ?? null })),
+    slides: Array.from({ length: AD_ROWS }, (_, r) => ({ picture: traffic.vehicleAdPicture(r, shape), own: ownAds.vehicle.get(r) ?? null })),
     start: liveAd(info.ad, AD_ROWS, 8),
     preview: () => undefined,
     previewAt: (row, draw, contact) => {

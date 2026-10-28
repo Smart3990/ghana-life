@@ -31,18 +31,27 @@ const PACK: Record<BatchKey, { file: string; paint: string[]; white?: string[] }
   VEHICLE_TYPES.filter((t) => t.file).map((t) => [t.key, { file: t.file!, paint: t.paint ?? [], white: t.white }]),
 );
 // Advert wraps on the pack's vehicles: [half width, bottom, top, back end, front end, back face].
-const PACK_PANELS: Partial<Record<BatchKey, [number, number, number, number, number, number]>> = {
-  // Measured on the pack's models (their flat side panels; owner, 28 Oct 2026: "must be very
-  // perfectly aligned"): each panel lies 1.5 cm off the flat side, inside its edges, in the advert's own
-  // shape (4 wide to 1 high, so nothing is stretched).
-  // The van: its flat side below the windows (x 0.86, y 0.44 to 1.34, z -1.62 to 1.66).
-  trotro: [0.875, 0.5, 1.31, -1.6, 1.64, -2.08],
-  sprinter: [0.875, 0.5, 1.31, -1.6, 1.64, -2.08],
-  // The city bus: its flat side (x 1.32, y 0.47 to 2.78), above the wheel arches (which reach 1.07),
-  // centred between the back and the front door.
-  bus: [1.335, 1.12, 2.72, -4.3, 2.1, -5.5],
-  // The box lorry: its cargo box (x 1.04, y 0.88 to 2.81, z -3.03 to 1.42), the advert centred on it.
-  truck: [1.055, 1.3, 2.39, -2.99, 1.38, -3.1],
+// Full-side advert wraps on the pack's vehicles (owner, 28 Oct 2026: the advert "must take up the full
+// side ... in both length and width", "made professionally"). Measured on the pack's models: each wrap
+// follows the side's own shape, 1.5 cm out from it, from back to front and from bottom to top.
+// profile: [height, distance out from the middle] up the side; z0..z1: back to front; shape: which
+// advert picture it carries (adverts are designed in each wrap's own proportions, never stretched).
+type Wrap = { profile: [number, number][]; z0: number; z1: number; shape: AdShape };
+const VAN_WRAP: Wrap = {
+  // The van: the lower body (x 0.84), the flat belt (x 0.86) and the windows sloping in (x 0.78 at 1.83).
+  profile: [[0.46, 0.862], [0.83, 0.862], [0.85, 0.9], [1.34, 0.9], [1.8, 0.8]], // (clear of the door handles, which reach 0.894)
+  z0: -1.6,
+  z1: 1.64,
+  shape: 'tall',
+};
+const PACK_WRAPS: Partial<Record<BatchKey, Wrap>> = {
+  trotro: VAN_WRAP,
+  sprinter: VAN_WRAP,
+  // The city bus: its whole flat side (x 1.32) above the wheel-arch lips (which reach 1.27) to the roof
+  // edge (2.78), from the back to the front door.
+  bus: { profile: [[1.3, 1.335], [2.74, 1.335]], z0: -5.4, z1: 2.6, shape: 'wide' },
+  // The box lorry: its whole cargo box (x 1.04, y 0.88 to 2.81, z -3.03 to 1.42).
+  truck: { profile: [[0.9, 1.066], [2.79, 1.066]], z0: -3.01, z1: 1.4, shape: 'tall' }, // (clear of the fittings at 1.058)
 };
 const MODERN: Partial<Record<BatchKey, string>> = {
   // Our own models shaped after the real vehicles at Circle (scripts/vehicles/build_ghana.py).
@@ -124,53 +133,184 @@ const paintPart = (g: THREE.BufferGeometry, colour: string) => paint(g, colour);
 // One picture holds all the adverts, one per row; each vehicle shows the row its number picks.
 // Placeholder brands only (the game's own), until real advertisers buy the space.
 export const AD_ROWS = 8;
-export type VehicleAd = { title: string; line: string; bg: [string, string]; accent: string; ink?: string };
+/** The two advert shapes: 'tall' (vans and lorry boxes, about 2.35 wide to 1 high), 'wide' (buses, about 5.5 to 1). */
+export type AdShape = 'tall' | 'wide';
+export const AD_ASPECT: Record<AdShape, number> = { tall: 2.36, wide: 5.55 };
+const SHAPE_OF: Partial<Record<string, AdShape>> = { trotro: 'tall', sprinter: 'tall', truck: 'tall', bus: 'wide' };
+export type VehicleAd = { title: string; line: string; bg: [string, string]; accent: string; ink?: string; cta?: string };
 // Placeholder adverts (the game's own brands). Advertisers' own adverts come from /data/ads.json
 // (the same fields), so new ones can be added without changing the game.
 const DEFAULT_ADS: VehicleAd[] = [
-  { title: 'SIKA MOBILE MONEY', line: 'Send money home in seconds', bg: ['#0f6b3a', '#1c9b57'], accent: '#f2c21a' },
-  { title: 'GHANAVERSE FM 98.5', line: 'The sound of the city, all day', bg: ['#4a1d6e', '#7a3fb0'], accent: '#ffd25a' },
-  { title: 'YOUR AD HERE', line: 'Tap this trotro · from ₵1,200 a week', bg: ['#f2efe6', '#e3dccb'], accent: '#c8442e', ink: '#121a14' },
-  { title: 'KELEWELE AT CIRCLE', line: 'Hot and spicy every evening', bg: ['#c2410c', '#f08a24'], accent: '#fff3c4' },
-  { title: 'COOL SACHET WATER', line: 'Clean, cold, everywhere', bg: ['#0b4f8a', '#2a86d1'], accent: '#ffffff' },
-  { title: 'GHANAVERSE NEWS', line: 'Tonight at 8 on every big screen', bg: ['#8e1b1b', '#c8442e'], accent: '#ffffff' },
-  { title: 'TONIGHT IN GHANAVERSE', line: 'Highlife night at Osu · free entry', bg: ['#1f4f8a', '#121a14'], accent: '#e3a92b' },
-  { title: 'PHONES & CHARGERS', line: 'Best prices at Circle, come and see', bg: ['#121a14', '#3a3d42'], accent: '#2dd4bf' },
+  { title: 'SIKA MOBILE MONEY', line: 'Send money home in seconds', bg: ['#0f6b3a', '#1c9b57'], accent: '#f2c21a', cta: 'Open the Sika app' },
+  { title: 'GHANAVERSE FM 98.5', line: 'The sound of the city, all day', bg: ['#4a1d6e', '#7a3fb0'], accent: '#ffd25a', cta: 'Tune in now' },
+  { title: 'YOUR AD HERE', line: 'Ride the whole city · from ₵1,200 a week', bg: ['#f2efe6', '#e3dccb'], accent: '#c8442e', ink: '#121a14', cta: 'Tap this vehicle' },
+  { title: 'KELEWELE AT CIRCLE', line: 'Hot and spicy every evening', bg: ['#c2410c', '#f08a24'], accent: '#fff3c4', cta: 'By the lorry station' },
+  { title: 'COOL SACHET WATER', line: 'Clean, cold, everywhere', bg: ['#0b4f8a', '#2a86d1'], accent: '#ffffff', cta: 'Ask for it by name' },
+  { title: 'GHANAVERSE NEWS', line: 'Tonight at 8 on every big screen', bg: ['#8e1b1b', '#c8442e'], accent: '#ffffff', cta: 'Every night at 8' },
+  { title: 'TONIGHT IN GHANAVERSE', line: 'Highlife night at Osu · free entry', bg: ['#1f4f8a', '#121a14'], accent: '#e3a92b', cta: 'Saturday from 9pm' },
+  { title: 'PHONES & CHARGERS', line: 'Best prices at Circle, come and see', bg: ['#121a14', '#3a3d42'], accent: '#2dd4bf', cta: 'Circle market' },
 ];
-function adAtlas(ads: VehicleAd[], canvas = document.createElement('canvas')) {
-  const c = canvas;
-  c.width = 1024;
-  c.height = 256 * AD_ROWS;
-  const g = c.getContext('2d')!;
+/** Fit a line of text into a width: the biggest size up to `size` that fits (never under 40%). */
+function fitFont(g: CanvasRenderingContext2D, text: string, weight: number, size: number, maxW: number) {
+  let px = size;
+  for (; px > size * 0.4; px *= 0.94) {
+    g.font = `${weight} ${Math.round(px)}px system-ui, sans-serif`;
+    if (g.measureText(text).width <= maxW) break;
+  }
+  return Math.round(px);
+}
+/** Split a title into two balanced lines (for the taller wraps). */
+function twoLines(text: string): string[] {
+  const w = text.split(' ');
+  if (w.length < 2) return [text];
+  let best = 1, diff = Infinity;
+  for (let i = 1; i < w.length; i++) {
+    const d = Math.abs(w.slice(0, i).join(' ').length - w.slice(i).join(' ').length);
+    if (d < diff) [best, diff] = [i, d];
+  }
+  return [w.slice(0, best).join(' '), w.slice(best).join(' ')];
+}
+/**
+ * One vehicle advert, laid out like a real wrap for the space's shape: a deep colour sweep, big
+ * shapes in the advert's colour, the brand in large letters (on two lines on the taller wraps), its
+ * line, a call-to-action badge, a round brand mark, and a kente band along the bottom.
+ */
+export function drawVehicleAd(g: CanvasRenderingContext2D, a: VehicleAd, top: number, W: number, H: number) {
+  const tall = W / H < 3.2;
+  const ink = a.ink ?? '#ffffff';
+  g.save();
+  g.beginPath();
+  g.rect(0, top, W, H);
+  g.clip();
+  const grad = g.createLinearGradient(0, top, W, top + H);
+  grad.addColorStop(0, a.bg[0]);
+  grad.addColorStop(1, a.bg[1]);
+  g.fillStyle = grad;
+  g.fillRect(0, top, W, H);
+  // Big soft shapes: a circle off the right edge and a slanted band.
+  g.fillStyle = a.accent;
+  g.globalAlpha = 0.16;
+  g.beginPath();
+  g.arc(W * 0.86, top + H * 0.42, H * (tall ? 0.62 : 0.85), 0, Math.PI * 2);
+  g.fill();
+  g.globalAlpha = 0.1;
+  g.beginPath();
+  g.moveTo(W * 0.56, top + H);
+  g.lineTo(W * 0.66, top + H);
+  g.lineTo(W * 0.8, top);
+  g.lineTo(W * 0.7, top);
+  g.fill();
+  g.globalAlpha = 1;
+  // Bands: a thin line of the advert's colour along the top, kente along the bottom.
+  const kh = Math.max(6, Math.round(H * 0.075));
+  g.fillRect(0, top, W, Math.max(3, Math.round(H * 0.025)));
   const kente = ['#e3a92b', '#121a14', '#c8442e', '#121a14', '#2f8f57', '#121a14', '#1f5fa8', '#121a14'];
-  for (let r = 0; r < AD_ROWS; r++) {
-    const a = ads[r % ads.length];
-    const ink = a.ink ?? '#ffffff';
-    const y = (AD_ROWS - 1 - r) * 256;
-    const grad = g.createLinearGradient(0, y, 1024, y + 256);
-    grad.addColorStop(0, a.bg[0]);
-    grad.addColorStop(1, a.bg[1]);
-    g.fillStyle = grad;
-    g.fillRect(0, y, 1024, 256);
-    for (let x = 0, i = 0; x < 1024; x += 24, i++) {
-      g.fillStyle = kente[i % kente.length];
-      g.fillRect(x, y + 232, 24, 24);
-    }
+  for (let x = 0, i = 0; x < W; x += kh, i++) {
+    g.fillStyle = kente[i % kente.length];
+    g.fillRect(x, top + H - kh, kh, kh);
+  }
+  // The brand mark on the right: a disc with the brand's initials.
+  const r = H * (tall ? 0.2 : 0.3);
+  const mx = W - r - H * (tall ? 0.16 : 0.2), my = top + (H - kh) / 2;
+  g.fillStyle = a.accent;
+  g.beginPath();
+  g.arc(mx, my, r, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = ink === '#ffffff' ? a.bg[0] : '#ffffff';
+  if (ink !== '#ffffff') g.fillStyle = a.bg[0] === '#f2efe6' ? '#121a14' : '#ffffff';
+  const initials = a.title.split(/\s+/).filter((w) => /[A-Z0-9]/i.test(w[0] ?? '')).slice(0, 2).map((w) => w[0]).join('');
+  g.font = `900 ${Math.round(r * 0.9)}px system-ui, sans-serif`;
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText(initials, mx, my + r * 0.04);
+  g.textAlign = 'left';
+  g.textBaseline = 'alphabetic';
+  // The words, in a block on the left, centred up and down.
+  const pad = H * (tall ? 0.1 : 0.14);
+  const maxW = mx - r - pad * 1.6;
+  const lines = tall ? twoLines(a.title) : [a.title];
+  let tsize = H * (tall ? 0.2 : 0.44);
+  for (const l of lines) tsize = Math.min(tsize, fitFont(g, l, 900, tsize, maxW));
+  const cta = a.cta ?? '';
+  // The whole block (brand, line, badge) always fits the height, with a margin.
+  const blockOf = (t: number) => lines.length * t * 1.02 + t * 0.4 * 1.5 + (cta ? t * 0.4 * 0.82 * 2.4 : 0);
+  while (blockOf(tsize) > (H - kh) * 0.84 && tsize > 8) tsize *= 0.95;
+  tsize = Math.round(tsize);
+  const lsize = fitFont(g, a.line, 700, tsize * (tall ? 0.42 : 0.4), maxW);
+  const csize = Math.round(lsize * 0.82);
+  const block = lines.length * tsize * 1.02 + lsize * 1.5 + (cta ? csize * 2.4 : 0);
+  let y = top + (H - kh - block) / 2 + tsize * 0.86;
+  g.fillStyle = ink;
+  g.font = `900 ${tsize}px system-ui, sans-serif`;
+  for (const l of lines) {
+    g.fillText(l, pad, y);
+    y += tsize * 1.02;
+  }
+  g.globalAlpha = 0.92;
+  g.fillStyle = ink === '#121a14' ? '#c8442e' : ink;
+  g.font = `700 ${lsize}px system-ui, sans-serif`;
+  y += lsize * 0.35;
+  g.fillText(a.line, pad, y);
+  g.globalAlpha = 1;
+  if (cta) {
+    // The call to action in a pill of the advert's colour.
+    g.font = `800 ${csize}px system-ui, sans-serif`;
+    const cw = g.measureText(cta).width + csize * 1.4;
+    const ch = csize * 1.7;
+    const cy = y + lsize * 0.6;
     g.fillStyle = a.accent;
     g.beginPath();
-    g.arc(930, y + 110, 70, 0, Math.PI * 2);
+    g.roundRect(pad, cy, cw, ch, ch / 2);
     g.fill();
-    g.fillStyle = ink;
-    g.font = '900 86px system-ui, sans-serif';
-    g.fillText(a.title, 34, y + 118, 820);
-    g.fillStyle = ink === '#121a14' ? '#c8442e' : a.accent;
-    g.font = '700 44px system-ui, sans-serif';
-    g.fillText(a.line, 38, y + 190, 820);
+    g.fillStyle = a.bg[0] === '#f2efe6' || a.accent === '#ffffff' || a.accent === '#fff3c4' || a.accent === '#ffd25a' || a.accent === '#f2c21a' || a.accent === '#e3a92b' || a.accent === '#2dd4bf' ? '#121a14' : '#ffffff';
+    g.fillText(cta, pad + csize * 0.7, cy + ch * 0.68);
   }
+  g.restore();
+}
+/** The adverts of one shape, one per row of one picture (row 0 at the bottom). */
+function adAtlas(ads: VehicleAd[], canvas: HTMLCanvasElement, shape: AdShape, W: number) {
+  const c = canvas;
+  const H = Math.round(W / AD_ASPECT[shape]);
+  c.width = W;
+  c.height = H * AD_ROWS;
+  const g = c.getContext('2d')!;
+  for (let r = 0; r < AD_ROWS; r++) drawVehicleAd(g, ads[r % ads.length], (AD_ROWS - 1 - r) * H, W, H);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = 4;
   return t;
+}
+
+/** A full-side wrap on both sides: strips up the side's profile, reading the right way round from outside. */
+function wrapGeometry(w: Wrap) {
+  const pos: number[] = [];
+  const uv: number[] = [];
+  const nor: number[] = [];
+  const P = w.profile;
+  const cum = [0];
+  for (let i = 1; i < P.length; i++) cum.push(cum[i - 1] + Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]));
+  const total = cum[cum.length - 1];
+  for (const side of [1, -1]) {
+    const u = side > 0 ? [1, 0, 0, 1] : [0, 1, 1, 0];
+    const order = side > 0 ? [0, 2, 1, 0, 3, 2] : [0, 1, 2, 0, 2, 3];
+    for (let i = 1; i < P.length; i++) {
+      const [ya, xa] = P[i - 1], [yb, xb] = P[i];
+      const va = cum[i - 1] / total, vb = cum[i] / total;
+      const quad = [[side * xa, ya, w.z0], [side * xa, ya, w.z1], [side * xb, yb, w.z1], [side * xb, yb, w.z0]];
+      const vv = [va, va, vb, vb];
+      const ny = -(xb - xa), nx = yb - ya, nl = Math.hypot(nx, ny) || 1;
+      for (const k of order) {
+        pos.push(...quad[k]);
+        uv.push(u[k], vv[k]);
+        nor.push((side * nx) / nl, ny / nl, 0);
+      }
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  return g;
 }
 
 // Where the advert panels go on each commercial vehicle, in the vehicle's own metres (front is +z):
@@ -595,15 +735,21 @@ export class StreetTraffic {
     const models: Record<BatchKey, Model> = {};
     for (const t of VEHICLE_TYPES) models[t.key] = t.key === 'motorking' ? motorKing() : byKind[t.kind]();
     this.batches = {} as typeof this.batches;
-    const adCanvas = this.adCanvas;
-    const adMat = adMaterial(adAtlas(DEFAULT_ADS, adCanvas));
+    // Two advert pictures, one per wrap shape (smaller on Light phones).
+    const AW = limit <= 300 ? 768 : 1024;
+    const adMats: Record<AdShape, THREE.MeshBasicMaterial> = {
+      tall: adMaterial(adAtlas(DEFAULT_ADS, this.adCanvases.tall, 'tall', AW)),
+      wide: adMaterial(adAtlas(DEFAULT_ADS, this.adCanvases.wide, 'wide', AW)),
+    };
     // Advertisers' adverts, when there are any.
     fetch('/data/ads.json')
       .then((r) => (r.ok ? r.json() : null))
       .then((list: VehicleAd[] | null) => {
         if (!Array.isArray(list) || !list.length) return;
-        adMat.map = adAtlas([...list, ...DEFAULT_ADS].slice(0, AD_ROWS), adCanvas);
-        adMat.needsUpdate = true;
+        for (const shape of ['tall', 'wide'] as const) {
+          adMats[shape].map = adAtlas([...list, ...DEFAULT_ADS].slice(0, AD_ROWS), this.adCanvases[shape], shape, AW);
+          adMats[shape].needsUpdate = true;
+        }
       })
       .catch(() => undefined);
     // "TAXI" on the front and back of the roof sign.
@@ -667,7 +813,7 @@ export class StreetTraffic {
       if (panel) {
         const geo = adPanels(panel);
         geo.setAttribute('aAd', new THREE.InstancedBufferAttribute(new Float32Array(limit), 1));
-        const ads = new THREE.InstancedMesh(geo, adMat, limit);
+        const ads = new THREE.InstancedMesh(geo, adMats[SHAPE_OF[kind] ?? 'tall'], limit);
         ads.count = 0;
         ads.frustumCulled = false;
         ads.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -735,10 +881,10 @@ export class StreetTraffic {
         f.fixed.geometry = await simpler(fixed, 0.3, true);
         f.fixed.material = fixedMat;
       }
-      const panel = PACK_PANELS[key];
+      const wrap = PACK_WRAPS[key];
       const ads = this.ads[key];
-      if (panel && ads) {
-        const g = adPanels(panel);
+      if (wrap && ads) {
+        const g = wrapGeometry(wrap);
         g.setAttribute('aAd', ads.geometry.getAttribute('aAd'));
         ads.geometry = g;
       }
@@ -836,7 +982,7 @@ export class StreetTraffic {
   /** Vehicles not drawn (the story has taken their place on the road). */
   hide = new Set<number>();
   private lane = 1.35;
-  private adCanvas = document.createElement('canvas');
+  private adCanvases: Record<AdShape, HTMLCanvasElement> = { tall: document.createElement('canvas'), wide: document.createElement('canvas') };
   /** Where a vehicle's route goes at a distance s (in the scene's metres), for driving along it. */
   routeAt(v: Placed['v'], s: number) {
     const p = this.traffic.at(v, s, this.lane);
@@ -850,21 +996,27 @@ export class StreetTraffic {
     const ad = this.ads[key] && r < 0.8 ? Math.floor(r * 1.25 * AD_ROWS) % AD_ROWS : null;
     return { key, ad };
   }
-  /** A picture of one vehicle advert (for the advert card). */
-  vehicleAdPicture(row: number) {
-    const src = this.adCanvas;
-    const c = document.createElement('canvas');
-    c.width = 512;
-    c.height = 128;
-    const h = src.height / AD_ROWS;
-    c.getContext('2d')!.drawImage(src, 0, (AD_ROWS - 1 - row) * h, src.width, h, 0, 0, 512, 128);
-    return c.toDataURL('image/webp', 0.85);
+  /** The advert shape a vehicle type carries ('tall' vans and lorries, 'wide' buses). */
+  adShapeOf(key: string): AdShape {
+    return SHAPE_OF[key] ?? 'tall';
   }
-  /** Show the player's own advert on every vehicle that carries this row (a preview, only for them). */
+  /** A picture of one vehicle advert in the shape of that vehicle's wrap (for the advert card). */
+  vehicleAdPicture(row: number, shape: AdShape = 'tall') {
+    const src = this.adCanvases[shape];
+    const c = document.createElement('canvas');
+    c.width = 720;
+    c.height = Math.round(720 / AD_ASPECT[shape]);
+    const h = src.height / AD_ROWS;
+    c.getContext('2d')!.drawImage(src, 0, (AD_ROWS - 1 - row) * h, src.width, h, 0, 0, c.width, c.height);
+    return c.toDataURL('image/webp', 0.88);
+  }
+  /** Show the player's own advert on every vehicle that carries this row, in both wrap shapes (a preview, only for them). */
   previewAd(row: number, draw: (g: CanvasRenderingContext2D, top: number, W: number, H: number) => void) {
-    const h = this.adCanvas.height / AD_ROWS;
-    draw(this.adCanvas.getContext('2d')!, (AD_ROWS - 1 - row) * h, this.adCanvas.width, h);
-    for (const m of Object.values(this.ads)) if (m) ((m.material as THREE.MeshStandardMaterial).map as THREE.Texture).needsUpdate = true;
+    for (const c of Object.values(this.adCanvases)) {
+      const h = c.height / AD_ROWS;
+      draw(c.getContext('2d')!, (AD_ROWS - 1 - row) * h, c.width, h);
+    }
+    for (const m of Object.values(this.ads)) if (m) ((m.material as THREE.MeshBasicMaterial).map as THREE.Texture).needsUpdate = true;
   }
   /** Vehicles told to stay where they are (a driver who got out). */
   hold = new Set<number>();

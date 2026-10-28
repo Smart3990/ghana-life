@@ -33,6 +33,8 @@ export type AdSpace = {
    * "Put your advert here" goes into the advert place you are looking at (`previewAt`).
    */
   slides?: { picture: string; own?: AdContact | null }[];
+  /** The advert's shape, width to height (a vehicle wrap's own; billboards 16:9). */
+  aspect?: number;
   start?: number;
   previewAt?: (i: number, draw: (g: CanvasRenderingContext2D, top: number, W: number, H: number) => void, contact: AdContact) => void;
 };
@@ -158,7 +160,8 @@ export class AdCard {
     return adPlace(this.d.where).kind;
   }
   private get aspect() {
-    return this.kind === 'vehicle' ? 4 : 16 / 9;
+    if (this.space?.aspect && this.space.kind === this.kind) return this.space.aspect;
+    return this.kind === 'vehicle' ? 2.36 : 16 / 9;
   }
   /** The same price for everybody: the place's price a week, times the weeks. */
   private total() {
