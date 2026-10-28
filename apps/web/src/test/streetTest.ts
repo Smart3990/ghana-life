@@ -37,7 +37,8 @@ import { Minimap } from '../hud/minimap';
 import { FullMap } from '../hud/fullMap';
 import { AdCard, type AdContact } from '../hud/adCard';
 import { forPlayer } from '../game/address';
-import { COMPOUND, compoundHouse, compoundSolid, inYourRoom, PARKING } from '../game/compound';
+import { COMPOUND, compoundHouse, compoundSolid, inYourRoom, PARKING, VILLA } from '../game/compound';
+import { housePick, modelSize, STREET_HOUSES, villaMesh } from '../game/packBuildings';
 import { AD_COUNT, adThumb } from '../game/adPosters';
 import type { PlaceAt } from '../game/places';
 import { Phone, type MissionRow, type Destination } from '../hud/phone';
@@ -1835,7 +1836,46 @@ const uncle = {
     this.heading = Math.atan2(x - this.x, -(z - this.z));
   },
 };
+// Uncle Kwame's wife, Auntie Esi, and their two children, Kofi and Akos (6c; owner, 28 Oct 2026:
+// "the uncles, his wife and children"): at home in the yard when you arrive.
+const family = {
+  people: [] as { p: Person; x: number; z: number; heading: number }[],
+  loading: null as Promise<void> | null,
+  load() {
+    this.loading ??= (async () => {
+      const list = await Promise.all([
+        createPerson({ shirt: '#1f5fa8', trousers: '#e3a92b', shoes: '#3a2a20', hair: '#141110', skin: '#6e625b' }, 'female', 'full'), // Auntie Esi, in a wax-print blue and gold
+        createPerson({ shirt: '#c8442e', trousers: '#2a3446', shoes: '#f2efe6', hair: '#141110', skin: '#6e625b' }, 'male', 'full'), // Kofi
+        createPerson({ shirt: '#d84a8c', trousers: '#f2efe6', shoes: '#f2efe6', hair: '#141110', skin: '#6e625b' }, 'female', 'full'), // Akos
+      ]);
+      list[1].model.scale.multiplyScalar(0.62);
+      list[2].model.scale.multiplyScalar(0.58);
+      for (const p of list) {
+        act(p, 'idle', 0);
+        p.model.traverse((o) => (o.castShadow = PRESET.shadows));
+        this.people.push({ p, x: 0, z: 0, heading: 0 });
+      }
+    })();
+    return this.loading;
+  },
+  show(spots: { x: number; z: number; heading: number }[]) {
+    this.people.forEach((f, i) => {
+      if (!spots[i]) return;
+      [f.x, f.z, f.heading] = [spots[i].x, spots[i].z, spots[i].heading];
+      scene.add(f.p.root);
+    });
+  },
+  update(dt: number) {
+    for (const f of this.people) {
+      if (!f.p.root.parent) continue;
+      f.p.root.position.set(f.x, 0, f.z);
+      f.p.root.rotation.set(0, Math.PI - f.heading, 0);
+      f.p.mixer.update(dt);
+    }
+  },
+};
 function updateUncle(dt: number) {
+  family.update(dt);
   const p = uncle.person;
   if (!p || !uncle.on) return;
   if (uncle.target) {
@@ -2024,7 +2064,50 @@ function updateAmbulance(t: number) {
 }
 
 // The compound house: placed on open ground near where the ride ends, its gate facing the road.
-const compound = { group: null as THREE.Group | null, x: 0, z: 0, face: 0, placed: false };
+const compound = { group: null as THREE.Group | null, x: 0, z: 0, face: 0, placed: false, street: null as UncleStreet | null };
+/** Uncle Kwame's quiet street (6c): its middle line from the main road to his gate, the main road there. */
+type UncleStreet = { toGate: { x: number; z: number }[]; main: { x: number; z: number; dx: number; dz: number; half: number }; houses: number };
+/**
+ * Follows a street's middle line from (x, z) along T, up to maxLen metres: its points, and where it
+ * meets a main road (if it does).
+ */
+function traceStreet(x: number, z: number, T: { x: number; z: number }, maxLen: number) {
+  const pts = [{ x, z }];
+  if (!life) return { pts, main: null };
+  let p = { x, z };
+  let t = { ...T };
+  for (let d = 3; d <= maxLen; d += 3) {
+    const g = { x: p.x + t.x * 3, z: p.z + t.z * 3 };
+    const main = life.roadPointNear(g.x, g.z, 4, 4.5);
+    if (main && d > 6) {
+      pts.push({ x: main.x, z: main.z });
+      return { pts, main };
+    }
+    const q = life.roadPointNear(g.x, g.z, 5, 2);
+    if (!q) break;
+    let dir = { x: q.dx, z: q.dz };
+    if (dir.x * t.x + dir.z * t.z < 0) dir = { x: -dir.x, z: -dir.z };
+    // (At a crossing, keep straight on rather than turning into the other street.)
+    if (dir.x * t.x + dir.z * t.z > 0.75) t = dir;
+    p = { x: q.x, z: q.z };
+    pts.push(p);
+  }
+  return { pts, main: null };
+}
+/** The gate's street: which way it runs at the gate point, and the way to the nearest main road along it. */
+function gateStreet(gx: number, gz: number, maxLen = 100) {
+  const q = life?.roadPointNear(gx, gz, 8, 2);
+  if (!q) return null;
+  let best: { pts: { x: number; z: number }[]; main: NonNullable<ReturnType<NonNullable<typeof life>['roadPointNear']>>; len: number } | null = null;
+  for (const sg of [1, -1]) {
+    const tr = traceStreet(q.x, q.z, { x: q.dx * sg, z: q.dz * sg }, maxLen);
+    if (!tr.main) continue;
+    let len = 0;
+    for (let i = 1; i < tr.pts.length; i++) len += Math.hypot(tr.pts[i].x - tr.pts[i - 1].x, tr.pts[i].z - tr.pts[i - 1].z);
+    if (!best || len < best.len) best = { pts: tr.pts, main: tr.main, len };
+  }
+  return best;
+}
 /** Under the carport's tin roof (the camera cannot see through it). */
 function underCarport(x: number, z: number) {
   if (!compound.placed) return false;
@@ -2062,7 +2145,12 @@ function compoundRoomShot() {
 }
 function placeCompound(nearX: number, nearZ: number) {
   if (!life) return null;
-  compound.group ??= compoundHouse();
+  if (!compound.group) {
+    compound.group = compoundHouse();
+    // Uncle's family house, the white modern one, on its side of the yard (it arrives in a moment).
+    const g = compound.group;
+    void villaMesh(VILLA).then((m) => g.add(m));
+  }
   const W = COMPOUND.w / 2 + 0.5;
   const D = COMPOUND.d / 2 + 0.5;
   let best: { x: number; z: number; face: number; bad: number } | null = null;
@@ -2080,7 +2168,7 @@ function placeCompound(nearX: number, nearZ: number) {
           const px = cx + R[0] * u + F[0] * v;
           const pz = cz + R[1] * u + F[1] * v;
           if (life.roadAt(px, pz, 0.5)) bad += 100; // never on a road
-          else if (buildings.blocked(px, pz, 0.2)) bad++;
+          else if (buildings.blocked(px, pz, 0.2)) bad += 0.12; // (the map's buildings there are cleared away: open ground only a little better)
         }
       // The gate must open onto the road, with nothing between the gate and the road.
       let toRoadOk = false;
@@ -2096,6 +2184,15 @@ function placeCompound(nearX: number, nearZ: number) {
       if (!toRoadOk) bad += 40;
       // A quiet side street, not on a busy main road with its sellers.
       if (life.roadDirNear(cx, cz, D + 14, 4.5) !== null) bad += 25;
+      // ... that joins a main road 25 to 100 m away (owner, 28 Oct 2026: Uncle comes along the main
+      // road and curves into his street).
+      if (bad < 30 && (!best || bad < best.bad)) {
+        let k = 1;
+        while (k < 12 && !life.roadAt(cx + F[0] * (D + k), cz + F[1] * (D + k), 0)) k += 0.5;
+        const st = gateStreet(cx + F[0] * (D + k + 1), cz + F[1] * (D + k + 1));
+        if (!st || st.len < 25) bad += 30;
+        else if (st.len > 55) bad += Math.min(20, (st.len - 55) / 5); // (a short street: he is home in a few seconds)
+      } else bad += 30;
       if (!best || bad < best.bad) best = { x: cx, z: cz, face, bad };
     }
   if (!best || best.bad >= 100) return null;
@@ -2109,7 +2206,76 @@ function placeCompound(nearX: number, nearZ: number) {
   scene.add(compound.group);
   life.clearArea(best.x, best.z, Math.hypot(COMPOUND.w, COMPOUND.d) / 2 + 12); // no sellers crowding the house: open ground round it
   const F = { x: Math.sin(best.face), z: -Math.cos(best.face) };
+  compound.street = buildUncleStreet(best.x, best.z, F);
   return { x: best.x, z: best.z, face: best.face, gate: { x: best.x + F.x * (COMPOUND.d / 2 + 1.6), z: best.z + F.z * (COMPOUND.d / 2 + 1.6) }, F };
+}
+
+/**
+ * Uncle Kwame's street (6c): from the main road to his gate and on a little past it, the map's
+ * buildings are cleared and the street is lined on both sides with houses from the pack, every one
+ * facing the street with its own house number (players can own them later). Returns the street.
+ */
+function buildUncleStreet(hx: number, hz: number, F: { x: number; z: number }): UncleStreet | null {
+  if (!life) return null;
+  const D = COMPOUND.d / 2;
+  let k = 1;
+  while (k < 12 && !life.roadAt(hx + F.x * (D + k), hz + F.z * (D + k), 0)) k += 0.5;
+  const st = gateStreet(hx + F.x * (D + k + 1), hz + F.z * (D + k + 1));
+  if (!st) return null;
+  const toMain = st.pts; // from the gate to the main road
+  // On past the gate for about 50 m the other way.
+  const g0 = toMain[0], g1 = toMain[Math.min(1, toMain.length - 1)];
+  const back = { x: g0.x - g1.x, z: g0.z - g1.z };
+  const bl = Math.hypot(back.x, back.z) || 1;
+  const beyond = traceStreet(g0.x, g0.z, { x: back.x / bl, z: back.z / bl }, 50).pts;
+  const line = [...beyond.slice(1).reverse(), ...toMain]; // from the far end to the main road
+  // Clear the map's buildings along it (the compound has its own plot).
+  const a = line[0], b = line[line.length - 1];
+  const len = Math.hypot(b.x - a.x, b.z - a.z);
+  if (len > 10) buildings.clearPlot((a.x + b.x) / 2, (a.z + b.z) / 2, Math.atan2(b.x - a.x, -(b.z - a.z)), 24, len / 2 + 4, 1);
+  // Houses on both sides, about every 15 m, from the far end to 14 m short of the main road.
+  let made = 0;
+  let s0 = 0;
+  const cum = [0];
+  for (let i = 1; i < line.length; i++) cum.push(cum[i - 1] + Math.hypot(line[i].x - line[i - 1].x, line[i].z - line[i - 1].z));
+  const total = cum[cum.length - 1];
+  const at = (d: number) => {
+    let i = 1;
+    while (i < line.length - 1 && cum[i] < d) i++;
+    const p = line[i - 1], q = line[i];
+    const t = Math.max(0, Math.min(1, (d - cum[i - 1]) / (cum[i] - cum[i - 1] || 1)));
+    const L = Math.hypot(q.x - p.x, q.z - p.z) || 1;
+    return { x: p.x + (q.x - p.x) * t, z: p.z + (q.z - p.z) * t, tx: (q.x - p.x) / L, tz: (q.z - p.z) / L };
+  };
+  for (const side of [1, -1]) {
+    s0 = side > 0 ? 6 : 13;
+    for (let d = s0; d < total - 14; d += 15) {
+      const p = at(d);
+      const n = { x: -p.tz * side, z: p.tx * side }; // out to this side
+      const half = life.roadPointNear(p.x, p.z, 6, 2)?.half ?? 4;
+      const model = STREET_HOUSES[(made * 7 + (side > 0 ? 3 : 0)) % STREET_HOUSES.length];
+      const size = modelSize(model);
+      const scale = Math.min(1, 13.5 / size.w);
+      const out = half + 2.2 + (size.d * scale) / 2;
+      const cx = p.x + n.x * out, cz = p.z + n.z * out;
+      // Not on the compound, not on another road, not on a flyover ramp.
+      const hw = (size.w * scale) / 2, hd = (size.d * scale) / 2;
+      if (Math.hypot(cx - hx, cz - hz) < Math.hypot(COMPOUND.w, COMPOUND.d) / 2 + Math.max(hw, hd) + 1) continue;
+      let ok = true;
+      for (const [u, v] of [[0, 0], [-1, -1], [1, -1], [-1, 1], [1, 1]] as const) {
+        const px = cx + p.tx * hw * u * 0.95 + n.x * hd * v * 0.95, pz = cz + p.tz * hw * u * 0.95 + n.z * hd * v * 0.95;
+        if (life.roadAt(px, pz, 0.3) || flyovers.lowRampAt(px, pz)) ok = false;
+      }
+      if (!ok) continue;
+      const front = { x: -n.x, z: -n.z }; // facing the street
+      const h = housePick(model, cx, cz, Math.atan2(front.x, front.z), scale, 7_100_000 + made);
+      buildings.addHouse(h);
+      life.clearArea(cx, cz, Math.max(hw, hd) + 1.5);
+      places.clearArea(cx, cz, Math.max(hw, hd) + 1.5);
+      made++;
+    }
+  }
+  return { toGate: [...toMain].reverse(), main: st.main, houses: made };
 }
 
 // The story's kelewele auntie (Auntie Dede): her own stall across the road from the nearest zebra.
@@ -3604,11 +3770,14 @@ async function homeAtNima(uCar: NonNullable<typeof streetTraffic>['story'][numbe
         const ahead = drive.at(Math.min(drive.length, d + 3.6));
         const blocked = (trafficSim?.vehicleNear(ahead.x, ahead.z, 1.2) ?? false) || signals.shouldStop(here.x, here.z, here.heading, 2.4, Date.now() / 1000);
         const left = drive.length - d;
-        const want = blocked ? 0 : Math.max(0.7, Math.min(7, Math.sqrt(2 * 1.6 * left)));
+        const want = blocked ? 0 : Math.max(0.7, Math.min(9, Math.sqrt(2 * 1.6 * left)));
         v = want < v ? Math.max(want, v - 5 * dt) : Math.min(want, v + 2 * dt);
         d = Math.min(drive.length, d + v * dt);
         const q = drive.at(d);
         [uCar.x, uCar.z, uCar.heading] = [q.x, q.z, q.heading];
+        // Following the car in from just behind it, a little to the side, until the gate.
+        if (left > 14) story.shot = frameShot(q.x, q.z, (q.heading * 180) / Math.PI + 24, 15, 64);
+        else story.shot = frameShot(gateIn.x, gateIn.z, (inward * 180) / Math.PI + 32, 17, 62);
         await pause(0.02);
       }
       const end = drive.at(drive.length);
@@ -3625,7 +3794,30 @@ async function homeAtNima(uCar: NonNullable<typeof streetTraffic>['story'][numbe
     story.hidePlayer = false;
     await pause(0.6);
     if (uncle.person) act(uncle.person, 'talk');
-    await cine.say('UNCLE KWAME', 'Welcome home. This is our compound. Come, let me show you your room.');
+    await cine.say('UNCLE KWAME', 'Welcome home. This is our house. Esi! Kofi! Akos! Come, he is here!');
+    if (uncle.person) act(uncle.person, 'idle');
+    // His wife and children come out of the house to greet you.
+    await family.loading;
+    const meAt = { x: state.x, z: state.z };
+    const toYou = (x: number, z: number) => Math.atan2(meAt.x - x, -(meAt.z - z));
+    const spots = [at((VILLA.u0 + VILLA.u1) / 2 + 2.6, VILLA.v1 + 2.4), at((VILLA.u0 + VILLA.u1) / 2 + 4.2, VILLA.v1 + 3.6), at((VILLA.u0 + VILLA.u1) / 2 + 1.6, VILLA.v1 + 3.9)].map((q) => ({ ...q, heading: toYou(q.x, q.z) }));
+    family.show(spots);
+    story.shot = frameShot((spots[0].x + meAt.x) / 2, (spots[0].z + meAt.z) / 2, (inward * 180) / Math.PI + 200, 9, 72);
+    const [esi, kofi, akos] = family.people.map((f) => f.p);
+    if (esi) act(esi, 'talk');
+    await cine.say('AUNTIE ESI', playerBody === 'female' ? 'Akwaaba! You are welcome, my dear. Kofi, Akos, come and greet your cousin!' : 'Akwaaba! You are welcome, my son. Kofi, Akos, come and greet your cousin!');
+    if (esi) act(esi, 'idle');
+    if (kofi) act(kofi, 'yes');
+    if (akos) act(akos, 'dance');
+    await cine.say('KOFI AND AKOS', 'Welcome! Welcome!', 2.2);
+    story.pose = 'yes';
+    await cine.say('YOU', 'Thank you, Auntie. Medaase.', 2.2);
+    story.pose = null;
+    if (kofi) act(kofi, 'idle');
+    if (akos) act(akos, 'idle');
+    story.shot = frameShot(carAt.x, carAt.z, (inward * 180) / Math.PI - 90, 7.5, 76);
+    if (uncle.person) act(uncle.person, 'talk');
+    await cine.say('UNCLE KWAME', 'Come, let me show you your room. It is at the back.');
     if (uncle.person) act(uncle.person, 'idle');
     // Now you walk: Uncle goes ahead to your door (the middle room at the back) and waits for you;
     // as you come up he steps in, and you follow him inside.
@@ -3817,7 +4009,25 @@ function driveIn(home: { face: number }, at: (u: number, v: number) => { x: numb
   // Where the quiet street meets a main road (owner, 28 Oct 2026: he comes along the main road and
   // curves into the side street, never just standing on the road): back along it up to 90 m.
   let lead: { x: number; z: number }[] = [{ x: lanePt.x - T.x * 34, z: lanePt.z - T.z * 34 }, { x: lanePt.x - T.x * 8, z: lanePt.z - T.z * 8 }];
-  for (let j = 6; j <= 90 && life; j += 2) {
+  const street = compound.street;
+  if (street && street.toGate.length > 2) {
+    // Along the main road in its right-hand lane, a right turn into Uncle's street, along its
+    // right-hand side to the gate (6c).
+    const m = street.main;
+    const g0 = street.toGate[0], g1 = street.toGate[Math.min(2, street.toGate.length - 1)];
+    const T0 = { x: g1.x - g0.x, z: g1.z - g0.z };
+    let M = { x: m.dx, z: m.dz };
+    if (-M.z * T0.x + M.x * T0.z < 0) M = { x: -M.x, z: -M.z };
+    const R = { x: -M.z, z: M.x };
+    const lane = { x: m.x + R.x * m.half * 0.4, z: m.z + R.z * m.half * 0.4 };
+    lead = [{ x: lane.x - M.x * 16, z: lane.z - M.z * 16 }, { x: lane.x - M.x * 6, z: lane.z - M.z * 6 }, lane];
+    for (let i = 2; i < street.toGate.length - 2; i++) {
+      const p = street.toGate[i], q = street.toGate[i + 1];
+      const L = Math.hypot(q.x - p.x, q.z - p.z) || 1;
+      lead.push({ x: p.x + (-(q.z - p.z) / L) * 1.4, z: p.z + ((q.x - p.x) / L) * 1.4 }); // (the right-hand side of the street)
+    }
+  }
+  for (let j = 6; j <= 90 && life && !street; j += 2) {
     const p = { x: lanePt.x - T.x * j, z: lanePt.z - T.z * j };
     if (!life.roadAt(p.x, p.z, 0.5)) break; // (the side street ends)
     if (life.roadDirNear(p.x, p.z, 6, 4.5) === null) continue;
@@ -4488,7 +4698,7 @@ async function start() {
   homeTown = choice.hometown;
   // Day name from the day you arrive (brief 5.3).
   dayName = (choice.body === 'female' ? ['Akosua', 'Adwoa', 'Abenaa', 'Akua', 'Yaa', 'Afua', 'Ama'] : ['Kwasi', 'Kwadwo', 'Kwabena', 'Kwaku', 'Yaw', 'Kofi', 'Kwame'])[new Date().getDay()];
-  const [player] = await Promise.all([loadPlayer(choice.body), skipStory ? null : loadThief(), skipStory ? null : auntie.load(), skipStory ? null : uncle.load()]);
+  const [player] = await Promise.all([loadPlayer(choice.body), skipStory ? null : loadThief(), skipStory ? null : auntie.load(), skipStory ? null : uncle.load(), skipStory ? null : family.load()]);
   playerPerson = player;
   for (const move of ['jumpLoop', 'jumpLand'] as const) {
     player.actions[move].play();

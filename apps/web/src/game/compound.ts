@@ -1,12 +1,18 @@
-// Uncle Kwame's compound house (brief 9.5, Chapter 1): a walled yard with a blue metal gate, a row of
-// rooms under one long tin roof with a veranda, a kitchen corner with a coal pot, a water drum and a
+// Uncle Kwame's home (brief 9.5, Chapter 1; owner, 28 Oct 2026: "an open modern house for the uncle,
+// his wife and children"): a walled yard with a blue metal gate standing open, the family's modern
+// two-storey house (the pack's modern house, painted white: packBuildings.ts villaMesh) on the left,
+// your small room at the back (the boys' quarters) and a store beside it under one tin roof with a veranda, a kitchen corner with a coal pot, a water drum and a
 // poly tank on a stand, a washing line, a mango tree, a bench and plastic chairs, flower pots, and a
 // carport just inside the gate where Uncle Kwame parks. Our own design, built from simple boxes so it
 // is cheap to draw. Built facing +z (the gate is in the +z wall).
 import * as THREE from 'three';
 import { box, merge, paint } from './vehicles3d';
 
-export const COMPOUND = { w: 24, d: 20 }; // outside size in metres
+export const COMPOUND = { w: 34, d: 24 }; // outside size in metres
+/** Your room's width (the boys' quarters, at the back in the middle). */
+const ROOM_W = 4.7;
+/** Uncle's family house: its outline in the compound's frame (u from, u to, v from, v to). */
+export const VILLA = { u0: -16.55, u1: -2.45, v0: -11.7, v1: -3.15 };
 /** Where Uncle Kwame's car parks (compound frame: u across, v towards the gate), under the carport. */
 export const PARKING = { u: 0, v: COMPOUND.d / 2 - 5.2 };
 
@@ -34,32 +40,34 @@ export function compoundHouse() {
     paint(box(0.06, 2.0, 1.5, -1.45, 1.05, D - 0.8), '#1f5fa8'),
     paint(box(0.06, 2.0, 1.5, 1.45, 1.05, D - 0.8), '#1f5fa8'),
   ];
-  // The rooms: five in a row along the back wall, one long roof and a veranda in front.
+  // At the back: your room in the middle (you can walk into it), and the store to its right, under one
+  // tin roof with a veranda. (Uncle's family house stands on the left: villaMesh, added by the game.)
   const roomD = 3.4;
   const roomZ = -D + 0.13 + roomD / 2;
-  // The rooms are solid blocks, except the middle one: your room, which you can walk into.
-  const roomW = (COMPOUND.w - 0.5) / 5;
-  const side = (COMPOUND.w - 0.5 - roomW) / 2; // width of the solid block on each side of your room
-  for (const sgn of [-1, 1]) {
-    const cx = sgn * (roomW / 2 + side / 2);
-    parts.push(paint(box(side, 2.8, roomD, cx, 1.4, roomZ), '#efe3c8'));
-    parts.push(paint(box(side, 0.7, roomD + 0.02, cx, 0.35, roomZ), dado));
-  }
+  const roomW = ROOM_W;
+  const sideL = roomW / 2, sideR = W - 0.25; // the store: from your room's wall to the side wall
+  const side = sideR - sideL;
+  parts.push(paint(box(side, 2.8, roomD, (sideL + sideR) / 2, 1.4, roomZ), '#efe3c8'));
+  parts.push(paint(box(side, 0.7, roomD + 0.02, (sideL + sideR) / 2, 0.35, roomZ), dado));
   parts.push(...yourRoom(roomW, roomD, roomZ, dado));
-  const roof = [paint(box(COMPOUND.w - 0.2, 0.08, roomD + 1.9, 0, 3.0, roomZ + 0.9, 0.08), '#8f959b')]; // tin roof (lifted away when you are in your room)
-  parts.push(paint(box(COMPOUND.w - 0.5, 0.15, 1.6, 0, 0.08, roomZ + roomD / 2 + 0.8), '#a8a092')); // veranda step
-  for (const x of [-W + 0.5, W - 0.5]) parts.push(paint(box(0.12, 2.9, 0.12, x, 1.45, roomZ + roomD / 2 + 1.5), '#6b665e'));
-  const curtains = ['#c8442e', '#2f8f57', '#e3a92b', '#6a4c93', '#1f5fa8'];
-  for (let i = 0; i < 5; i++) {
-    const x = -W + 0.25 + (COMPOUND.w - 0.5) * ((i + 0.5) / 5);
-    const front = roomZ + roomD / 2 + 0.02;
-    if (i !== 2) {
-      parts.push(paint(box(0.9, 2.0, 0.05, x - 0.6, 1.0, front), '#6b4a2e')); // door
-      parts.push(paint(box(0.85, 1.6, 0.03, x - 0.6, 1.1, front + 0.04), curtains[i])); // its curtain
-    }
+  const roofL = -roomW / 2 - 0.1, roofR = W - 0.1;
+  const roof = [paint(box(roofR - roofL, 0.08, roomD + 1.9, (roofL + roofR) / 2, 3.0, roomZ + 0.9, 0.08), '#8f959b')]; // tin roof (lifted away when you are in your room)
+  parts.push(paint(box(roofR - roofL - 0.3, 0.15, 1.6, (roofL + roofR) / 2, 0.08, roomZ + roomD / 2 + 0.8), '#a8a092')); // veranda step
+  for (const x of [roofL + 0.4, W - 0.5]) parts.push(paint(box(0.12, 2.9, 0.12, x, 1.45, roomZ + roomD / 2 + 1.5), '#6b665e'));
+  const curtains = ['#c8442e', '#2f8f57', '#e3a92b'];
+  const front = roomZ + roomD / 2 + 0.02;
+  // Your room's window, and the store's doors and windows.
+  parts.push(paint(box(0.9, 0.8, 0.05, 0.8, 1.55, front), '#3e4a52'));
+  for (let k = 0; k < 4; k++) parts.push(paint(box(0.86, 0.04, 0.07, 0.8, 1.24 + k * 0.18, front + 0.03), '#c9c4b8'));
+  for (let i = 0; i < 3; i++) {
+    const x = sideL + side * ((i + 0.5) / 3);
+    parts.push(paint(box(0.9, 2.0, 0.05, x - 0.6, 1.0, front), '#6b4a2e')); // door
+    parts.push(paint(box(0.85, 1.6, 0.03, x - 0.6, 1.1, front + 0.04), curtains[i])); // its curtain
     parts.push(paint(box(0.9, 0.8, 0.05, x + 0.8, 1.55, front), '#3e4a52')); // louvre window
     for (let k = 0; k < 4; k++) parts.push(paint(box(0.86, 0.04, 0.07, x + 0.8, 1.24 + k * 0.18, front + 0.03), '#c9c4b8'));
   }
+  // A paved front step and a path to the family house's door.
+  parts.push(paint(new THREE.PlaneGeometry(8, 2.4).rotateX(-Math.PI / 2).translate((VILLA.u0 + VILLA.u1) / 2, 0.04, VILLA.v1 + 1.2), '#cfc6b4'));
   // Kitchen corner (left front): a low shed with a coal pot.
   parts.push(paint(box(3, 0.08, 2.2, -W + 1.7, 2.1, D - 1.4, -0.08), '#8f959b'));
   for (const [x, z] of [[-W + 0.35, D - 0.4], [-W + 3.1, D - 0.4], [-W + 3.1, D - 2.4]]) parts.push(paint(box(0.1, 2.1, 0.1, x, 1.05, z), '#6b665e'));
@@ -102,9 +110,9 @@ export function compoundHouse() {
   const crown = new THREE.IcosahedronGeometry(2.1, 1).translate(TREE.u, 3.6, TREE.v);
   parts.push(paint(crown, '#2f6b35'));
   // The washing line with clothes.
-  parts.push(paint(box(0.06, 1.9, 0.06, -8.5, 0.95, 0), '#6b665e'), paint(box(0.06, 1.9, 0.06, -4.5, 0.95, 0), '#6b665e'), paint(box(4, 0.02, 0.02, -6.5, 1.88, 0), '#d9d2c2'));
+  parts.push(paint(box(0.06, 1.9, 0.06, 10, 0.95, 4), '#6b665e'), paint(box(0.06, 1.9, 0.06, 14, 0.95, 4), '#6b665e'), paint(box(4, 0.02, 0.02, 12, 1.88, 4), '#d9d2c2')); // (on the right, clear of the house's door)
   const cloth = ['#e3a92b', '#2f8f57', '#f2efe6', '#c8442e', '#1f5fa8', '#7a3fb0'];
-  for (let i = 0; i < 6; i++) parts.push(paint(box(0.48, 0.6 + (i % 2) * 0.2, 0.02, -8.1 + i * 0.62, 1.55 - (i % 2) * 0.1, 0), cloth[i]));
+  for (let i = 0; i < 6; i++) parts.push(paint(box(0.48, 0.6 + (i % 2) * 0.2, 0.02, 10.4 + i * 0.62, 1.55 - (i % 2) * 0.1, 4), cloth[i]));
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, side: THREE.DoubleSide });
   const mesh = new THREE.Mesh(merge(parts), mat);
   const roofMesh = new THREE.Mesh(merge(roof), mat);
@@ -157,7 +165,7 @@ function yourRoom(roomW: number, roomD: number, roomZ: number, dado: string) {
 /** Is a point (compound frame) inside your room? */
 export function inYourRoom(u: number, v: number) {
   const D = COMPOUND.d / 2;
-  return Math.abs(u) < (COMPOUND.w - 0.5) / 10 && v > -D && v < -D + 0.13 + 3.4;
+  return Math.abs(u) < ROOM_W / 2 && v > -D && v < -D + 0.13 + 3.4;
 }
 
 /** Solid parts of the compound in its own frame (u across, v towards the gate): walls and rooms. */
@@ -166,9 +174,11 @@ export function compoundSolid(u: number, v: number, room: number) {
   const D = COMPOUND.d / 2;
   const roomD = 3.4;
   if (Math.abs(u) > W + room || Math.abs(v) > D + room) return false;
+  // Uncle's family house.
+  if (u > VILLA.u0 - room && u < VILLA.u1 + room && v > VILLA.v0 - room && v < VILLA.v1 + room) return true;
   if (v < -D + roomD + room) {
     // Inside your room, or in its doorway, you can walk; everywhere else along the back is rooms.
-    const hw = (COMPOUND.w - 0.5) / 10;
+    const hw = ROOM_W / 2;
     const inRoom = Math.abs(u) < hw - 0.12 - room && v > -D + 0.25 + room && v < -D + roomD - 0.12 - room;
     // (The doorway overlaps the room's floor, so there is no sliver of wall between them.)
     const inDoor = Math.abs(u + 0.6) < DOOR_HALF - 0.08 - room * 0.5 && v > -D + roomD - 0.9;

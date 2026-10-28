@@ -299,3 +299,30 @@ export class PackBuildings {
     }
   }
 }
+
+/**
+ * Uncle Kwame's family house (6c): the pack's big modern house painted white, made to stand on an
+ * outline (its own frame: u across, v towards its front; from u0 to u1 and v0 to v1).
+ */
+export async function villaMesh(o: { u0: number; u1: number; v0: number; v1: number }) {
+  const g = await packGeometry('house-modern-big');
+  const [mw, , md, mx, mz] = MODELS['house-modern-big'];
+  const sx = (o.u1 - o.u0) / mw, sz = (o.v1 - o.v0) / md;
+  const mesh = new THREE.Mesh(g, epicMaterial());
+  mesh.scale.set(sx, Math.min(1, Math.sqrt(sx * sz) * 1.08), sz);
+  mesh.position.set((o.u0 + o.u1) / 2 - mx * sx, 0, (o.v0 + o.v1) / 2 - mz * sz);
+  mesh.castShadow = mesh.receiveShadow = true;
+  return mesh;
+}
+
+/** A house of the given model standing with its middle at (cx, cz), its front facing `turn` (as Pick.turn). */
+export function housePick(model: PackModel, cx: number, cz: number, turn: number, scale: number, id: number, use: Use = 'house') {
+  const [mw, mh, md, mx, mz] = MODELS[model];
+  const c = Math.cos(turn), sn = Math.sin(turn);
+  const ox = mx * scale, oz = mz * scale;
+  const pick: Pick = { id, x: cx - (ox * c + oz * sn), z: cz - (-ox * sn + oz * c), model, turn, sx: scale, sy: scale, sz: scale, use, address: id % 1000000 };
+  return { pick, cx, cz, hw: (mw * scale) / 2, hd: (md * scale) / 2, height: mh * scale };
+}
+/** The houses that line a quiet street (6c). */
+export const STREET_HOUSES: PackModel[] = ['house-family-small', 'house-block-big', 'house-family-large', 'house-block', 'house-family-small', 'house-block-old'];
+export const modelSize = (m: PackModel) => ({ w: MODELS[m][0], d: MODELS[m][2] });

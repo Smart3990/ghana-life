@@ -44,7 +44,7 @@ test, and goes live only after the owner has seen it work. Agreed with the owner
    - Kiosks, stalls, umbrellas, benches, bins, signs and trees from the pack.
    - **Circle junction packed with sellers:** rows of kiosks and stalls so full that you can see at once
      this is a busy market place, all on the pavements and the open ground, none on the road.
-   - Uncle's compound in Nima rebuilt in the pack's style.
+   - Uncle's compound in Nima rebuilt in the pack's style. (Done, 6c: a quiet street of pack houses off a main road; his white modern family house, his wife and children; your room at the back.)
 7. **The living world.** Trains on the real railway with level crossings; planes taking off and
    landing at Kotoka; a helicopter, a hot-air balloon and boats at the coast.
 8. **The story scenes, redone in the new world.**

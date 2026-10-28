@@ -82,7 +82,8 @@ function clip(ring: { x: number; y: number }[]) {
 
 // A plot cleared of the map's buildings (Uncle Kwame's compound stands there): centre, its turn, and
 // half its size. Buildings there are not drawn and do not block.
-const CLEAR = { a: { value: new THREE.Vector4(0, 0, 1, 0) }, b: { value: new THREE.Vector4(0, 0, 0, 0) } };
+// (Up to four plots: the compound, and Uncle Kwame's street.)
+const CLEAR = { a: { value: [0, 1, 2, 3].map(() => new THREE.Vector4(0, 0, 1, 0)) }, b: { value: [0, 1, 2, 3].map(() => new THREE.Vector4(0, 0, 0, 0)) } };
 // 0 by day, 1 at night: at night about half the windows and some shops glow warm.
 const NIGHT = { value: 0 };
 // Where the pack buildings are drawn (x, z, radius): the plain blocks swapped for them fold away there.
@@ -104,15 +105,16 @@ function wallMaterial() {
         'void main() {',
         `varying vec3 vFacade;
 varying vec2 vClearP;
-uniform vec4 uClearA;
-uniform vec4 uClearB;
+uniform vec4 uClearA[4];
+uniform vec4 uClearB[4];
 uniform float uNight;
 void main() {
-  if (uClearB.z > 0.5) {
-    vec2 d = vClearP - uClearA.xy;
-    float cu = -(d.x * uClearA.z + d.y * uClearA.w);
-    float cv = d.x * uClearA.w - d.y * uClearA.z;
-    if (abs(cu) < uClearB.x && abs(cv) < uClearB.y) discard;
+  for (int i = 0; i < 4; i++) {
+    if (uClearB[i].z < 0.5) continue;
+    vec2 d = vClearP - uClearA[i].xy;
+    float cu = -(d.x * uClearA[i].z + d.y * uClearA[i].w);
+    float cv = d.x * uClearA[i].w - d.y * uClearA[i].z;
+    if (abs(cu) < uClearB[i].x && abs(cv) < uClearB[i].y) discard;
   }`,
       )
       .replace(
@@ -194,6 +196,12 @@ export class StreetBuildings {
   private packAt = { x: Infinity, z: Infinity, cells: -1, version: 0 };
   /** The pack buildings drawn now (for tests, and for owning homes later). */
   packShown: Pick[] = [];
+  /** Houses the story builds itself (Uncle Kwame's street, 6c): always drawn near you, and solid. */
+  private extras: { pick: Pick; cx: number; cz: number; hw: number; hd: number }[] = [];
+  addHouse(h: { pick: Pick; cx: number; cz: number; hw: number; hd: number }) {
+    this.extras.push(h);
+    this.packVersion++;
+  }
   private cells = new Map<string, Cell>();
   private tiles = new Set<string>();
   private queue: (() => void)[] = [];
@@ -260,6 +268,11 @@ export class StreetBuildings {
       this.pack.place(list[k].p);
       this.packShown.push(list[k].p);
     }
+    for (const e of this.extras)
+      if (Math.hypot(e.pick.x - x, e.pick.z - z) < Math.max(R, 140)) {
+        if (!this.pack.ready(e.pick.model)) this.packVersion++;
+        else if (this.pack.place(e.pick)) this.packShown.push(e.pick);
+      }
     this.pack.end();
     NEAR.value.set(x, z, Math.max(0, radius));
   }
@@ -546,22 +559,33 @@ export class StreetBuildings {
   }
 
   /** Clear a plot of the map's buildings (centre, the way it faces, half width and half depth). */
-  clearPlot(x: number, z: number, face: number, halfW: number, halfD: number) {
-    CLEAR.a.value.set(x, z, Math.cos(face), Math.sin(face));
-    CLEAR.b.value.set(halfW, halfD, 1, 0);
-    this.plot = { x, z, c: Math.cos(face), s: Math.sin(face), hw: halfW, hd: halfD };
+  clearPlot(x: number, z: number, face: number, halfW: number, halfD: number, slot = 0) {
+    CLEAR.a.value[slot].set(x, z, Math.cos(face), Math.sin(face));
+    CLEAR.b.value[slot].set(halfW, halfD, 1, 0);
+    this.plots[slot] = { x, z, c: Math.cos(face), s: Math.sin(face), hw: halfW, hd: halfD };
+    this.packVersion++;
   }
-  private plot: { x: number; z: number; c: number; s: number; hw: number; hd: number } | null = null;
+  private plots: ({ x: number; z: number; c: number; s: number; hw: number; hd: number } | null)[] = [null, null, null, null];
   private inPlot(x: number, z: number) {
-    const p = this.plot;
-    if (!p) return false;
-    const dx = x - p.x;
-    const dz = z - p.z;
-    return Math.abs(-(dx * p.c + dz * p.s)) < p.hw && Math.abs(dx * p.s - dz * p.c) < p.hd;
+    for (const p of this.plots) {
+      if (!p) continue;
+      const dx = x - p.x;
+      const dz = z - p.z;
+      if (Math.abs(-(dx * p.c + dz * p.s)) < p.hw && Math.abs(dx * p.s - dz * p.c) < p.hd) return true;
+    }
+    return false;
   }
 
   /** True if the point (metres) is inside a building. */
   blocked(x: number, z: number, margin = 0.3) {
+    for (const e of this.extras) {
+      const dx = x - e.cx, dz = z - e.cz;
+      if (Math.abs(dx) > 30 || Math.abs(dz) > 30) continue;
+      const c = Math.cos(e.pick.turn), sn = Math.sin(e.pick.turn);
+      // In the house's own frame (its front along +z, turned by `turn`).
+      const lx = dx * c - dz * sn, lz = dx * sn + dz * c;
+      if (Math.abs(lx) < e.hw + margin && Math.abs(lz) < e.hd + margin) return true;
+    }
     if (this.inPlot(x, z)) return false;
     const cx = Math.floor(x / CELL_M);
     const cz = Math.floor(z / CELL_M);

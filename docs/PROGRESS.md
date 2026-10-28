@@ -489,6 +489,13 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
     - Every home has a fixed address number ready for players to own homes later (on the server, a step of its own).
     - Done when: walking in Adabraka, Nima and East Legon shows pack houses facing the streets, villas in East Legon, a bank where the map has one; no errors; Light stays inside its budget on the cheap Android (owner's check).
 
+  - **Step 6c: Uncle Kwame's street and home** (owner, 28 Oct):
+    - His home is now on a quiet side street that joins a main road 25 to 100 m away (shorter streets preferred). Uncle comes along the main road in its right-hand lane, turns right into his street and drives along it to his gate, the camera following the car in; within 10 s.
+    - The street, from the main road to about 50 m past his gate, is lined on both sides with houses from the pack (family houses and town houses), every one facing the street with its own house number, ready for players to own homes later; the map's buildings there are cleared and the new houses are solid.
+    - His home: a wider walled yard with the blue gate standing open, the carport and the mango tree; on the left the family's modern two-storey house (the pack's modern house, painted white); at the back your small room (the boys' quarters) and a store beside it under one tin roof.
+    - His wife, Auntie Esi, and their children, Kofi and Akos, come out to greet you ("Akwaaba!"), then Uncle shows you to your room as before.
+    - Done when: ?scene=nima shows the car on the main road turning into the street of houses and into the yard, the white house, Auntie Esi, Kofi and Akos; the room scene still ends the chapter; no errors.
+
 ## Waiting on the owner
 
 - Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.

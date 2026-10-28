@@ -1135,6 +1135,27 @@ export class StreetLife {
   }
 
   /** The direction (clockwise from north) from a point towards the nearest main road within reach, or null. */
+  /** The nearest point on a road's middle line (roads at least `minHalf` wide), the road's direction there and its half width. */
+  roadPointNear(x: number, z: number, reach: number, minHalf = 2) {
+    const cx = Math.floor(x / 25), cz = Math.floor(z / 25);
+    let best: { x: number; z: number; dx: number; dz: number; half: number; d: number } | null = null;
+    const n = Math.max(1, Math.ceil(reach / 25));
+    for (let i = -n; i <= n; i++)
+      for (let j = -n; j <= n; j++) {
+        const list = this.roadGrid.get(`${cx + i},${cz + j}`);
+        if (!list) continue;
+        for (let k = 0; k < list.length; k += 5) {
+          const [ax, az, bx, bz, half] = [list[k], list[k + 1], list[k + 2], list[k + 3], list[k + 4]];
+          if (half < minHalf) continue;
+          const dx = bx - ax, dz = bz - az, len = Math.hypot(dx, dz) || 1;
+          const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (len * len)));
+          const px = ax + dx * t, pz = az + dz * t;
+          const d = Math.hypot(px - x, pz - z);
+          if (d < reach && (!best || d < best.d)) best = { x: px, z: pz, dx: dx / len, dz: dz / len, half, d };
+        }
+      }
+    return best;
+  }
   roadDirNear(x: number, z: number, reach: number, minHalf = 4.5): number | null {
     const cx = Math.floor(x / 25);
     const cz = Math.floor(z / 25);
