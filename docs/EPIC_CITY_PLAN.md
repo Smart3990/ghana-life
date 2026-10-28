@@ -34,7 +34,7 @@ test, and goes live only after the owner has seen it work. Agreed with the owner
      roundabouts, climb the flyovers.
    - Crowded roads everywhere; the main roads jammed in the evening rush hour. (Done; the pack's
      traffic rules: following, red lights and waiting are ours, kept.)
-5. **People, the story characters included.**
+5. **Done: people, the story characters included.** (Faces on everyone close; the still crowd from Quaternius's Posed Background Characters, the walkers and story people from the Quaternius bodies, the Epic City pack's people on every vehicle you can see into; about twice the crowd at the same cost; nobody inside kiosks or vehicles. The owner's phone check of the frame rate is still needed.)
    - The whole crowd from the pack's people, with Ghanaian skin tones and Accra clothes colours.
    - The player, Auntie Dede, Uncle Kwame, the thief and everyone in the story rebuilt from pack
      people.
