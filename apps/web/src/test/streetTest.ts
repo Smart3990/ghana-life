@@ -3956,7 +3956,11 @@ async function start() {
     (async (): Promise<StartChoice> => {
       await landscapeGate(document.getElementById('gate')!, autoTest);
       const female = params.has('female') ? 'female' : undefined;
-      return skipStory ? { body: female ?? 'male', hometown: 'Ada' } : startScreen({ body: female }, () => cine.prepareVideo('/film/opening-480.mp4', '/film/opening-poster.jpg'));
+      return skipStory ? { body: female ?? 'male', hometown: 'Ada' } : startScreen({ body: female }, () => {
+            // Black in the same moment as the tap: no glimpse of Circle (or a helicopter) before the film.
+            cine.coverNow();
+            cine.prepareVideo('/film/opening-480.mp4', '/film/opening-poster.jpg');
+          });
     })(),
     new Promise<void>((r) => map.once('load', () => r())),
   ]);

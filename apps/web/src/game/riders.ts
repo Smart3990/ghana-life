@@ -1,6 +1,7 @@
 // Riders and drivers for the vehicles you can see into (owner, 28 Oct 2026: "the motors ... there
 // are no people on it"): okadas with their rider (and often a passenger behind), open jeeps, golf
-// carts and the road machines with their driver. They are the Epic City pack's people, sat down: the
+// carts, pragyas, cargo tricycles, the formula car and the road machines with their driver. (Closed
+// vehicles have no one drawn inside: the pack's windows are solid dark glass, so they could not be seen.) They are the Epic City pack's people, sat down: the
 // pack's rigged person is posed (thighs forward, knees bent, hands forward on the handlebars or the
 // wheel) and that pose is frozen into a plain shape, so hundreds can be drawn in one go. Their skin is
 // moved to the pack's darker skin colours (Ghanaian skin tones).
@@ -18,6 +19,11 @@ export const SEATS: Record<string, { at: [number, number, number][]; extra?: num
   roller: { at: [[0, 1.45, -0.7]] },
   bulldozer: { at: [[0, 1.35, -0.9]] },
   forklift: { at: [[0, 0.95, -0.45]] },
+  // Our tricycles: the pragya's driver, and passengers on the bench behind in most of them; the
+  // cargo tricycle's rider. The formula car's driver in the open cockpit.
+  tricycle: { at: [[0, 1.0, 0.22], [0.3, 1.12, -0.8], [-0.3, 1.12, -0.8]], extra: 0.6 },
+  motorking: { at: [[0, 1.0, 0.58]] },
+  formula: { at: [[0, 0.3, -0.35]] },
 };
 
 // The pack's skin colour cells (the top row of the texture sheet): from the lightest, used by the

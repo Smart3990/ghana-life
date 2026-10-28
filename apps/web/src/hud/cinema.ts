@@ -50,6 +50,13 @@ export class Cinema {
     });
   }
 
+  /** Black at once (no fade): nothing of the city shows until the film starts. */
+  coverNow() {
+    this.card.style.transitionDuration = '0s';
+    this.card.innerHTML = '';
+    this.card.classList.add('on', 'black');
+  }
+
   /** Is the clip downloaded enough to play smoothly? */
   videoReady() {
     return !!this.videoEl && this.videoEl.readyState >= 3 && !this.videoEl.error;

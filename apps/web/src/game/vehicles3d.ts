@@ -384,7 +384,6 @@ function motorKing(): Model {
     box(1.4, 0.75, 0.06, 0, 1.0, 0.2), // front board
     box(0.3, 0.32, 0.6, 0, 0.62, 0.65), // tank and engine cover
   ]);
-  const skin = '#4e3322';
   const sack = (x: number, y: number, z: number, c: string) => paint(new THREE.SphereGeometry(0.36, 8, 6).scale(1, 0.62, 1.15).translate(x, y, z), c);
   const fixed: Part[] = [
     sack(-0.34, 1.05, -0.4, '#c9b48a'), sack(0.34, 1.05, -0.4, '#bba57c'), sack(-0.34, 1.05, -1.2, '#c4ae84'), sack(0.34, 1.05, -1.2, '#d1bd94'),
@@ -394,11 +393,7 @@ function motorKing(): Model {
     paint(box(0.7, 0.04, 0.04, 0, 1.18, 1.0), TRIM), // handlebar
     paint(box(0.05, 0.6, 0.05, 0, 0.85, 1.02), TRIM), // fork
     paint(box(0.14, 0.12, 0.08, 0, 1.0, 1.08), HEAD),
-    // The rider
-    paint(box(0.36, 0.5, 0.26, 0, 1.2, 0.6), '#7a7f86'),
-    paint(new THREE.SphereGeometry(0.12, 10, 8).translate(0, 1.58, 0.62), skin),
-    paint(box(0.12, 0.42, 0.12, 0.13, 0.78, 0.8), '#3b5f8a'),
-    paint(box(0.12, 0.42, 0.12, -0.13, 0.78, 0.8), '#3b5f8a'),
+    // (The rider is one of the pack's people, sat on the seat: riders.ts.)
     ...wheel(0.27, 0.12, 0, 1.05),
     ...wheel(0.27, 0.16, 0.62, -1.0),
     ...wheel(0.27, 0.16, -0.62, -1.0),
@@ -413,7 +408,6 @@ function pragya(): Model {
     box(1.24, 0.42, 1.25, 0, 0.72, -0.7), // passenger tub
     box(0.32, 0.36, 0.55, 0, 0.62, 0.65), // front body
   ]);
-  const skin = '#5a3a26';
   const fixed: Part[] = [
     paint(box(0.05, 1.1, 0.05, 0.6, 1.22, -1.2), TRIM), // canopy posts
     paint(box(0.05, 1.1, 0.05, -0.6, 1.22, -1.2), TRIM),
@@ -423,11 +417,7 @@ function pragya(): Model {
     paint(box(0.3, 0.1, 0.5, 0, 0.88, 0.25), '#1f1f1f'), // driver's seat
     paint(box(0.7, 0.04, 0.04, 0, 1.25, 0.85), TRIM), // handlebar
     paint(box(0.12, 0.1, 0.06, 0, 0.95, 0.95), HEAD),
-    // The driver
-    paint(box(0.36, 0.5, 0.26, 0, 1.2, 0.3), '#33506e'),
-    paint(new THREE.SphereGeometry(0.12, 10, 8).translate(0, 1.58, 0.33), skin),
-    paint(box(0.12, 0.42, 0.12, 0.13, 0.78, 0.5), '#2a2f38'),
-    paint(box(0.12, 0.42, 0.12, -0.13, 0.78, 0.5), '#2a2f38'),
+    // (The driver and passengers are the pack's people, sat down: riders.ts.)
     ...wheel(0.25, 0.14, 0, 1.0),
     ...wheel(0.25, 0.14, 0.58, -0.8),
     ...wheel(0.25, 0.14, -0.58, -0.8),
@@ -704,7 +694,7 @@ export class StreetTraffic {
     this.riderKinds = near.length;
     const mat = dayLookMaterial(); // (keeps the day glow at night)
     this.riders = shapes.map((g) => {
-      const m = new THREE.InstancedMesh(g, mat, Math.ceil(this.limit * 0.6));
+      const m = new THREE.InstancedMesh(g, mat, this.limit);
       m.count = 0;
       m.frustumCulled = false;
       m.castShadow = true;
