@@ -404,6 +404,8 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
     - Nothing blinks out: the crowd is never thinned below 85% on a struggling phone (it was down to 30%), and many more vehicles may be drawn (Light 260, Standard 420, Ultra 560) than are ever near you, so the ones at the edge no longer blink in and out. Vehicles switch to their simpler shape from 30 m.
     - Cost on Light at the test spot: about 430,000 triangles, most of it the crowd (our people models, about 1,100 to 1,300 triangles each, about 165,000 in all); step 5 replaces them with the pack's people (about 450 each). Needs the owner's frame-rate check on the cheap Android.
 
+  - **The owner's film is now the first scene** (owner, 28 Oct): after START, the owner's 23-second clip plays full screen with its own sound (Grandma's goodbye, the ₵50 and her letter, the lorry park, the trotro to Accra). The story's words come up over the picture at the moment each thing happens, with no black screen; they follow the clip's own clock, so they stay in step even if the phone stutters. When the clip ends: the black card "Accra. Hours later. Kwame Nkrumah Circle.", our highlife music, then the map flies in to Circle. If the clip cannot play, the old title card is shown instead. Done when: tap START, every line appears on its moment of the clip, then the black card, then the fly-in (checked on the test machine).
+
 ## Waiting on the owner
 
 - Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.

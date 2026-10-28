@@ -55,8 +55,11 @@ export class Cinema {
     return !!this.videoEl && this.videoEl.readyState >= 3 && !this.videoEl.error;
   }
 
-  /** Play the prepared clip full screen, with subtitles at set times (seconds). */
-  async video(cues: [at: number, who: string, line: string][]) {
+  /**
+   * Play the prepared clip full screen, with subtitles at set times (seconds into the clip; each shown
+   * for `seconds`). With `thenBlack`, the screen is black the moment it ends (for a title card next).
+   */
+  async video(cues: [at: number, who: string, line: string, seconds?: number][], thenBlack = false) {
     const v = this.videoEl;
     if (this.skipping || !v) return false;
     this.pic.innerHTML = '';
@@ -76,23 +79,54 @@ export class Cinema {
         return false;
       }
     }
-    const shown = new Set<number>();
+    // The words follow the clip's own clock: whichever line belongs to this moment of the clip is the
+    // one on screen, so they stay in step with the picture even if the phone stutters.
+    let showing = -1;
+    const sync = () => {
+      const t = v.currentTime;
+      let now = -1;
+      cues.forEach(([at, , , secs], i) => {
+        if (t >= at && t < at + (secs ?? 2.4)) now = i;
+      });
+      if (now === showing) return;
+      showing = now;
+      if (now < 0) {
+        this.sub.classList.remove('on');
+        return;
+      }
+      const [, who, line, secs] = cues[now];
+      this.onLine?.(who, line);
+      if (who) this.lastTalk = performance.now() / 1000 + (secs ?? 2.4);
+      this.sub.innerHTML = '';
+      if (who) {
+        const name = el('b');
+        name.textContent = who;
+        this.sub.append(name);
+      }
+      this.sub.append(line);
+      this.sub.classList.add('on');
+    };
+    v.addEventListener('timeupdate', sync);
     await new Promise<void>((resolve) => {
       const tick = () => {
         if (this.skipping || v.ended || v.error) return resolve();
-        cues.forEach(([at, who, line], i) => {
-          if (!shown.has(i) && v.currentTime >= at) {
-            shown.add(i);
-            void this.say(who, line, 2.4);
-          }
-        });
+        sync();
         requestAnimationFrame(tick);
       };
       tick();
     });
+    v.removeEventListener('timeupdate', sync);
+    this.sub.classList.remove('on');
     v.pause();
+    if (thenBlack) {
+      // Straight to black under the clip, then the clip goes: no flash of the map between.
+      this.card.style.transitionDuration = '0s';
+      this.card.innerHTML = '';
+      this.card.classList.add('on', 'black');
+      this.sub.classList.remove('on');
+    }
     this.pic.classList.remove('on');
-    await this.wait(0.8);
+    await this.wait(thenBlack ? 0.3 : 0.8);
     return true;
   }
 

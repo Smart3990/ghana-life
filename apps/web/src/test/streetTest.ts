@@ -2720,13 +2720,31 @@ async function playOpening(start: StartChoice) {
   story.hidePlayer = true; // (you are on the trotro until it stops at Circle and you step down)
   goalChip.classList.add('hidden');
   setMoney(50, 'From Grandma for the journey');
-  // 1. Title cards on black. (The opening film from home is being made again: it goes here.)
+  // 1. The opening film (the owner's clip, public/film/opening-480): leaving home, Grandma's ₵50 and
+  //    her letter, the goodbye, the trotro to Accra. The story's words come up over it at the moments
+  //    they happen, with no black screen. Then a title card on black: hours later, Accra.
   cine.begin();
   await cine.black(true, 0.01);
-  // The music: in as the journey begins, out as the thief gets away.
   music.preload();
+  const ready = await waitUntil(() => cine.videoReady(), 6);
+  void ready;
+  const played = cine.videoReady()
+    ? await cine.video(
+        [
+          [0.4, '', `${home}. Your last morning at home.`, 2.6],
+          [4.0, '', 'Grandma puts ₵50 and her letter for Uncle Kwame into your hand.', 1.9],
+          [6.1, 'GRANDMA', 'Go well, my child. Greet your uncle for me.', 3.2],
+          [9.6, '', 'You wave goodbye. She watches until you are gone.', 2.2],
+          [12.1, '', 'The lorry park. The trotro to Accra.', 2.6],
+          [15.0, 'MATE', 'Accra! Accra! One more, come!', 2.6],
+          [18.9, '', 'The long road to Accra.', 3.3],
+        ],
+        true,
+      )
+    : false;
+  if (!played) await cine.title(home, 'Grandma’s ₵50 and her letter in your bag. The bus to Accra.', 2.6);
+  // The music: in as the journey ends at Circle, out as the thief gets away.
   music.play(3);
-  await cine.title(home, 'Grandma’s ₵50 and her letter in your bag. The bus to Accra.', 2.6);
   await cine.title('Accra', 'Hours later. Kwame Nkrumah Circle.', 2.2);
   // 2. The camera comes down over the city to Circle.
   if (!cine.skipped) {
@@ -3935,7 +3953,7 @@ async function start() {
     (async (): Promise<StartChoice> => {
       await landscapeGate(document.getElementById('gate')!, autoTest);
       const female = params.has('female') ? 'female' : undefined;
-      return skipStory ? { body: female ?? 'male', hometown: 'Ada' } : startScreen({ body: female });
+      return skipStory ? { body: female ?? 'male', hometown: 'Ada' } : startScreen({ body: female }, () => cine.prepareVideo('/film/opening-480.mp4', '/film/opening-poster.jpg'));
     })(),
     new Promise<void>((r) => map.once('load', () => r())),
   ]);

@@ -28,7 +28,8 @@ The plastic chairs and football (`src/game/streetScenes.ts`) are built in code. 
 
 ## Opening film clip (public/film)
 
-- `journey-480.mp4`, `journey-480.webm`, `journey-poster.jpg`: the owner's 10-second clip "Young man traveling to Accra" (made with ImagineArt, 2026-10-25), shrunk for phones (854×480, about 640 KB each format). Same commercial-use check as the pictures above before launch.
+- `opening-480.mp4`, `opening-480.webm`, `opening-poster.jpg`: the owner's 23-second opening film (Grandma's goodbye in the village, the ₵50 and the letter, the lorry park and the trotro to Accra), made by the owner with ImagineArt and sent on 2026-10-28, with its own sound. Shrunk for phones (about 1.3 MB each format). All people invented; the "SIKA Mobile Money" on the trotro is a made-up name. Same commercial-use check as the pictures above before launch.
+- Removed on 2026-10-28: `journey-480.*` and `journey-poster.jpg` (the earlier 10-second clip), replaced by the opening film above.
 
 ## Billboard advert photos (public/ads/)
 
