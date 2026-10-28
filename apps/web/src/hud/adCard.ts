@@ -27,6 +27,14 @@ export type AdSpace = {
   /** Draw an advert into the space (preview, for this player only). */
   preview: (draw: (g: CanvasRenderingContext2D, top: number, W: number, H: number) => void, contact: AdContact) => void;
   onClose?: () => void;
+  /**
+   * All the adverts that take turns on this space (owner, 28 Oct 2026: "swipe to see all the ads"):
+   * the card opens on `start` (the one showing now), and you swipe through the rest. With these,
+   * "Put your advert here" goes into the advert place you are looking at (`previewAt`).
+   */
+  slides?: { picture: string; own?: AdContact | null }[];
+  start?: number;
+  previewAt?: (i: number, draw: (g: CanvasRenderingContext2D, top: number, W: number, H: number) => void, contact: AdContact) => void;
 };
 
 const COLOURS: [string, string, string][] = [
@@ -103,6 +111,9 @@ export class AdCard {
   private space: AdSpace | null = null;
   private d: Draft = AdCard.fresh();
   isOpen = false;
+  /** On Light phones: a plain see-through dark backdrop instead of the blur (the blur costs speed). */
+  lite = false;
+  private slide = 0;
 
   private static fresh(): Draft {
     return { weeks: 1, where: 'street', mode: 'flyer', flyer: null, flyerFit: 'auto', brand: '', head: '', line: '', cta: '', photo: null, photoFit: 'auto', colour: 0, phone: '', whatsapp: '', link: '', showPhone: true, pay: 'momo' };
@@ -129,11 +140,13 @@ export class AdCard {
     if (this.root) return;
     const r = document.createElement('div');
     r.id = 'adcard';
-    r.className = 'hidden';
+    r.className = 'hidden' + (this.lite ? ' lite' : '');
     r.innerHTML = '<div class="ac-body"><button type="button" class="ac-x" aria-label="Close">✕</button><div class="ac-in"></div></div>';
     document.body.append(r);
     for (const ev of ['pointerdown', 'pointermove', 'touchstart', 'touchmove', 'wheel', 'keydown', 'keyup']) r.addEventListener(ev, (e) => e.stopPropagation(), { passive: true });
     r.querySelector('.ac-x')!.addEventListener('click', () => this.close());
+    // A tap on the blurred city around the card closes it.
+    r.addEventListener('click', (e) => e.target === r && this.close());
     this.root = r;
   }
 
@@ -247,6 +260,7 @@ export class AdCard {
   // ---------- Step 0: the space as it is ----------
   private step0() {
     const s = this.space!;
+    if (s.slides?.length) return this.gallery();
     const own = s.own;
     this.inner.innerHTML = `
       <small class="ac-kind">${s.kind === 'billboard' ? '📺 BILLBOARD' : '🚐 MOVING ADVERT'}</small>
@@ -258,6 +272,61 @@ export class AdCard {
       <button type="button" class="ac-go">Put your advert here</button>`;
     this.inner.querySelector('.ac-go')!.addEventListener('click', () => this.step1());
     this.bindContactButtons();
+  }
+  /** All the adverts on this space, one at a time: swipe (or the arrows) to see the next. */
+  private gallery() {
+    const s = this.space!;
+    const slides = s.slides!;
+    const n = slides.length;
+    this.slide = Math.max(0, Math.min(n - 1, s.start ?? this.slide));
+    this.inner.innerHTML = `
+      <small class="ac-kind">${s.kind === 'billboard' ? '📺 BILLBOARD' : '🚐 MOVING ADVERT'} · <span data-count></span></small>
+      <h3>${esc(s.title)}</h3>
+      <div class="ac-gal">
+        <div class="ac-track">${slides.map((sl, i) => `<div class="ac-slide"><div class="ac-pic ${s.kind}"><img alt="Advert ${i + 1} of ${n}" src="${sl.picture}" draggable="false">${i === s.start ? '<span>● LIVE</span>' : ''}</div></div>`).join('')}</div>
+        <button type="button" class="ac-arrow prev" aria-label="Previous advert">‹</button>
+        <button type="button" class="ac-arrow next" aria-label="Next advert">›</button>
+      </div>
+      <div class="ac-dots">${slides.map(() => '<i></i>').join('')}</div>
+      <div data-contact></div>
+      <p class="ac-note">${esc(s.note)}</p>
+      <div class="ac-price"><b>₵${adPlace(s.place).price.toLocaleString('en-GH')} a week</b><span>${esc(adPlace(s.place).name)} · ${esc(adPlace(s.place).note)}</span></div>
+      <button type="button" class="ac-go">Put your advert here</button>`;
+    const track = this.inner.querySelector('.ac-track') as HTMLElement;
+    const show = () => {
+      (this.inner.querySelector('[data-count]') as HTMLElement).textContent = `${this.slide + 1} OF ${n}`;
+      this.inner.querySelectorAll('.ac-dots i').forEach((d, i) => d.classList.toggle('on', i === this.slide));
+      const own = slides[this.slide].own;
+      (this.inner.querySelector('[data-contact]') as HTMLElement).innerHTML = own ? this.contactButtons(own) : '';
+      this.bindContactButtons();
+    };
+    const go = (i: number, smooth = true) => {
+      this.slide = (i + n) % n;
+      track.scrollTo({ left: this.slide * track.clientWidth, behavior: smooth ? 'smooth' : 'auto' });
+      show();
+    };
+    // Swiping: the track snaps to each advert; the counter follows.
+    let settle = 0;
+    track.addEventListener('scroll', () => {
+      clearTimeout(settle);
+      settle = window.setTimeout(() => {
+        const i = Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
+        if (i !== this.slide) {
+          this.slide = i;
+          show();
+        }
+      }, 60);
+    }, { passive: true });
+    this.inner.querySelector('.ac-arrow.prev')!.addEventListener('click', () => go(this.slide - 1));
+    this.inner.querySelector('.ac-arrow.next')!.addEventListener('click', () => go(this.slide + 1));
+    requestAnimationFrame(() => go(this.slide, false));
+    this.inner.querySelector('.ac-go')!.addEventListener('click', () => {
+      // Your advert goes into the place you were looking at.
+      const at = this.slide;
+      s.start = at; // (Back comes back to this one)
+      if (s.previewAt) s.preview = (draw, contact) => s.previewAt!(at, draw, contact);
+      this.step1();
+    });
   }
   private contactButtons(c: AdContact) {
     const btns: string[] = [];

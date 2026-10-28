@@ -10,7 +10,7 @@ import { createMap } from '../map/createMap';
 import { detectTier, measureFps } from '../map/tier';
 import type { Traffic } from '../game/traffic';
 import { createStreetNetwork } from '../game/streetNetwork';
-import { StreetTraffic } from '../game/vehicles3d';
+import { AD_ROWS, StreetTraffic } from '../game/vehicles3d';
 import { StreetBuildings } from '../game/streetBuildings';
 import { applyStreetStyle } from '../map/streetStyle';
 import { StreetLife } from '../game/streetLife';
@@ -3447,56 +3447,80 @@ async function runAutoTest() {
 let minimap: Minimap | null = null;
 // ---------- Adverts: tap a vehicle in the street, or a billboard on the big map ----------
 const adCard = new AdCard();
+adCard.lite = tier === 'light';
 // The player's own adverts (previews): their contact buttons, and their pictures for the cards.
 const ownAds = { board: new Map<number, AdContact>(), vehicle: new Map<number, AdContact>(), boardPictures: new Map<number, string>() };
 const KIND_NAME: Record<string, string> = { trotro: 'Trotro', bus: 'City bus', truck: 'Truck', taxi: 'Taxi', car: 'Car', pickup: 'Pickup', suv: 'SUV', tricycle: 'Tricycle', okada: 'Okada' };
 const tapPoint = new THREE.Vector4();
+/** Which advert a sliding advert face shows at this moment (the same sum as its picture, adScreens.ts). */
+const liveAd = (first: number, rows: number, period: number) => (first + Math.floor((AD_CLOCK.value + first * 2.9) / period)) % rows;
 function tapVehicle(sx: number, sy: number) {
-  if (!streetTraffic || story.frozen || story.shot || story.autoRun || adCard.isOpen) return; // (any time you are walking, also during the story)
+  if (story.frozen || story.shot || story.autoRun || adCard.isOpen) return; // (any time you are walking, also during the story)
   const w = window.innerWidth;
   const h = window.innerHeight;
-  let best: { p: (typeof streetTraffic.placed)[number]; d: number } | null = null;
-  for (const p of streetTraffic.placed) {
+  const onScreen = (x: number, y: number, z: number) => {
+    tapPoint.set(x, y, z, 1).applyMatrix4(camera3d.projectionMatrix);
+    if (tapPoint.w <= 0) return null;
+    return [((tapPoint.x / tapPoint.w + 1) / 2) * w, ((1 - tapPoint.y / tapPoint.w) / 2) * h] as const;
+  };
+  // A vehicle (moving or not) near where you tapped...
+  let best: { p: NonNullable<typeof streetTraffic>['placed'][number]; d: number } | null = null;
+  for (const p of streetTraffic?.placed ?? []) {
     if (p.bridge) continue;
     const [x, z] = [(p.lon - START[0]) * M_LON, (START[1] - p.lat) * M_LAT];
     if (Math.hypot(x - state.x, z - state.z) > 70) continue;
-    tapPoint.set(x, 1.3, z, 1).applyMatrix4(camera3d.projectionMatrix);
-    if (tapPoint.w <= 0) continue;
-    const px = ((tapPoint.x / tapPoint.w + 1) / 2) * w;
-    const py = ((1 - tapPoint.y / tapPoint.w) / 2) * h;
-    const d = Math.hypot(px - sx, py - sy);
+    const q = onScreen(x, 1.3, z);
+    if (!q) continue;
+    const d = Math.hypot(q[0] - sx, q[1] - sy);
     if (d < 90 && (!best || d < best.d)) best = { p, d };
   }
-  if (!best) return;
+  // ... or a billboard's advert (on its legs or on a roof).
+  let board: { ad: number; x: number; z: number; d: number } | null = null;
+  for (const [list, high, half] of [[life?.boards.all ?? [], 5.0, 2.0], [life?.roofBoards.all ?? [], 5.6, 2.4]] as const) {
+    for (const b of list) {
+      if (Math.hypot(b.x - state.x, b.z - state.z) > 90) continue;
+      const y = ((b as { y?: number }).y ?? 0) + high;
+      const c = onScreen(b.x, y, b.z);
+      const top = onScreen(b.x, y + half, b.z);
+      if (!c || !top) continue;
+      const reach = Math.max(40, Math.abs(c[1] - top[1]) * 1.6); // about the poster's size on screen
+      const d = Math.hypot(c[0] - sx, c[1] - sy);
+      if (d < reach && (!board || d < board.d)) board = { ad: b.colour % AD_COUNT, x: b.x, z: b.z, d };
+    }
+  }
+  if (board && (!best || board.d < best.d)) {
+    const { lng, lat } = lngLatOf(board.x, board.z);
+    openBoardCard(liveAd(board.ad, AD_COUNT, 7), placeLabel.textContent ?? '', lng, lat, false);
+    return;
+  }
+  if (!best || !streetTraffic) return;
   const info = streetTraffic.vehicleInfo(best.p.v);
   const name = KIND_NAME[best.p.v.kind] ?? 'Vehicle';
   if (info.ad === null) {
     toast(name, 'No advert space on this one');
     return;
   }
-  // It stops while you look, its advert still sliding.
-  const id = best.p.v.id;
-  streetTraffic.hold.add(id);
-  const [vx, vz] = [(best.p.lon - START[0]) * M_LON, (START[1] - best.p.lat) * M_LAT];
-  showBubble(vx, vz, 2.4, toMe(best.p.v.kind === 'trotro' ? 'Chale, you want put your advert for my trotro?' : 'Boss, you like the advert?'));
-  const row = info.ad;
+  // The card shows every advert that rides the city's vehicles, starting with the one on this one
+  // now; the vehicle carries on driving (owner, 28 Oct 2026: it "doesn't affect the cars movement").
+  const traffic = streetTraffic;
   adCard.open({
     kind: 'vehicle',
-    title: `${name} · advert on both sides and the back`,
-    picture: streetTraffic.vehicleAdPicture(row),
+    title: `${name} · advert on both sides`,
+    picture: traffic.vehicleAdPicture(info.ad),
     place: vehiclePlace(best.p.v.kind),
-    note: 'It drives its real route all day, past everyone on the road. The advert changes every few seconds.',
-    own: ownAds.vehicle.get(row) ?? null,
-    preview: (draw, contact) => {
-      streetTraffic?.previewAd(row, draw);
+    note: 'Adverts ride trotros, buses and lorries on their real routes all day, past everyone on the road. Each one changes every few seconds.',
+    own: ownAds.vehicle.get(info.ad) ?? null,
+    slides: Array.from({ length: AD_ROWS }, (_, r) => ({ picture: traffic.vehicleAdPicture(r), own: ownAds.vehicle.get(r) ?? null })),
+    start: liveAd(info.ad, AD_ROWS, 8),
+    preview: () => undefined,
+    previewAt: (row, draw, contact) => {
+      traffic.previewAd(row, draw);
       ownAds.vehicle.set(row, contact);
     },
-    onClose: () => streetTraffic?.hold.delete(id),
   });
-  setTimeout(() => streetTraffic?.hold.delete(id), 30000); // never held for long
 }
-function openBoardCard(ad: number, place: string, lng: number, lat: number) {
-  fullMap.close();
+function openBoardCard(ad: number, place: string, lng: number, lat: number, fromMap = true) {
+  if (fromMap) fullMap.close();
   // Its price comes from where it stands: the airport, a busy station or market, a main road or a side street.
   const [bx, bz] = [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT];
   const spots = places.list();
@@ -3509,14 +3533,18 @@ function openBoardCard(ad: number, place: string, lng: number, lat: number) {
     place: where,
     note: `Shared with ${AD_COUNT - 1} other adverts: each shows for 7 seconds, then slides to the next. Seen from both sides of the road.`,
     own: ownAds.board.get(ad) ?? null,
-    preview: (draw, contact) => {
-      life?.previewAd(ad, draw);
-      ownAds.board.set(ad, contact);
+    preview: () => undefined,
+    // Every advert that takes turns on the billboards: swipe through them all.
+    slides: Array.from({ length: AD_COUNT }, (_, i) => ({ picture: ownAds.boardPictures.get(i) ?? adThumb(i, 512), own: ownAds.board.get(i) ?? null })),
+    start: ad,
+    previewAt: (i, draw, contact) => {
+      life?.previewAd(i, draw);
+      ownAds.board.set(i, contact);
       const c = document.createElement('canvas');
       c.width = 512;
       c.height = 288;
       draw(c.getContext('2d')!, 0, 512, 288);
-      ownAds.boardPictures.set(ad, c.toDataURL('image/webp', 0.85));
+      ownAds.boardPictures.set(i, c.toDataURL('image/webp', 0.85));
     },
   });
 }
@@ -4029,7 +4057,7 @@ async function start() {
     };
     streetTraffic.sim = trafficSim;
     void loadDriver();
-    if (debug) Object.assign(window, { __street: { state, sky, look, life, story, thief, signals, lightFor, flyovers, pinch, bigScreen, roadSigns, getStation: () => station, places, fuelWhy, bag, driver, shove, uncle, compound, props, camera3d, adCard, frameShot, placeCompound, buildings, nimaRoute, rideSign, RIDE_SIGNS, map, placeCarTag, fullMap, phone, camAvoid, camAt, viewBlocked, heightAtView, solidAt, traffic: streetTraffic, driveIn, parkingNear, pullIn, pullOut, roadLineNear, compoundAt, music, streetSound, epicRoads, trafficSim: () => trafficSim, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
+    if (debug) Object.assign(window, { __street: { state, sky, look, life, story, thief, signals, lightFor, flyovers, pinch, bigScreen, roadSigns, getStation: () => station, places, fuelWhy, bag, driver, shove, uncle, compound, props, camera3d, adCard, frameShot, placeCompound, buildings, nimaRoute, rideSign, RIDE_SIGNS, map, placeCarTag, fullMap, phone, camAvoid, camAt, viewBlocked, heightAtView, solidAt, traffic: streetTraffic, driveIn, parkingNear, pullIn, pullOut, roadLineNear, compoundAt, music, streetSound, epicRoads, THREE, trafficSim: () => trafficSim, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
   }
 
   document.getElementById('loading')!.remove();

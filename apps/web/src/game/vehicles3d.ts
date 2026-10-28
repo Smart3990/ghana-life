@@ -32,10 +32,17 @@ const PACK: Record<BatchKey, { file: string; paint: string[]; white?: string[] }
 );
 // Advert wraps on the pack's vehicles: [half width, bottom, top, back end, front end, back face].
 const PACK_PANELS: Partial<Record<BatchKey, [number, number, number, number, number, number]>> = {
-  trotro: [0.9, 0.58, 1.6, -1.95, 1.15, -2.08],
-  sprinter: [0.9, 0.58, 1.6, -1.95, 1.15, -2.08],
-  bus: [1.425, 0.95, 2.9, -5.3, 3.6, -5.5],
-  truck: [1.05, 1.0, 2.75, -3.0, 1.35, -3.1],
+  // Measured on the pack's models (their flat side panels; owner, 28 Oct 2026: "must be very
+  // perfectly aligned"): each panel lies 1.5 cm off the flat side, inside its edges, in the advert's own
+  // shape (4 wide to 1 high, so nothing is stretched).
+  // The van: its flat side below the windows (x 0.86, y 0.44 to 1.34, z -1.62 to 1.66).
+  trotro: [0.875, 0.5, 1.31, -1.6, 1.64, -2.08],
+  sprinter: [0.875, 0.5, 1.31, -1.6, 1.64, -2.08],
+  // The city bus: its flat side (x 1.32, y 0.47 to 2.78), above the wheel arches (which reach 1.07),
+  // centred between the back and the front door.
+  bus: [1.335, 1.12, 2.72, -4.3, 2.1, -5.5],
+  // The box lorry: its cargo box (x 1.04, y 0.88 to 2.81, z -3.03 to 1.42), the advert centred on it.
+  truck: [1.055, 1.3, 2.39, -2.99, 1.38, -3.1],
 };
 const MODERN: Partial<Record<BatchKey, string>> = {
   // Our own models shaped after the real vehicles at Circle (scripts/vehicles/build_ghana.py).
@@ -123,7 +130,7 @@ export type VehicleAd = { title: string; line: string; bg: [string, string]; acc
 const DEFAULT_ADS: VehicleAd[] = [
   { title: 'SIKA MOBILE MONEY', line: 'Send money home in seconds', bg: ['#0f6b3a', '#1c9b57'], accent: '#f2c21a' },
   { title: 'GHANAVERSE FM 98.5', line: 'The sound of the city, all day', bg: ['#4a1d6e', '#7a3fb0'], accent: '#ffd25a' },
-  { title: 'YOUR AD HERE', line: 'Ride the whole city · ₵250 a week', bg: ['#f2efe6', '#e3dccb'], accent: '#c8442e', ink: '#121a14' },
+  { title: 'YOUR AD HERE', line: 'Tap this trotro · from ₵1,200 a week', bg: ['#f2efe6', '#e3dccb'], accent: '#c8442e', ink: '#121a14' },
   { title: 'KELEWELE AT CIRCLE', line: 'Hot and spicy every evening', bg: ['#c2410c', '#f08a24'], accent: '#fff3c4' },
   { title: 'COOL SACHET WATER', line: 'Clean, cold, everywhere', bg: ['#0b4f8a', '#2a86d1'], accent: '#ffffff' },
   { title: 'GHANAVERSE NEWS', line: 'Tonight at 8 on every big screen', bg: ['#8e1b1b', '#c8442e'], accent: '#ffffff' },
@@ -203,8 +210,9 @@ function adPanels([hw, y0, y1, z0, z1, zb]: [number, number, number, number, num
 }
 const AD_TIME = { value: 0 };
 function adMaterial(map: THREE.Texture) {
-  // The same sliding change as the billboards (the next advert slides in every 8 seconds).
-  const sliding = slidingAdMaterial(map, AD_ROWS, 8) as THREE.MeshStandardMaterial;
+  // The same sliding change as the billboards (the next advert slides in every 8 seconds), and lit
+  // like them: a bright screen, the same at noon and at midnight, so it is always clear to read.
+  const sliding = slidingAdMaterial(map, AD_ROWS, 8, true) as THREE.MeshBasicMaterial;
   sliding.polygonOffset = true;
   sliding.polygonOffsetFactor = -2;
   sliding.side = THREE.FrontSide;

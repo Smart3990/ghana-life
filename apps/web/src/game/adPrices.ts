@@ -11,7 +11,7 @@ export const AD_PLACES: AdPlace[] = [
   { key: 'station', kind: 'billboard', icon: '🚌', name: 'Billboard at a busy station', note: 'lorry stations, markets and bus terminals', price: 600 },
   { key: 'airport', kind: 'billboard', icon: '✈️', name: 'Billboard at the airport', note: 'on the roads round Kotoka International Airport', price: 900 },
   { key: 'taxi', kind: 'vehicle', icon: '🚕', name: 'On a moving taxi', note: 'both sides and the back, all over the city', price: 1000 },
-  { key: 'trotro', kind: 'vehicle', icon: '🚐', name: 'On a moving trotro', note: 'both sides and the back, on its real route all day', price: 1200 },
+  { key: 'trotro', kind: 'vehicle', icon: '🚐', name: 'On a moving trotro', note: 'both sides, on its real route all day', price: 1200 },
   { key: 'bus', kind: 'vehicle', icon: '🚍', name: 'On a moving city bus', note: 'the biggest moving advert, across the city', price: 1500 },
 ];
 export const adPlace = (key: AdPlaceKey) => AD_PLACES.find((p) => p.key === key)!;

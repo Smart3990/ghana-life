@@ -27,7 +27,7 @@ export const BOARD_ADS: AdDesign[] = [
   { brand: 'GHANAVERSE NEWS', head: 'The city’s biggest stories', line: 'Tonight at 8 on every big screen', cta: 'Watch tonight', bg: ['#6e1010', '#c8442e'], accent: '#ffffff' },
   { brand: 'ADINKRA BANK', head: 'Save small. Grow big.', line: 'Open an account with ₵10', cta: 'Visit any branch', bg: ['#10265a', '#1f5fa8'], accent: '#e3a92b' },
   { brand: 'TONIGHT IN GHANAVERSE', head: 'Highlife night at Osu', line: 'Live band · free entry · 8 pm', cta: 'See you there', bg: ['#121a14', '#1f4f8a'], accent: '#e3a92b' },
-  { brand: 'YOUR AD HERE', head: 'Advertise in Ghanaverse', line: 'Billboards across the city from ₵35 a week', cta: 'Ask in the app', bg: ['#f2efe6', '#d9d2c2'], accent: '#c8442e', ink: '#121a14' },
+  { brand: 'YOUR AD HERE', head: 'Advertise in Ghanaverse', line: 'Billboards across the city from ₵300 a week', cta: 'Tap this billboard', bg: ['#f2efe6', '#d9d2c2'], accent: '#c8442e', ink: '#121a14' },
 ];
 export const AD_COUNT = BOARD_ADS.length;
 

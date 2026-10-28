@@ -410,6 +410,14 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
 
   - **Nothing before the film; every rider and driver from the Epic City pack** (owner, 28 Oct): the screen goes black in the same moment as the START tap, so no glimpse of Circle or a helicopter shows while the game loads before the film (checked: the first picture after the tap is all black, then the film). The pragya's driver and the cargo tricycle's rider were our own block figures; now they are the pack's people sat down, like the okada riders, with passengers on the pragya's bench in most of them, and a driver in the formula car's open cockpit. Closed vehicles have no one drawn inside, because the pack's windows are solid dark glass and nobody could be seen.
 
+  - **Vehicle adverts fitted exactly, always clear, and a swipe card for every advert** (owner, 28 Oct):
+    - The advert panels on trotros, buses and lorries were measured on the pack's models (their flat side panels) and now lie 1.5 cm off the flat side, inside its edges, in the advert's own 4-to-1 shape (nothing stretched): the trotro's flat side below the windows, the bus's side above the wheel arches (before the front door), the lorry's cargo box. Before, the bus panel floated 10 cm off the side and the trotro's crossed its sloping windows.
+    - Vehicle adverts are drawn like the billboards: a bright screen, the same at noon and at night (they were lit like paint and went dark at night).
+    - Tap a moving advert vehicle, or a billboard in the street: a card opens in the middle of the screen over the city, softly blurred and see-through (on Light phones a see-through dark backdrop without blur, which would slow them down). It shows every advert that takes turns on that kind of space, starting with the one showing now: swipe (or the arrows) through them all, the advertiser's Call / WhatsApp / Website buttons under each one that has them, and "Put your advert here" (it goes into the advert place you were looking at). The traffic keeps moving; tap outside or the cross to close.
+    - Taps on the empty space round the minimap now reach the city (the minimap's box was catching them).
+    - The placeholder "your ad here" adverts show the real starting prices (billboards from ₵300 a week, trotros ₵1,200).
+    - Done when: tap a passing trotro and a billboard, swipe through the adverts, the vehicle drives on (checked on the test machine: card opened, 8 adverts, the trotro moved on 3 m while the card was open).
+
 ## Waiting on the owner
 
 - Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.

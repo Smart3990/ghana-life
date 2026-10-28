@@ -399,7 +399,7 @@ export class StreetLife {
   }
   private roofMesh!: THREE.InstancedMesh;
   private bannerMesh!: THREE.InstancedMesh;
-  private roofBoards!: Batch;
+  roofBoards!: Batch;
   private banners!: Batch;
 
   private wires!: THREE.LineSegments;
