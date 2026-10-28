@@ -1237,6 +1237,38 @@ window.addEventListener('keydown', (e) => {
   if (n >= 1 && n <= btns.length) (btns[n - 1] as HTMLButtonElement).click();
 });
 
+// Asking for help (owner, 28 Oct 2026): anyone can be asked. Some help, telling you which way to go
+// and roughly how far; some are not from here and send you to ask someone else.
+const NOT_FROM_HERE = [
+  'Sorry oo, I am not from here. Ask another person.',
+  'Ei, I don\'t know this place well myself. Ask that woman over there, she sells here.',
+  'Sorry, my dear, I am new here too. Ask the kiosk people, they know everywhere.',
+  'Hmm, I can\'t say. Ask somebody else, they will show you.',
+];
+const HELP_PLACES = ['BUS STOP', 'CHOP BAR', 'MOBILE MONEY', 'PHARMACY', 'MARKET', 'POLICE STATION', 'SUPERMARKET'];
+function helpAnswer(who: Who): string {
+  const r = ((who.seed * 2654435761) >>> 0) / 4294967296;
+  if (r > 0.62) return NOT_FROM_HERE[Math.floor(r * 97) % NOT_FROM_HERE.length];
+  // Where to: where the story is sending you; otherwise somewhere useful nearby.
+  let goal: { x: number; z: number; name: string } | null = null;
+  if (story.target) goal = { x: story.target.x, z: story.target.z, name: story.target.who === 'Auntie Dede' ? 'the kelewele auntie' : story.target.who ?? 'there' };
+  else if (story.auntie) goal = { x: story.auntie.x, z: story.auntie.z, name: 'the kelewele auntie' };
+  else {
+    const spots = places.list().filter((p) => HELP_PLACES.includes(p.kind));
+    if (station) spots.push({ x: station.x, z: station.z, kind: 'LORRY STATION' });
+    spots.sort((a, b) => Math.hypot(a.x - state.x, a.z - state.z) - Math.hypot(b.x - state.x, b.z - state.z));
+    const p = spots[0];
+    if (p) goal = { x: p.x, z: p.z, name: `the ${p.kind.toLowerCase()}` };
+  }
+  if (!goal) return 'Welcome to Accra! Just ask around, people will help you.';
+  const d = Math.hypot(goal.x - state.x, goal.z - state.z);
+  const rel = angleDiff(Math.atan2(goal.x - state.x, -(goal.z - state.z)), state.heading);
+  const way = Math.abs(rel) < 0.5 ? 'straight ahead of you' : Math.abs(rel) > 2.5 ? 'behind you' : rel > 0 ? 'on your right' : 'on your left';
+  const far = d < 25 ? 'just there, very close' : d < 140 ? `about ${Math.round(d / 10) * 10} metres` : `a bit far, about ${Math.round(d / 50) * 50} metres. Take an okada if you are tired`;
+  const tip = goal.name === 'the kelewele auntie' ? ' Cross at the zebra, the cars stop when the light is red.' : '';
+  return `You want ${goal.name}? Go that way, ${way}: ${far}.${tip}`;
+}
+
 async function chat(who: Who, t: number) {
   const kind = who.words?.some((w) => /!.*!/.test(w) && /Kaneshie|Madina|Circle|Accra|Lapaz|Kasoa|Tema/.test(w)) ? 'mate' : who.words?.some((w) => /Phone|Charger/i.test(w)) ? 'phones' : who.seller ? 'seller' : who.kind;
   const options = TALKS[kind] ?? TALKS.any;
@@ -1256,17 +1288,26 @@ async function chat(who: Who, t: number) {
   };
   // You say hello first.
   await speak(who.kind === 'muslimMan' || who.kind === 'muslimWoman' ? 'Salaam alaikum.' : [forTheHour('Good afternoon!', day.hour), 'Hello!', 'Chale, how far?'][Math.floor(Math.random() * 3)], true);
+  const HELP = 'Please, I am new in Accra. Can you help me?';
+  let asked = false;
   while (node && !away()) {
     await speak(node.them, false);
-    if (!node.choices?.length || away()) break;
+    // Every conversation offers asking for help (once).
+    const offered: TalkNode = { ...node, choices: [...(node.choices ?? []), ...(asked ? [] : [{ you: HELP }])] };
+    if (!offered.choices!.length || away()) break;
     const choice = await new Promise<number>((resolve) => {
       talkEnd = () => resolve(-1);
-      showChoices(node!, resolve);
+      showChoices(offered, resolve);
     });
     talkEl.classList.add('hidden');
     if (choice < 0 || away()) break;
-    const c: { you: string; next?: TalkNode | string } = node.choices[choice];
+    const c: { you: string; next?: TalkNode | string } = offered.choices![choice];
     await speak(c.you, true);
+    if (c.you === HELP) {
+      asked = true;
+      node = { them: helpAnswer(who), choices: [{ you: 'Thank you very much!', next: 'You are welcome. Go well!' }] };
+      continue;
+    }
     node = asNode(c.next);
   }
   talkEl.classList.add('hidden');
@@ -1286,7 +1327,21 @@ function checkTalkAway() {
 
 const me = { energy: 100, vibe: 0, doing: 'none' as 'none' | 'sit' | 'dance' | 'greet', until: 0, seat: null as { x: number; z: number; face: number } | null, tiredSaid: false };
 type ActionId = 'ride' | 'off' | 'sit' | 'stand' | 'dance' | 'stop' | 'greet' | 'chat' | 'talk';
-type Action = { id: ActionId; target?: Nearby; walker?: { i: number; x: number; z: number; kind: string; height: number; body: 'male' | 'female' | 'child' } };
+type Action = { id: ActionId; target?: Nearby; walker?: { i: number; x: number; z: number; kind: string; height: number; body: 'male' | 'female' | 'child' }; rider?: { id: number; x: number; z: number; kind: string } };
+/** A rider or driver you can talk to: within reach, the vehicle stopped or crawling, its driver to be seen. */
+function riderNear() {
+  if (!streetTraffic) return null;
+  let best: { id: number; x: number; z: number; kind: string; d: number } | null = null;
+  for (const p of streetTraffic.placed) {
+    if (p.bridge || (p.v.speed ?? 0) > 1.6) continue;
+    const kind = p.v.kind;
+    if (!['okada', 'tricycle', 'taxi', 'trotro', 'car', 'suv', 'pickup'].includes(kind)) continue;
+    const [x, z] = [(p.lon - START[0]) * M_LON, (START[1] - p.lat) * M_LAT];
+    const d = Math.hypot(x - state.x, z - state.z);
+    if (d < 3.3 && (!best || d < best.d)) best = { id: p.v.id, x, z, kind, d };
+  }
+  return best;
+}
 const ACTIONS: Record<ActionId, { label: string; icon: string }> = {
   ride: { label: 'RIDE', icon: '<circle cx="5.5" cy="16.5" r="3.5"/><circle cx="18.5" cy="16.5" r="3.5"/><path d="M5.5 16.5L9 10h6l3.5 6.5"/><path d="M15 10l-1.5-3H16"/><path d="M9 10l2.5 6.5h3"/>' },
   off: { label: 'GET OFF', icon: '<path d="M14 4h4a2 2 0 012 2v12a2 2 0 01-2 2h-4"/><path d="M10 8l-4 4 4 4"/><path d="M6 12h10"/>' },
@@ -1316,6 +1371,11 @@ function chooseAction(nearOkada: boolean, near: Nearby | null): Action | null {
   if (nearOkada && state.y === 0) return { id: 'ride' };
   // People on the pavement can be greeted too: whoever is nearer, them or someone at a place.
   const walker = me.doing === 'none' && !chatting ? life?.nearestWalker(state.x, state.z, 2.4) : null;
+  // Riders and drivers too (owner, 28 Oct 2026: "talk to anyone she gets close to, even riders"):
+  // an okada rider, a tricycle or open-jeep driver, a taxi driver or trotro mate, stopped or crawling
+  // in the traffic right beside you.
+  const rider = me.doing === 'none' && !chatting && !walker ? riderNear() : null;
+  if (rider) return { id: 'greet', target: { kind: 'person', x: rider.x, z: rider.z, face: 0, d: 0, who: -1 }, rider };
   if (walker && (!near || Math.hypot(walker.x - state.x, walker.z - state.z) < near.d)) {
     return { id: 'greet', target: { kind: 'person', x: walker.x, z: walker.z, face: 0, d: 0, who: -1 }, walker };
   }
@@ -1395,6 +1455,19 @@ function doAction(a: Action | null, t: number) {
       if (a.walker) {
         life?.holdWalker(a.walker.i, 40, state.x, state.z);
         who = { x: a.walker.x, z: a.walker.z, height: a.walker.height, kind: a.walker.kind, seller: a.walker.kind === 'hawker', body: a.walker.body, seed: a.walker.i * 13 };
+      } else if (a.rider) {
+        // The vehicle waits while you talk (then drives on).
+        const id = a.rider.id;
+        streetTraffic?.hold.add(id);
+        const kind = a.rider.kind === 'okada' || a.rider.kind === 'tricycle' ? 'rider' : a.rider.kind === 'trotro' ? 'mate' : 'driver';
+        who = { x: a.rider.x, z: a.rider.z, height: a.rider.kind === 'okada' ? 2.0 : 2.3, kind, seller: false, body: 'male', seed: id * 17 };
+        const release = () => streetTraffic?.hold.delete(id);
+        setTimeout(release, 45000); // (never held for long)
+        void (async () => {
+          await new Promise((r) => setTimeout(r, 300));
+          while (chatting) await new Promise((r) => setTimeout(r, 300));
+          release();
+        })();
       } else {
         const c = life?.scenes?.converse(target.who, performance.now() / 1000, 40);
         if (c) who = c;

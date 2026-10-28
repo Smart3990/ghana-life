@@ -88,6 +88,26 @@ export const TALKS: Record<string, TalkNode[]> = {
       { you: 'Just looking.', next: 'Look well, boss! Original stuff only.' },
     ] },
   ],
+  // Okada riders and drivers you talk to from the kerb (in traffic, or stopped).
+  rider: [
+    { them: 'Chale, where you dey go? I fit drop you.', choices: [
+      { you: 'Not now, thank you.', next: 'Okay, no wahala! Another time.' },
+      { you: 'Is it far to Nima?', next: 'Nima? Not too far. With okada, ten minutes, if the traffic allows.' },
+    ] },
+    { them: 'Bra, how far? The traffic is too much today oo.', choices: [
+      { you: 'Ei, true! Every day?', next: 'Every day! Accra traffic, we just manage.' },
+      { you: 'Ride safe, my brother.', next: 'Thank you, God bless you!' },
+    ] },
+  ],
+  driver: [
+    { them: 'Hello! Taxi? Where are you going?', choices: [
+      { you: 'Just looking around.', next: 'Okay, enjoy Accra! Circle is busy, watch your bag.' },
+      { you: 'How is business today?', next: 'Small small. But God is good!' },
+    ] },
+    { them: 'Ah, this traffic! You are walking? You are faster than me today!', choices: [
+      { you: 'Ha! Sorry oo.', next: 'No problem. Have a good day!' },
+    ] },
+  ],
   mate: [
     { them: 'Where are you going? Kaneshie? Madina? Come, come!', choices: [
       { you: 'How much to Kaneshie?', next: 'Five cedis! One more seat, come and sit!' },
