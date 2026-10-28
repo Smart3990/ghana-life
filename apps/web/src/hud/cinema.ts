@@ -26,12 +26,19 @@ export class Cinema {
   }
 
   private videoEl: HTMLVideoElement | null = null;
+  private filmStarted = false;
+  private unlocking: Promise<void> = Promise.resolve();
 
   /**
    * Get a film clip ready: starts downloading it, and (called from a tap) unlocks it so it can
    * play with sound later, which phones only allow after a tap.
    */
   prepareVideo(url: string, poster: string) {
+    if (!this.videoEl) this.loadVideo(url, poster);
+    this.unlockVideo();
+  }
+  /** Start downloading the film clip now (as the page opens), so it is ready by the time you tap START. */
+  loadVideo(url: string, poster: string) {
     const v = document.createElement('video');
     // The phone picks the format it plays best: MP4 (H.264) or WebM (VP9), the same clip.
     const webm = url.replace(/\.mp4$/, '.webm');
@@ -42,14 +49,35 @@ export class Cinema {
     v.setAttribute('playsinline', '');
     v.className = 'cine-video';
     this.videoEl = v;
-    // Unlock: start and pause straight away inside the tap.
+    v.load();
+  }
+  /** In the tap: let the clip play with its sound later (phones only allow it after a tap). */
+  unlockVideo() {
+    const v = this.videoEl;
+    if (!v) return;
+    // Unlock: start and pause straight away inside the tap (unless the film has begun meanwhile).
     v.muted = true;
-    v.play().then(() => v.pause(), () => undefined).finally(() => {
-      v.currentTime = 0;
+    this.filmStarted = false;
+    const unlock = v.play();
+    this.unlocking = unlock.then(
+      () => {
+        if (!this.filmStarted) v.pause();
+      },
+      () => undefined,
+    ).finally(() => {
+      if (!this.filmStarted) v.currentTime = 0;
       v.muted = false;
     });
   }
 
+  /** A small "Loading…" on the black (while the film downloads on a slow network). */
+  loadingNote(on: boolean) {
+    if (on && !this.card.querySelector('.cine-loading')) {
+      const n = el('div', 'cine-loading');
+      n.textContent = 'Loading…';
+      this.card.append(n);
+    } else if (!on) this.card.querySelector('.cine-loading')?.remove();
+  }
   /** Black at once (no fade): nothing of the city shows until the film starts. */
   coverNow() {
     this.card.style.transitionDuration = '0s';
@@ -75,6 +103,11 @@ export class Cinema {
     // city: owner, 28 Oct 2026, "flashes of Circle and a helicopter before the video plays").
     this.pic.style.transitionDuration = '0s';
     this.pic.classList.add('on');
+    // (The unlock in the tap has finished first: its pause must not stop the film.)
+    await this.unlocking;
+    this.filmStarted = true;
+    v.currentTime = 0;
+    v.muted = false;
     try {
       await v.play();
     } catch {
@@ -116,7 +149,7 @@ export class Cinema {
         return;
       }
       const [, who, line, secs] = cues[now];
-      this.onLine?.(who, line);
+      // (No voices over the film: its own sound, and the words as subtitles only.)
       if (who) this.lastTalk = performance.now() / 1000 + (secs ?? 2.4);
       this.sub.innerHTML = '';
       if (who) {
@@ -284,7 +317,7 @@ export type StartChoice = { body: 'male' | 'female'; hometown: string };
 const HOMETOWNS = ['Ada', 'Ho', 'Kumasi', 'Tamale', 'Cape Coast', 'Koforidua'];
 
 /** Two taps and Start: who you are and where you come from. The title updates as you choose. */
-export function startScreen(preset: Partial<StartChoice> = {}, onStart?: () => void): Promise<StartChoice> {
+export function startScreen(preset: Partial<StartChoice> = {}, onStart?: (choice: StartChoice) => void): Promise<StartChoice> {
   let saved: Partial<StartChoice> = {};
   try {
     saved = JSON.parse(localStorage.getItem('gv.start') ?? '{}');
@@ -329,7 +362,7 @@ export function startScreen(preset: Partial<StartChoice> = {}, onStart?: () => v
   draw();
   return new Promise((resolve) => {
     screen.querySelector('.start-go')!.addEventListener('click', () => {
-      onStart?.(); // inside the tap: lets the film clip play with sound
+      onStart?.(choice); // inside the tap: lets the film clip play with sound
       try {
         localStorage.setItem('gv.start', JSON.stringify(choice));
       } catch {

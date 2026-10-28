@@ -456,6 +456,12 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
     - The ambulance is one of the traffic's drivers too (lights flashing, a little faster, in the queues).
     - Done when: the whole story is played through and no story vehicle ever touches a traffic vehicle (checked: the full story, every 0.1 s, 0 contacts; it was 2 before these changes).
 
+  - **The opening, put right** (owner, 28 Oct):
+    - The dark screen at the start, diagnosed: after START the game waited for the map, then downloaded you, Auntie, Uncle and the thief, and only then started the film (1.3 MB), waiting up to 6 more seconds: all of it black on a slow network. Now the film downloads from the moment the page opens and plays from the START tap while the city and the people load behind it (checked: the film is 1.7 s in, one second after START). On a slow or data-saving connection a lighter copy plays (360p, 0.8 MB, opening-360.mp4/webm); if it still needs time, the black says "Loading…".
+    - No voices over the film: its own sound and the story's words as subtitles only. The street sounds (the owner's recordings) and the music wait until the camera has come down over Circle.
+    - Skip works: it stopped the film but the arrival then waited up to 25 s for the trotro and ran its own pauses, leaving a still view of Circle. Now Skip goes straight to you standing at Circle, and the story carries on (checked: Skip during the film, then the bag snatch).
+    - The frame rate is no longer shown on screen (only with ?fps in the address, for tests).
+
 ## Waiting on the owner
 
 - Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.

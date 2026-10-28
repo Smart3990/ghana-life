@@ -1497,6 +1497,49 @@ function toast(text: string, small = '') {
 // auntie calls your uncle. Then the city is yours to explore. ?nostory skips it (for tests).
 
 const cine = new Cinema();
+// The opening film starts downloading as the page opens (owner, 28 Oct 2026: no long dark screen at
+// the start): the lighter copy (360p, about 0.8 MB) on a slow or data-saving connection.
+const slowNet = (() => {
+  try {
+    const c = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
+    return !!c && (!!c.saveData || /(^|-)(2g|3g)$/.test(c.effectiveType ?? ''));
+  } catch {
+    return false;
+  }
+})();
+const FILM = slowNet ? '/film/opening-360.mp4' : '/film/opening-480.mp4';
+if (!params.has('nostory') && !params.has('auto')) cine.loadVideo(FILM, '/film/opening-poster.jpg');
+/** The opening film, started in the START tap (it plays while the city and the people load behind it). */
+let earlyFilm: Promise<boolean> | null = null;
+/**
+ * The opening film (the owner's clip, public/film/opening-*): leaving home, Grandma's ₵50 and her
+ * letter, the goodbye, the trotro to Accra, with its own sound and the story's words as subtitles at
+ * the moments they happen (no voices). On a slow network: "Loading…" on the black until it can play.
+ */
+async function playFilm(home: string) {
+  cine.begin();
+  cine.coverNow();
+  streetSound.setQuiet(true); // (the film's own sound only)
+  const t0 = performance.now();
+  while (!cine.videoReady() && !cine.skipped && performance.now() - t0 < 25000) {
+    if (performance.now() - t0 > 1200) cine.loadingNote(true);
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  cine.loadingNote(false);
+  if (!cine.videoReady() || cine.skipped) return false;
+  return cine.video(
+    [
+      [0.4, '', `${home}. Your last morning at home.`, 2.6],
+      [4.0, '', 'Grandma puts ₵50 and her letter for Uncle Kwame into your hand.', 1.9],
+      [6.1, 'GRANDMA', 'Go well, my child. Greet your uncle for me.', 3.2],
+      [9.6, '', 'You wave goodbye. She watches until you are gone.', 2.2],
+      [12.1, '', 'The lorry park. The trotro to Accra.', 2.6],
+      [15.0, 'MATE', 'Accra! Accra! One more, come!', 2.6],
+      [18.9, '', 'The long road to Accra.', 3.3],
+    ],
+    true,
+  );
+}
 // The film's lines are spoken too (Grandma, the bus mate, Auntie Dede, Uncle Kwame, you).
 const FILM_VOICES: Record<string, { body: 'male' | 'female' | 'child'; seed: number }> = {
   GRANDMA: { body: 'female', seed: 11 },
@@ -2780,6 +2823,16 @@ async function arriveByBus(): Promise<number | null> {
   const spot = { x: state.x, z: state.z };
   const toRoad = life?.roadDirNear(spot.x, spot.z, 30, 2) ?? null;
   const lane = roadLineNear(spot.x, spot.z);
+  /** Skipped (the film's Skip): you are simply standing at Circle, facing the road. */
+  const skipTo = () => {
+    story.hidePlayer = false;
+    story.autoRun = null;
+    state.speed = 0;
+    [state.x, state.z] = [spot.x, spot.z];
+    if (toRoad !== null) state.heading = state.camHeading = toRoad;
+    return lane ? lane(0).heading + Math.PI : null;
+  };
+  if (cine.skipped) return skipTo();
   if (!lane || toRoad === null || !streetTraffic) {
     story.hidePlayer = false;
     await cine.say('', 'Circle. Noise, crowds, hawkers everywhere. You made it to Accra.');
@@ -2825,6 +2878,10 @@ async function arriveByBus(): Promise<number | null> {
   if (simBus !== null && follow()) {
     // Until it has come to rest at the stop (or, at worst, in the queue nearby).
     while (gameClock - t0 < 25) {
+      if (cine.skipped) {
+        trafficSim!.release(simBus);
+        return skipTo();
+      }
       follow();
       const st = trafficSim!.storyState(simBus);
       if (!st || (st.stopped && (st.atStop || gameClock - t0 > 12))) break;
@@ -2899,28 +2956,10 @@ async function playOpening(start: StartChoice) {
   // 1. The opening film (the owner's clip, public/film/opening-480): leaving home, Grandma's ₵50 and
   //    her letter, the goodbye, the trotro to Accra. The story's words come up over it at the moments
   //    they happen, with no black screen. Then a title card on black: hours later, Accra.
-  cine.begin();
-  await cine.black(true, 0.01);
   music.preload();
-  const ready = await waitUntil(() => cine.videoReady(), 6);
-  void ready;
-  const played = cine.videoReady()
-    ? await cine.video(
-        [
-          [0.4, '', `${home}. Your last morning at home.`, 2.6],
-          [4.0, '', 'Grandma puts ₵50 and her letter for Uncle Kwame into your hand.', 1.9],
-          [6.1, 'GRANDMA', 'Go well, my child. Greet your uncle for me.', 3.2],
-          [9.6, '', 'You wave goodbye. She watches until you are gone.', 2.2],
-          [12.1, '', 'The lorry park. The trotro to Accra.', 2.6],
-          [15.0, 'MATE', 'Accra! Accra! One more, come!', 2.6],
-          [18.9, '', 'The long road to Accra.', 3.3],
-        ],
-        true,
-      )
-    : false;
-  if (!played) await cine.title(home, 'Grandma’s ₵50 and her letter in your bag. The bus to Accra.', 2.6);
-  // The music: in as the journey ends at Circle, out as the thief gets away.
-  music.play(3);
+  // (The film began in the START tap; it may still be playing while the city loaded.)
+  const played = await (earlyFilm ?? playFilm(home));
+  if (!played && !cine.skipped) await cine.title(home, 'Grandma’s ₵50 and her letter in your bag. The bus to Accra.', 2.6);
   await cine.title('Accra', 'Hours later. Kwame Nkrumah Circle.', 2.2);
   // 2. The camera comes down over the city to Circle.
   if (!cine.skipped) {
@@ -2934,6 +2973,9 @@ async function playOpening(start: StartChoice) {
   story.fly = null;
   for (const id of ['buildings', 'roofs']) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', 'none');
   await cine.black(false, 0.3);
+  // Down at Circle: the street's sounds, and the music (in as the journey ends, out as the thief gets away).
+  streetSound.setQuiet(false);
+  music.play(3);
   // 3. The trotro pulls in at the kerb, you step down, it drives off, you turn to cross: the bag.
   await waitUntil(() => startPlaced, 15);
   if (life?.roadAt(state.x, state.z, 0.4)) placeOnPavement();
@@ -4306,11 +4348,12 @@ async function start() {
     (async (): Promise<StartChoice> => {
       await landscapeGate(document.getElementById('gate')!, autoTest);
       const female = params.has('female') ? 'female' : undefined;
-      return skipStory ? { body: female ?? 'male', hometown: 'Ada' } : startScreen({ body: female }, () => {
+      return skipStory ? { body: female ?? 'male', hometown: 'Ada' } : startScreen({ body: female }, (picked) => {
             // Black in the same moment as the tap: no glimpse of Circle (or a helicopter) before the film.
             cine.coverNow();
             (window as Window & { __goFull?: () => void }).__goFull?.(); // (full screen again, if it was left)
-            cine.prepareVideo('/film/opening-480.mp4', '/film/opening-poster.jpg');
+            cine.prepareVideo(FILM, '/film/opening-poster.jpg'); // (downloading since the page opened; unlocked here, in the tap)
+            earlyFilm = playFilm(picked.hometown); // the film starts now, while the city and the people load
           });
     })(),
     new Promise<void>((r) => map.once('load', () => r())),
@@ -4441,7 +4484,7 @@ async function start() {
   if (autoTest) runAutoTest();
   // Busy, but never slow: every 2 seconds, if the frame rate is low, show fewer people and vehicles;
   // if there is room to spare, bring them back (master plan: draw less when a phone struggles).
-  if (debug) debugLine.hidden = false;
+  if (params.has('fps')) debugLine.hidden = false; // (the frame rate on screen only when asked for: ?fps)
   if (!params.has('full')) {
     let density = 1;
     const baseLimit = { light: 100, standard: 170, ultra: 260 }[tier];

@@ -99,7 +99,13 @@ export class StreetSound {
 
   setMuted(muted: boolean) {
     this.muted = muted;
-    if (this.ctx) this.master.gain.setTargetAtTime(muted ? 0 : 0.9, this.ctx.currentTime, 0.1);
+    if (this.ctx) this.master.gain.setTargetAtTime(muted || this.quiet ? 0 : 0.9, this.ctx.currentTime, 0.1);
+  }
+  /** Held back (the opening film plays its own sound): separate from the player's own mute. */
+  quiet = false;
+  setQuiet(quiet: boolean) {
+    this.quiet = quiet;
+    if (this.ctx) this.master.gain.setTargetAtTime(this.muted || quiet ? 0 : 0.9, this.ctx.currentTime, 0.4);
   }
 
   private noise(seconds: number, colour: 'brown' | 'pink') {
