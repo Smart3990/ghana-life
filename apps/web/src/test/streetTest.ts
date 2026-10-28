@@ -4188,6 +4188,8 @@ const buildings = new StreetBuildings(
     else simBatches.push(batch);
   },
 );
+// The pack buildings near you (6b): how far, and how many (Light / Standard / Ultra).
+[buildings.packRadius, buildings.packLimit] = { light: [42, 24], standard: [90, 80], ultra: [140, 180] }[tier] as [number, number];
 scene.add(buildings.group);
 life = new StreetLife((x, z, m) => buildings.blocked(x, z, m), { ...{
   // Packed, chaotic Circle (owner, 2026-10-27: "very crowded", kiosks and stalls everywhere).

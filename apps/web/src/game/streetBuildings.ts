@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { VectorTile } from '@mapbox/vector-tile';
 import { PbfReader } from 'pbf';
+import { PackBuildings, choosePack, isLuxuryArea, type Pick } from './packBuildings';
 
 const Z = 15; // the most detailed tiles
 const EXTENT = 4096;
@@ -84,6 +85,8 @@ function clip(ring: { x: number; y: number }[]) {
 const CLEAR = { a: { value: new THREE.Vector4(0, 0, 1, 0) }, b: { value: new THREE.Vector4(0, 0, 0, 0) } };
 // 0 by day, 1 at night: at night about half the windows and some shops glow warm.
 const NIGHT = { value: 0 };
+// Where the pack buildings are drawn (x, z, radius): the plain blocks swapped for them fold away there.
+const NEAR = { value: new THREE.Vector3(0, 0, 0) };
 
 // The wall material: lit like everything else, with windows, doors and shutters painted in by the shader.
 function wallMaterial() {
@@ -92,9 +95,10 @@ function wallMaterial() {
     shader.uniforms.uClearA = CLEAR.a;
     shader.uniforms.uClearB = CLEAR.b;
     shader.uniforms.uNight = NIGHT;
+    shader.uniforms.uNear = NEAR;
     shader.vertexShader = shader.vertexShader
-      .replace('void main() {', 'attribute vec3 facade;\nvarying vec3 vFacade;\nvarying vec2 vClearP;\nvoid main() {\n  vFacade = facade;\n  vClearP = position.xz;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>');
+      .replace('void main() {', 'attribute vec3 facade;\nattribute vec3 swap;\nuniform vec3 uNear;\nvarying vec3 vFacade;\nvarying vec2 vClearP;\nvoid main() {\n  vFacade = facade;\n  vClearP = position.xz;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\n  if (swap.z > 0.5 && distance(swap.xy, uNear.xy) < uNear.z) transformed = vec3(swap.x, -60.0, swap.y);');
     shader.fragmentShader = shader.fragmentShader
       .replace(
         'void main() {',
@@ -173,7 +177,7 @@ void main() {
   return m;
 }
 
-type Cell = { key: string; mesh: THREE.Mesh | null; footprints: Footprint[] };
+type Cell = { key: string; mesh: THREE.Mesh | null; footprints: Footprint[]; picks: (Pick & { cx: number; cz: number })[] };
 
 export class StreetBuildings {
   /** 0 by day, 1 at night (lit windows and shops). */
@@ -183,11 +187,18 @@ export class StreetBuildings {
 
   readonly group = new THREE.Group();
   private material = wallMaterial();
+  /** The pack buildings (6b): drawn within `packRadius` metres of you, at most `packLimit` of them. */
+  packRadius = 60;
+  packLimit = 40;
+  readonly pack = new PackBuildings(200);
+  private packAt = { x: Infinity, z: Infinity, cells: -1, version: 0 };
+  /** The pack buildings drawn now (for tests, and for owning homes later). */
+  packShown: Pick[] = [];
   private cells = new Map<string, Cell>();
   private tiles = new Set<string>();
   private queue: (() => void)[] = [];
   // Collected per cell while a tile is being built.
-  private pending = new Map<string, { pos: number[]; nor: number[]; col: number[]; fac: number[]; footprints: Footprint[] }>();
+  private pending = new Map<string, { pos: number[]; nor: number[]; col: number[]; fac: number[]; swp: number[]; footprints: Footprint[]; picks: (Pick & { cx: number; cz: number })[] }>();
 
   private roofs: Roof[] = [];
 
@@ -202,12 +213,55 @@ export class StreetBuildings {
     this.request(lngLat, x, z);
     const start = performance.now();
     while (this.queue.length && performance.now() - start < BUDGET_MS) this.queue.shift()!();
+    this.updatePack(x, z);
     // Only the nearby squares are drawn; the fog hides the edge.
     for (const cell of this.cells.values()) {
       if (!cell.mesh) continue;
       const c = cell.mesh.userData.centre as THREE.Vector2;
       cell.mesh.visible = Math.hypot(c.x - x, c.y - z) < this.radiusM + CELL_M * 0.75;
     }
+  }
+
+  private packVersion = 0;
+  private updatePack(x: number, z: number) {
+    if (!this.pack.group.parent) this.group.add(this.pack.group);
+    const moved = Math.hypot(x - this.packAt.x, z - this.packAt.z);
+    if (moved < 2 && this.packAt.cells === this.cells.size && this.packAt.version === this.packVersion) return;
+    this.packAt = { x, z, cells: this.cells.size, version: this.packVersion };
+    const R = this.packRadius;
+    const list: { p: Pick & { cx: number; cz: number }; d: number }[] = [];
+    const n = Math.ceil(R / CELL_M);
+    const ccx = Math.floor(x / CELL_M), ccz = Math.floor(z / CELL_M);
+    for (let i = -n; i <= n; i++)
+      for (let j = -n; j <= n; j++) {
+        const cell = this.cells.get(`${ccx + i},${ccz + j}`);
+        if (!cell) continue;
+        for (const p of cell.picks) {
+          const d = Math.hypot(p.cx - x, p.cz - z);
+          if (d < R && !this.inPlot(p.cx, p.cz)) list.push({ p, d });
+        }
+      }
+    list.sort((a, b) => a.d - b.d);
+    // As many as the limit; and only out to the first one whose model has not downloaded yet (its
+    // plain block stays until it has), so there is never a gap.
+    let radius = R;
+    let count = 0;
+    for (const { p, d } of list) {
+      if (count >= this.packLimit || !this.pack.ready(p.model)) {
+        radius = d - 0.01;
+        if (!this.pack.ready(p.model)) this.packVersion++; // (look again soon)
+        break;
+      }
+      count++;
+    }
+    this.pack.begin();
+    this.packShown = [];
+    for (let k = 0; k < count; k++) {
+      this.pack.place(list[k].p);
+      this.packShown.push(list[k].p);
+    }
+    this.pack.end();
+    NEAR.value.set(x, z, Math.max(0, radius));
   }
 
   // Loads the tile under the player, and its neighbours when the player is near an edge.
@@ -259,11 +313,48 @@ export class StreetBuildings {
     const north = latOf(ty);
     const south = latOf(ty + 1);
     const toLngLat = (px: number, py: number): LngLat => [west + (px / EXTENT) * (east - west), north + (py / EXTENT) * (south - north)];
+    // What the pack buildings need to know (6b): the roads of this tile (which way each building's
+    // front faces, and whether it is on a main road) and the places on the map (a bank is a bank).
+    const ctx: TileContext = { roads: new Map(), places: [], luxury: isLuxuryArea((west + east) / 2, (north + south) / 2) };
+    this.queue.push(() => {
+      const rl = tile.layers.roads;
+      if (rl)
+        for (let i = 0; i < rl.length; i++) {
+          const f = rl.feature(i);
+          const kind = String(f.properties.kind);
+          if (!['highway', 'major_road', 'minor_road', 'other'].includes(kind) || f.properties.is_tunnel || f.properties.is_bridge) continue;
+          const main = kind === 'highway' || kind === 'major_road' ? 1 : 0;
+          for (const line of f.loadGeometry())
+            for (let k = 1; k < line.length; k++) {
+              const [ax, az] = this.toLocal(...toLngLat(line[k - 1].x, line[k - 1].y));
+              const [bx, bz] = this.toLocal(...toLngLat(line[k].x, line[k].y));
+              const len = Math.hypot(bx - ax, bz - az);
+              for (let d = 0; d <= len; d += 20) {
+                const key = `${Math.floor((ax + ((bx - ax) * d) / (len || 1)) / 40)},${Math.floor((az + ((bz - az) * d) / (len || 1)) / 40)}`;
+                const list = ctx.roads.get(key) ?? [];
+                if (list.length < 5 || list[list.length - 5] !== ax || list[list.length - 4] !== az) list.push(ax, az, bx, bz, main);
+                ctx.roads.set(key, list);
+              }
+            }
+        }
+      const pl = tile.layers.pois;
+      if (pl)
+        for (let i = 0; i < pl.length; i++) {
+          const f = pl.feature(i);
+          if (f.type !== 1) continue;
+          const q = f.loadGeometry()[0]?.[0];
+          if (!q) continue;
+          const [x, z] = this.toLocal(...toLngLat(q.x, q.y));
+          let kind = String(f.properties.kind);
+          if (kind === 'place_of_worship' && /mosque|masjid|islam|jamia|muslim/i.test(String(f.properties.name ?? ''))) kind = 'mosque';
+          ctx.places.push({ x, z, kind });
+        }
+    });
     // One small job per few buildings, run within the frame budget.
     const BATCH = 40;
     for (let i = 0; i < layer.length; i += BATCH) {
       this.queue.push(() => {
-        for (let k = i; k < Math.min(layer.length, i + BATCH); k++) this.addBuilding(layer.feature(k), toLngLat);
+        for (let k = i; k < Math.min(layer.length, i + BATCH); k++) this.addBuilding(layer.feature(k), toLngLat, ctx);
       });
     }
     this.queue.push(() => this.finish());
@@ -326,9 +417,10 @@ export class StreetBuildings {
     }
   }
 
-  private addBuilding(f: ReturnType<VectorTile['layers'][string]['feature']>, toLngLat: (x: number, y: number) => LngLat) {
+  private addBuilding(f: ReturnType<VectorTile['layers'][string]['feature']>, toLngLat: (x: number, y: number) => LngLat, ctx: TileContext) {
     const id = typeof f.id === 'number' ? f.id : 0;
-    const height = typeof f.properties.height === 'number' ? f.properties.height : 4 + 3 * (id % 3);
+    const mapHeight = typeof f.properties.height === 'number' ? f.properties.height : null;
+    const height = mapHeight ?? 4 + 3 * (id % 3);
     const base = typeof f.properties.min_height === 'number' ? f.properties.min_height : 0;
     const wallColour = new THREE.Color(WALLS[id % 7]);
     const roofColour = new THREE.Color(ROOFS[Math.floor(id / 7) % 5]);
@@ -346,17 +438,26 @@ export class StreetBuildings {
         if (Math.sign(area(r)) === outerSign || !shapes.length) shapes.push({ outer: r, holes: [] });
         else shapes[shapes.length - 1].holes.push(r);
       }
-      for (const s of shapes) this.addShape(s.outer, s.holes, base, height, wallColour, roofColour);
+      shapes.forEach((s, k) => this.addShape(s.outer, s.holes, base, height, wallColour, roofColour, base < 1 && k === 0 ? { id, mapHeight, ctx } : null));
     }
   }
 
-  private addShape(outer: [number, number][], holes: [number, number][][], base: number, top: number, wall: THREE.Color, roof: THREE.Color) {
+  private addShape(outer: [number, number][], holes: [number, number][][], base: number, top: number, wall: THREE.Color, roof: THREE.Color, pack: { id: number; mapHeight: number | null; ctx: TileContext } | null) {
     let cx = 0;
     let cz = 0;
     for (const [x, z] of outer) [cx, cz] = [cx + x / outer.length, cz + z / outer.length];
     const key = `${Math.floor(cx / CELL_M)},${Math.floor(cz / CELL_M)}`;
     let p = this.pending.get(key);
-    if (!p) this.pending.set(key, (p = { pos: [], nor: [], col: [], fac: [], footprints: [] }));
+    if (!p) this.pending.set(key, (p = { pos: [], nor: [], col: [], fac: [], swp: [], footprints: [], picks: [] }));
+    // The pack building for it (6b), if one fits.
+    let picks: Pick[] = [];
+    if (pack) {
+      const near = nearestRoad(pack.ctx, cx, cz);
+      const placeIn = pack.ctx.places.find((q) => Math.abs(q.x - cx) < 60 && Math.abs(q.z - cz) < 60 && insideRing(outer, q.x, q.z))?.kind ?? null;
+      picks = choosePack(pack.id || Math.round(cx * 31 + cz * 17), outer, pack.mapHeight, placeIn, near ? [(near.x - cx) / (near.d || 1), (near.z - cz) / (near.d || 1)] : null, !!near && near.main && near.d < 22, pack.ctx.luxury);
+      for (const q of picks) p.picks.push({ ...q, cx, cz });
+    }
+    const sw = [cx, cz, picks.length ? 1 : 0];
 
     const signedArea = (r: [number, number][]) => r.reduce((s, [x1, z1], i) => { const [x2, z2] = r[(i + 1) % r.length]; return s + (x1 * z2 - x2 * z1); }, 0);
     const walls = (ring: [number, number][], isHole: boolean) => {
@@ -378,6 +479,7 @@ export class StreetBuildings {
           p!.nor.push(nx, 0, nz);
           p!.col.push(wall.r, wall.g, wall.b);
           p!.fac.push(u, v - base, len);
+          p!.swp.push(sw[0], sw[1], sw[2]);
         }
       }
     };
@@ -394,6 +496,7 @@ export class StreetBuildings {
         p.nor.push(0, 1, 0);
         p.col.push(roof.r, roof.g, roof.b);
         p.fac.push(0, 0, 0);
+        p.swp.push(sw[0], sw[1], sw[2]);
       }
     }
     // Remember the footprint for walking into walls (ground-floor buildings only).
@@ -413,17 +516,21 @@ export class StreetBuildings {
   private finish() {
     for (const [key, p] of this.pending) {
       let cell = this.cells.get(key);
-      if (!cell) this.cells.set(key, (cell = { key, mesh: null, footprints: [] }));
+      if (!cell) this.cells.set(key, (cell = { key, mesh: null, footprints: [], picks: [] }));
       cell.footprints.push(...p.footprints);
+      cell.picks.push(...p.picks);
       if (!p.pos.length) continue;
       const g = new THREE.BufferGeometry();
       g.setAttribute('position', new THREE.Float32BufferAttribute(p.pos, 3));
       g.setAttribute('normal', new THREE.Float32BufferAttribute(p.nor, 3));
       g.setAttribute('color', new THREE.Float32BufferAttribute(p.col, 3));
       g.setAttribute('facade', new THREE.Float32BufferAttribute(p.fac, 3));
+      g.setAttribute('swap', new THREE.Float32BufferAttribute(p.swp, 3));
       g.computeBoundingSphere();
       const mesh = new THREE.Mesh(g, this.material);
-      mesh.castShadow = mesh.receiveShadow = true; // used only where shadows are switched on
+      // (The plain blocks cast no shadow: near you, where shadows are drawn, the pack buildings stand
+      // in for them and cast their own.)
+      mesh.receiveShadow = true;
       const [cx, cz] = key.split(',').map((n) => (Number(n) + 0.5) * CELL_M);
       mesh.userData.centre = new THREE.Vector2(cx, cz);
       if (cell.mesh) {
@@ -518,4 +625,35 @@ function nearEdge(ring: Float32Array, x: number, z: number, margin: number) {
     if (Math.hypot(ax + dx * t - x, az + dz * t - z) < margin) return true;
   }
   return false;
+}
+
+type TileContext = { roads: Map<string, number[]>; places: { x: number; z: number; kind: string }[]; luxury: boolean };
+/** The nearest road to a point within about 40 m (this tile's roads): where, how far, and whether it is a main road. */
+function nearestRoad(ctx: TileContext, x: number, z: number) {
+  const cx = Math.floor(x / 40), cz = Math.floor(z / 40);
+  let best: { x: number; z: number; d: number; main: boolean } | null = null;
+  for (let i = -1; i <= 1; i++)
+    for (let j = -1; j <= 1; j++) {
+      const list = ctx.roads.get(`${cx + i},${cz + j}`);
+      if (!list) continue;
+      for (let k = 0; k < list.length; k += 5) {
+        const [ax, az, bx, bz, main] = [list[k], list[k + 1], list[k + 2], list[k + 3], list[k + 4]];
+        const dx = bx - ax, dz = bz - az;
+        const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz || 1)));
+        const px = ax + dx * t, pz = az + dz * t;
+        // A main road counts as a little nearer (a corner house faces the main road).
+        const d = Math.hypot(px - x, pz - z) - (main ? 4 : 0);
+        if (!best || d < best.d) best = { x: px, z: pz, d, main: !!main };
+      }
+    }
+  if (best) best.d = Math.hypot(best.x - x, best.z - z);
+  return best;
+}
+function insideRing(ring: [number, number][], x: number, z: number) {
+  let hit = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, zi] = ring[i], [xj, zj] = ring[j];
+    if (zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) hit = !hit;
+  }
+  return hit;
 }

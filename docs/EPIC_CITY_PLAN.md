@@ -40,7 +40,7 @@ test, and goes live only after the owner has seen it work. Agreed with the owner
      people.
    - People never walk into kiosks, stalls, cars or each other; crowded pavements everywhere.
 6. **Buildings and street things.**
-   - Pack buildings on the real Accra building shapes.
+   - Pack buildings on the real Accra building shapes. (Done, 6b: places, flats, offices, houses, villas in the wealthy areas.)
    - Kiosks, stalls, umbrellas, benches, bins, signs and trees from the pack.
    - **Circle junction packed with sellers:** rows of kiosks and stalls so full that you can see at once
      this is a busy market place, all on the pavements and the open ground, none on the road.
