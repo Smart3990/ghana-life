@@ -42,7 +42,16 @@ export class Signals {
   private s = new THREE.Vector3(1, 1, 1);
   private up = new THREE.Vector3(0, 1, 0);
   private c = new THREE.Color();
-  private lastRefresh = { x: Infinity, z: Infinity, n: -1 };
+  private lastRefresh = { x: Infinity, z: Infinity, n: -1, v: -1 };
+  /**
+   * Is this spot road (or a flyover ramp)? A pole never stands there (owner, 28 Oct 2026: a pole stood
+   * on the tarmac by the zebra, in the cars' way). Set by the game; `roadsVersion` changes as more
+   * roads are built, so the poles are checked again.
+   */
+  blocked: (x: number, z: number) => boolean = () => false;
+  roadsVersion = 0;
+  /** How many poles had to move off the road, and how many could not stand anywhere (for tests). */
+  stats = { moved: 0, dropped: 0 };
   private packPole = false;
   private local = new THREE.Matrix4();
   private pole = new THREE.Matrix4();
@@ -61,7 +70,7 @@ export class Signals {
       this.poles.geometry = g;
       this.poles.material = epicMaterial();
       this.packPole = true;
-      this.lastRefresh = { x: Infinity, z: Infinity, n: -1 };
+      this.lastRefresh = { x: Infinity, z: Infinity, n: -1, v: -1 };
     });
     const lamp = new THREE.CircleGeometry(0.13, 12);
     const lampMat = () => new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
@@ -107,7 +116,7 @@ export class Signals {
 
   /** Draw the lights and crossings near the player and set the lamps for time t. */
   update(x: number, z: number, t: number) {
-    if (Math.hypot(x - this.lastRefresh.x, z - this.lastRefresh.z) > 25 || this.junctions.length !== this.lastRefresh.n) this.refresh(x, z);
+    if (Math.hypot(x - this.lastRefresh.x, z - this.lastRefresh.z) > 25 || this.junctions.length !== this.lastRefresh.n || this.roadsVersion !== this.lastRefresh.v) this.refresh(x, z);
     let i = 0;
     for (const j of this.near) {
       for (const arm of j.arms) {
@@ -126,7 +135,8 @@ export class Signals {
   }
 
   private refresh(x: number, z: number) {
-    this.lastRefresh = { x, z, n: this.junctions.length };
+    this.lastRefresh = { x, z, n: this.junctions.length, v: this.roadsVersion };
+    this.stats = { moved: 0, dropped: 0 };
     this.near = this.junctions.filter((j) => Math.hypot(j.x - x, j.z - z) < 170);
     let arms = 0;
     let stripes = 0;
@@ -139,10 +149,34 @@ export class Signals {
         const rx = Math.cos(arm.angle); // across the arm
         const rz = Math.sin(arm.angle);
         // Pole at the kerb on the drivers' right as they come in (Ghana drives on the right), just before the line.
-        const d = stopLineAt(j) + 0.4;
-        const side = -(arm.half + GUTTER + 0.5);
+        // Never on the road: if the spot is tarmac (a curved junction corner, a slip road, the other
+        // side of a dual road) or a ramp, the pole steps back along the pavement or further from the
+        // kerb; if no spot is clear, this pole is left out (the other heads still show the lights).
+        let d = stopLineAt(j) + 0.4;
+        let side = -(arm.half + GUTTER + 0.5);
+        const clearAt = (dd: number, ss: number) => {
+          const px = j.x + ox * dd + rx * ss, pz = j.z + oz * dd + rz * ss;
+          // The pole's foot and a little round it (about its base).
+          for (const [ax, az] of [[0, 0], [0.45, 0], [-0.45, 0], [0, 0.45], [0, -0.45]]) if (this.blocked(px + ax, pz + az)) return false;
+          return true;
+        };
+        let ok = clearAt(d, side);
+        if (!ok) {
+          search: for (const back of [0, 1, 2, 3, 4.5, 6, 8, 10]) {
+            for (const out of [0, 0.6, 1.2, 1.8]) {
+              if (clearAt(d + back, side - out)) {
+                d += back;
+                side -= out;
+                ok = true;
+                break search;
+              }
+            }
+          }
+          if (ok) this.stats.moved++;
+          else this.stats.dropped++;
+        }
         this.q.setFromAxisAngle(this.up, Math.PI - arm.angle);
-        this.m.compose(this.p.set(j.x + ox * d + rx * side, 0, j.z + oz * d + rz * side), this.q, this.s.set(1, 1, 1));
+        this.m.compose(this.p.set(j.x + ox * d + rx * side, 0, j.z + oz * d + rz * side), this.q, this.s.set(ok ? 1 : 0, ok ? 1 : 0, ok ? 1 : 0));
         this.poles.setMatrixAt(arms, this.m);
         this.pole.copy(this.m);
         // Three lamps on the front of each signal head, red on top: on the pack's light, on the head

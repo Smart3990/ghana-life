@@ -1000,6 +1000,7 @@ function step(player: Player, dt: number, t: number) {
     };
   }
   if (life) signals.junctions = life.junctions;
+  signals.roadsVersion = epicRoads.tilesBuilt * 1000 + flyovers.version;
   signals.update(state.x, state.z, Date.now() / 1000);
   flyovers.update();
   flyovers.updateLamps(state.x, state.z);
@@ -3940,6 +3941,8 @@ const groundDip = (x: number, z: number) => epicRoads.dipAt(x, z);
 // Traffic lights and zebra crossings at the big junctions (vehicles stop on red).
 const signals = new Signals();
 scene.add(signals.group);
+// No pole on the road: not on any tarmac (junction corners included), not in a ramp, not right at the kerb.
+signals.blocked = (x, z) => epicRoads.roadAt(x, z, 0.25) || flyovers.lowRampAt(x, z);
 
 // Planes on the Kotoka flight paths and helicopters circling over the city.
 const sky = new SkyTraffic((lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT]);

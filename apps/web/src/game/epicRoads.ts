@@ -169,6 +169,8 @@ export class EpicRoads {
   readonly group = new THREE.Group();
   /** Tarmac that is sunk (for heights): segments in 25 m cells, [ax, az, bx, bz, half, piece id]. */
   private grid = new Map<string, number[]>();
+  // The tarmac of the junctions (the middle and the curved corners), as triangles in 25 m squares.
+  private junctionTar = new Map<string, number[]>();
   private nextId = 1;
   triangles = 0;
   /** Time spent building, and the slowest single tile (milliseconds), to keep loading smooth. */
@@ -319,6 +321,7 @@ export class EpicRoads {
           for (let j = 1; j < kerb.length; j++) {
             // Tarmac out to the curved kerb, pavement round the corner, and the kerb's face.
             sh.tri([C[0], -ROAD_DIP, C[1]], [kerb[j - 1][0], -ROAD_DIP, kerb[j - 1][1]], [kerb[j][0], -ROAD_DIP, kerb[j][1]], UP, EPIC_UV.asphalt);
+            this.tarTri(C, kerb[j - 1], kerb[j]);
             sh.quad([kerb[j - 1][0], PAVE_Y, kerb[j - 1][1]], [kerb[j][0], PAVE_Y, kerb[j][1]], [inner[j][0], PAVE_Y, inner[j][1]], [inner[j - 1][0], PAVE_Y, inner[j - 1][1]], UP, EPIC_UV.pavement);
             const mx = (kerb[j - 1][0] + kerb[j][0]) / 2 - O[0], mz = (kerb[j - 1][1] + kerb[j][1]) / 2 - O[1];
             const ml = Math.hypot(mx, mz) || 1;
@@ -336,6 +339,7 @@ export class EpicRoads {
             const outer = arc(node[0], node[1], h + w, a0, sweep);
             for (let j = 1; j < kerb.length; j++) {
               sh.tri([node[0], -ROAD_DIP, node[1]], [kerb[j - 1][0], -ROAD_DIP, kerb[j - 1][1]], [kerb[j][0], -ROAD_DIP, kerb[j][1]], UP, EPIC_UV.asphalt);
+              this.tarTri(node, kerb[j - 1], kerb[j]);
               sh.quad([kerb[j - 1][0], PAVE_Y, kerb[j - 1][1]], [kerb[j][0], PAVE_Y, kerb[j][1]], [outer[j][0], PAVE_Y, outer[j][1]], [outer[j - 1][0], PAVE_Y, outer[j - 1][1]], UP, EPIC_UV.pavement);
               const mx = (kerb[j - 1][0] + kerb[j][0]) / 2 - node[0], mz = (kerb[j - 1][1] + kerb[j][1]) / 2 - node[1];
               const ml = Math.hypot(mx, mz) || 1;
@@ -352,6 +356,7 @@ export class EpicRoads {
       for (let j = 0; j < middle.length; j++) {
         const p = middle[j], q = middle[(j + 1) % middle.length];
         sh.tri([node[0], -ROAD_DIP, node[1]], [p[0], -ROAD_DIP, p[1]], [q[0], -ROAD_DIP, q[1]], UP, EPIC_UV.asphalt);
+        this.tarTri(node, p, q);
       }
       // Lines stop short of a junction of three or more roads.
       if (list.length >= 3) {
@@ -514,8 +519,51 @@ export class EpicRoads {
     return out;
   }
 
-  /** How far below the pavement the ground is here: ROAD_DIP on sunk tarmac, else 0. */
-  dipAt(x: number, z: number) {
-    return this.onTarmac(x, z) ? ROAD_DIP : 0;
+  /** Remember a triangle of junction tarmac (for roadAt). */
+  private tarTri(a: V2, b: V2, c: V2) {
+    const x0 = Math.floor(Math.min(a[0], b[0], c[0]) / 25), x1 = Math.floor(Math.max(a[0], b[0], c[0]) / 25);
+    const z0 = Math.floor(Math.min(a[1], b[1], c[1]) / 25), z1 = Math.floor(Math.max(a[1], b[1], c[1]) / 25);
+    for (let gx = x0; gx <= x1; gx++)
+      for (let gz = z0; gz <= z1; gz++) {
+        const k = `${gx},${gz}`;
+        (this.junctionTar.get(k) ?? this.junctionTar.set(k, []).get(k)!).push(a[0], a[1], b[0], b[1], c[0], c[1]);
+      }
   }
+
+  /**
+   * Is this point on road (any tarmac: the roads, and the middles and curved corners of junctions)?
+   * `margin` metres more all round counts as road too (for things that must keep clear of it).
+   */
+  roadAt(x: number, z: number, margin = 0) {
+    if (this.onTarmac(x, z)) return true;
+    if (margin > 0) for (const [ox, oz] of [[margin, 0], [-margin, 0], [0, margin], [0, -margin]]) if (this.onTarmac(x + ox, z + oz)) return true;
+    const list = this.junctionTar.get(`${Math.floor(x / 25)},${Math.floor(z / 25)}`);
+    if (!list) return false;
+    for (let k = 0; k < list.length; k += 6) {
+      if (inTri(x, z, list, k, margin)) return true;
+    }
+    return false;
+  }
+
+  /** How far below the pavement the ground is here: ROAD_DIP on sunk tarmac (junctions too), else 0. */
+  dipAt(x: number, z: number) {
+    return this.roadAt(x, z) ? ROAD_DIP : 0;
+  }
+}
+
+/** Is (x, z) inside the triangle at list[k..k+5], or within `margin` of it? */
+function inTri(x: number, z: number, t: number[], k: number, margin: number) {
+  const ax = t[k], az = t[k + 1], bx = t[k + 2], bz = t[k + 3], cx = t[k + 4], cz = t[k + 5];
+  const d1 = (x - bx) * (az - bz) - (ax - bx) * (z - bz);
+  const d2 = (x - cx) * (bz - cz) - (bx - cx) * (z - cz);
+  const d3 = (x - ax) * (cz - az) - (cx - ax) * (z - az);
+  const neg = d1 < 0 || d2 < 0 || d3 < 0, pos = d1 > 0 || d2 > 0 || d3 > 0;
+  if (!(neg && pos)) return true;
+  if (margin <= 0) return false;
+  const seg = (px: number, pz: number, qx: number, qz: number) => {
+    const dx = qx - px, dz = qz - pz;
+    const u = Math.max(0, Math.min(1, ((x - px) * dx + (z - pz) * dz) / (dx * dx + dz * dz || 1)));
+    return Math.hypot(px + dx * u - x, pz + dz * u - z);
+  };
+  return Math.min(seg(ax, az, bx, bz), seg(bx, bz, cx, cz), seg(cx, cz, ax, az)) < margin;
 }
