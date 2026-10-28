@@ -644,6 +644,39 @@ function readInput() {
 // An okada horn, made in code (two short beeps, no sound file to download).
 // distance: how far away the horn is (quieter further away); car: a deeper car horn.
 let lastHoot = 0;
+/** One vehicle's horn in a jam: its own pitch, short or long (several sound together, like Accra). */
+let hornsPlayed = 0; // (for tests)
+function hornOf(distance: number, pitch: number, long: boolean) {
+  hornsPlayed++;
+  try {
+    const audio = streetSound.context;
+    const out = streetSound.output;
+    if (!audio || !out) return;
+    const t = audio.currentTime;
+    const loud = 0.1 / (1 + distance / 10);
+    for (const [start, len] of long ? [[0, 0.7]] : [[0, 0.2], [0.28, 0.2]]) {
+      const osc = audio.createOscillator();
+      const osc2 = audio.createOscillator(); // a second note: real horns are two tones
+      const gain = audio.createGain();
+      osc.type = osc2.type = 'square';
+      osc.frequency.setValueAtTime(pitch, t + start);
+      osc2.frequency.setValueAtTime(pitch * 1.26, t + start);
+      gain.gain.setValueAtTime(0.0001, t + start);
+      gain.gain.exponentialRampToValueAtTime(loud, t + start + 0.015);
+      gain.gain.setValueAtTime(loud, t + start + len - 0.04);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + start + len);
+      osc.connect(gain);
+      osc2.connect(gain);
+      gain.connect(out);
+      for (const o of [osc, osc2]) {
+        o.start(t + start);
+        o.stop(t + start + len + 0.02);
+      }
+    }
+  } catch {
+    // (no sound here)
+  }
+}
 function honk(distance = 0, car = false) {
   try {
     if (car && performance.now() - lastHoot < 1500) return;
@@ -2232,10 +2265,28 @@ const SHOUTS = [
 ];
 const MATE_SHOUTS = ['Ah! My brother, move! Passengers dey wait!', 'Circle, Circle! Move, we dey go Circle!', 'Chale, you go pay our time? Move!'];
 const PUSH_LINES = ['Massa, I beg, go side!', 'Chale, the road no be your room!', 'Herh, go the pavement!'];
+// The queue behind, after a while (the light is green and nobody can move).
+const COMPLAINTS = [
+  'Light don turn green ooo!',
+  'Ei! We go sleep here?',
+  'This one, he no hear horn?',
+  'Somebody help am comot for road!',
+  'Chale, green light! Move!',
+  'Ah, Accra! Every day!',
+  'My brother, we dey late!',
+  'Ebei! Who dey stand for road like that?',
+];
+// A passer-by who comes off the pavement to move you.
+const HELPER_LINES = ['Come, come, my brother. Come this side.', 'Chale, come out of the road before car jam you!', 'Massa, I beg, the pavement dey here.'];
+const queue = { hoot: new Map<number, number>(), said: 0, front: -1, since: 0, last: 0 };
 const driver = {
   person: null as Person | null,
   loading: false,
   phase: 'none' as 'none' | 'out' | 'push' | 'back',
+  /** 'driver': the front vehicle's driver gets out; 'passer': someone comes from the pavement. */
+  who: 'driver' as 'driver' | 'passer',
+  homeX: 0,
+  homeZ: 0,
   car: null as null | { id: number; x: number; z: number; heading: number; halfW: number; half: number },
   x: 0,
   z: 0,
@@ -2254,40 +2305,94 @@ async function loadDriver() {
   man.model.traverse((o) => (o.castShadow = PRESET.shadows));
   driver.person = man;
 }
+/**
+ * A vehicle waits because you stand in its way (owner, 28 Oct 2026): on a green light, the whole queue
+ * behind you hoots, each at its own moment and pitch; after a while the drivers further back complain;
+ * then someone always comes and pushes you off the road: a passer-by from the pavement, or the driver
+ * of the front vehicle. At a red light they were stopping anyway: nobody fusses.
+ */
 function onVehicleBlocked(v: { id: number; x: number; z: number; heading: number; kind: string; halfW: number; half: number; waited: number }) {
   if (story.busy) return;
+  // Waiting at a red light anyway: no fuss.
+  if (signals.shouldStop(v.x, v.z, v.heading, v.half, Date.now() / 1000)) return;
   const now = performance.now() / 1000;
   const n = nagged.get(v.id) ?? { shout: 0, hoot: 0 };
   const mouthX = v.x + Math.sin(v.heading) * v.half * 0.6;
   const mouthZ = v.z - Math.cos(v.heading) * v.half * 0.6;
-  // 1. A shout (the mate on a trotro, otherwise the driver), then again every few seconds.
-  if (v.waited > 0.9 && now - n.shout > 5) {
+  if (queue.front !== v.id || now - queue.last > 3) [queue.front, queue.since] = [v.id, now];
+  queue.last = now;
+  // How long it has waited for you, in real seconds (the same on a slow phone).
+  const waited = Math.max(0, now - queue.since);
+  // 1. The front one shouts (the mate on a trotro, otherwise the driver), then again every few seconds.
+  if (waited > 0.9 && now - n.shout > 5) {
     n.shout = now;
     const line = toMe(v.kind === 'trotro' && v.id % 2 ? pick(MATE_SHOUTS, v.id + now) : pick(SHOUTS, v.id * 7 + now));
     showBubble(mouthX, mouthZ, 2.3, line);
     void voices.say(line, { body: 'male', seed: v.id }, 1, 1);
   }
-  // 2. The horn, again and again while you stay.
-  if (v.waited > 2 && now - n.hoot > 2.5) {
+  // 2. Horns: the front one, and the whole queue behind it (each its own moment and note).
+  if (waited > 1.6 && now - n.hoot > 2.2) {
     n.hoot = now;
-    honk(Math.hypot(v.x - state.x, v.z - state.z), true);
+    hornOf(Math.hypot(v.x - state.x, v.z - state.z), 330 + (v.id % 7) * 22, waited > 6 && v.id % 2 === 0);
+  }
+  const fx = Math.sin(v.heading), fz = -Math.cos(v.heading);
+  const behind = (trafficSim?.near(v.x, v.z, 55, 40) ?? []).filter((q) => {
+    if (q.v.id === v.id || q.bridge || (q.v.speed ?? 0) > 0.6) return false;
+    const [qx, qz] = [(q.lon - START[0]) * M_LON, (START[1] - q.lat) * M_LAT];
+    const along = (qx - v.x) * fx + (qz - v.z) * fz;
+    return along < -1 && Math.abs((qx - v.x) * -fz + (qz - v.z) * fx) < 8 && Math.cos(q.heading - v.heading) > 0.8;
+  });
+  if (waited > 2.2) {
+    for (const q of behind.slice(0, 8)) {
+      const last = queue.hoot.get(q.v.id) ?? 0;
+      const every = 2.4 + ((q.v.id * 7919) % 10) / 4; // each driver his own rhythm
+      if (now - last < every) continue;
+      queue.hoot.set(q.v.id, now);
+      const [qx, qz] = [(q.lon - START[0]) * M_LON, (START[1] - q.lat) * M_LAT];
+      const d = Math.hypot(qx - state.x, qz - state.z);
+      setTimeout(() => hornOf(d, 300 + (q.v.id % 9) * 20, (q.v.id + Math.floor(now)) % 3 === 0), ((q.v.id * 131) % 900));
+    }
+    if (queue.hoot.size > 300) queue.hoot.clear();
+  }
+  // 3. After a while, the queue complains (a line every few seconds, from different vehicles).
+  if (waited > 5 && now - queue.said > 3.2 && behind.length) {
+    queue.said = now;
+    const q = behind[Math.floor(now) % Math.min(behind.length, 5)];
+    const [qx, qz] = [(q.lon - START[0]) * M_LON, (START[1] - q.lat) * M_LAT];
+    const line = toMe(pick(COMPLAINTS, q.v.id + now));
+    showBubble(qx, qz, 2.1, line);
+    void voices.say(line, { body: q.v.id % 3 ? 'male' : 'female', seed: q.v.id }, 1 / (1 + Math.hypot(qx - state.x, qz - state.z) / 9), 1);
   }
   nagged.set(v.id, n);
   if (nagged.size > 200) nagged.clear();
-  // 3. Some drivers get down and push you aside (about half of them, after 7 seconds).
-  if (v.waited > 7 && driver.phase === 'none' && driver.person && v.kind !== 'okada' && ((v.id * 2654435761) >>> 0) % 2 === 0 && !state.onOkada) {
-    const side = Math.sign((state.x - v.x) * Math.cos(v.heading) + (state.z - v.z) * Math.sin(v.heading)) || 1;
-    // He gets out on the side you are standing, so he walks straight to you.
+  // 4. Someone always comes to move you (after about 8 seconds): a passer-by from the nearest
+  //    pavement if there is one close, otherwise the front vehicle's driver gets down.
+  if (waited > 8 && driver.phase === 'none' && driver.person && !state.onOkada) {
+    const pave = life?.pavementNear(state.x, state.z, 0.5);
     driver.car = { id: v.id, x: v.x, z: v.z, heading: v.heading, halfW: v.halfW, half: v.half };
-    driver.x = v.x + Math.cos(v.heading) * (v.halfW + 0.45) * side;
-    driver.z = v.z + Math.sin(v.heading) * (v.halfW + 0.45) * side;
+    if (pave && Math.hypot(pave.x - state.x, pave.z - state.z) < 14) {
+      driver.who = 'passer';
+      // From a few steps along the pavement, so you see them come.
+      const ax = pave.x - state.x, az = pave.z - state.z, al = Math.hypot(ax, az) || 1;
+      driver.homeX = pave.x + (-az / al) * 3 + (ax / al) * 1;
+      driver.homeZ = pave.z + (ax / al) * 3 + (az / al) * 1;
+      if (solidAt(driver.homeX, driver.homeZ, 0.3)) [driver.homeX, driver.homeZ] = [pave.x, pave.z];
+      [driver.x, driver.z] = [driver.homeX, driver.homeZ];
+    } else {
+      if (v.kind === 'okada') return;
+      driver.who = 'driver';
+      const side = Math.sign((state.x - v.x) * Math.cos(v.heading) + (state.z - v.z) * Math.sin(v.heading)) || 1;
+      // He gets out on the side you are standing, so he walks straight to you.
+      driver.x = v.x + Math.cos(v.heading) * (v.halfW + 0.45) * side;
+      driver.z = v.z + Math.sin(v.heading) * (v.halfW + 0.45) * side;
+      streetTraffic?.hold.add(v.id);
+    }
     driver.phase = 'out';
     driver.time = 0; // seconds in this phase (game time, so slow phones work the same)
-    streetTraffic?.hold.add(v.id);
     scene.add(driver.person.root);
-    const line = toMe(pick(PUSH_LINES, v.id));
+    const line = toMe(driver.who === 'passer' ? pick(HELPER_LINES, v.id) : pick(PUSH_LINES, v.id));
     showBubble(driver.x, driver.z, 1.9, line);
-    void voices.say(line, { body: 'male', seed: v.id }, 1, 2);
+    void voices.say(line, { body: 'male', seed: v.id + 5 }, 1, 2);
   }
 }
 function updateDriver(dt: number) {
@@ -2308,7 +2413,8 @@ function updateDriver(dt: number) {
   const car = driver.car;
   let tx = state.x;
   let tz = state.z;
-  if (driver.phase === 'back') {
+  if (driver.phase === 'back' && driver.who === 'passer') [tx, tz] = [driver.homeX, driver.homeZ];
+  else if (driver.phase === 'back') {
     const side = Math.sign((driver.x - car.x) * Math.cos(car.heading) + (driver.z - car.z) * Math.sin(car.heading)) || 1;
     tx = car.x + Math.cos(car.heading) * (car.halfW + 0.4) * side;
     tz = car.z + Math.sin(car.heading) * (car.halfW + 0.4) * side;
@@ -2355,7 +2461,7 @@ function updateDriver(dt: number) {
   } else if (driver.phase === 'back' && (d < 0.4 || driver.time > 10)) {
     // Back in the car: on his way.
     scene.remove(man.root);
-    streetTraffic?.hold.delete(car.id);
+    if (driver.who === 'driver') streetTraffic?.hold.delete(car.id);
     driver.phase = 'none';
     driver.car = null;
     return;
@@ -4059,7 +4165,7 @@ async function start() {
     };
     streetTraffic.sim = trafficSim;
     void loadDriver();
-    if (debug) Object.assign(window, { __street: { state, sky, look, life, story, thief, signals, lightFor, flyovers, pinch, bigScreen, roadSigns, getStation: () => station, places, fuelWhy, bag, driver, shove, uncle, compound, props, camera3d, adCard, frameShot, placeCompound, buildings, nimaRoute, rideSign, RIDE_SIGNS, map, placeCarTag, fullMap, phone, camAvoid, camAt, viewBlocked, heightAtView, solidAt, traffic: streetTraffic, driveIn, parkingNear, pullIn, pullOut, roadLineNear, compoundAt, music, streetSound, epicRoads, THREE, trafficSim: () => trafficSim, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
+    if (debug) Object.assign(window, { __street: { state, sky, look, life, story, thief, signals, lightFor, flyovers, pinch, bigScreen, roadSigns, getStation: () => station, places, fuelWhy, bag, driver, shove, uncle, compound, props, camera3d, adCard, frameShot, placeCompound, buildings, nimaRoute, rideSign, RIDE_SIGNS, map, placeCarTag, fullMap, phone, camAvoid, camAt, viewBlocked, heightAtView, solidAt, traffic: streetTraffic, driveIn, parkingNear, pullIn, pullOut, roadLineNear, compoundAt, music, streetSound, epicRoads, THREE, horns: () => hornsPlayed, trafficSim: () => trafficSim, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
   }
 
   document.getElementById('loading')!.remove();
