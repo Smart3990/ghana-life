@@ -1759,7 +1759,8 @@ function driveAway(car: { x: number; z: number; heading: number }, at: (d: numbe
     last = gameClock;
     t += dt;
     const ahead = at(d + 1);
-    if (storyBlocked(ahead.x, ahead.z, ahead.heading, 2.6)) v = 0;
+    const next = at(d + Math.max(0.4, v * dt * 2));
+    if (storyBlocked(ahead.x, ahead.z, ahead.heading, 2.6) || trafficSim?.overlapsBox(next.x, next.z, next.heading, 2.9, 1.2)) v = 0;
     else v = Math.min(speed, v + accel * dt);
     d += v * dt;
     const q = at(d);
@@ -1788,7 +1789,42 @@ function ambulanceLook() {
   ambulance.lights = [red, blue];
   return g;
 }
+/**
+ * The ambulance as one of the traffic's drivers (owner, 28 Oct 2026: nothing passes through another
+ * vehicle): it comes along a lane 35 to 80 m away, a little faster than the rest, lights flashing,
+ * behind whatever is ahead in a jam; after about 20 seconds its lights go off and it drives on.
+ */
+const simAmbulance = { id: null as number | null };
+function updateSimAmbulance(t: number) {
+  const a = ambulance;
+  const sim = trafficSim!;
+  if (simAmbulance.id !== null) {
+    const w = sim.where(simAmbulance.id);
+    if (!w || t > a.until) {
+      if (a.group) scene.remove(a.group);
+      simAmbulance.id = null;
+      a.next = t + 70 + Math.random() * 40;
+      return;
+    }
+    const y = w.bridge ? flyovers.heightAt(w.x, w.z) : -groundDip(w.x, w.z);
+    a.group!.position.set(w.x, y, w.z);
+    a.group!.rotation.y = Math.PI - w.heading;
+    const on = Math.floor(t * 4) % 2 === 0;
+    a.lights[0].color.set(on ? '#ff2a2a' : '#4a0a0a');
+    a.lights[1].color.set(on ? '#0a1640' : '#2a6bff');
+    return;
+  }
+  if (t < a.next || story.frozen || story.autoRun || chatting) return;
+  a.next = t + 10; // (try again soon if no lane fits)
+  const id = sim.addSpecial('pickup', state.x, state.z, 35, 80);
+  if (id === null) return;
+  simAmbulance.id = id;
+  a.until = t + 20;
+  a.group ??= ambulanceLook();
+  scene.add(a.group);
+}
 function updateAmbulance(t: number) {
+  if (trafficSim) return updateSimAmbulance(t);
   if (!streetTraffic) return;
   const a = ambulance;
   if (a.car && a.v) {
@@ -2593,8 +2629,10 @@ async function runChase(gone: Promise<void>) {
     const drive = () => {
       const q = Math.min(1, (gameClock - t0) / 1.1);
       const e = 1 - (1 - q) * (1 - q); // brakes hard at the end
-      car.x = stopAt.x - T.x * from * reach * (1 - e);
-      car.z = stopAt.z - T.z * from * reach * (1 - e);
+      const nx = stopAt.x - T.x * from * reach * (1 - e);
+      const nz = stopAt.z - T.z * from * reach * (1 - e);
+      // Never into a vehicle of the traffic (it brakes short instead).
+      if (!trafficSim?.overlapsBox(nx, nz, car.heading, 2.9, 1.25)) [car.x, car.z] = [nx, nz];
       if (q < 1) requestAnimationFrame(drive);
       else done();
     };
@@ -2755,10 +2793,24 @@ async function arriveByBus(): Promise<number | null> {
     const p = lane(d);
     [bus.x, bus.z, bus.heading] = [p.x, p.z, p.heading];
   };
-  put(STOP - 45);
-  streetTraffic.story.unshift(bus);
-  // Its lane is clear when the scene starts (no car under it as it comes in and stops).
+  // The trotro is a real driver in the traffic (owner, 28 Oct 2026: it must never pass through a car):
+  // it comes along its lane from about 45 m back, stops for the lights and waits behind the traffic
+  // like everyone, and stops level with you. (Its lane is cleared at this camera cut, so it is not
+  // stuck far behind a queue.)
   clearStoryPath([-55, -30, -10, STOP, STOP + 12].map((d) => lane(d)));
+  const stopAt = lane(STOP);
+  const simBus = trafficSim?.addStory({ kind: 'trotro', type: 'trotro', colour: '#f1ece0', x: stopAt.x, z: stopAt.z, heading: stopAt.heading, back: 45 }) ?? null;
+  if (simBus !== null) trafficSim!.stopAt(simBus, stopAt.x, stopAt.z);
+  const follow = () => {
+    const w = simBus !== null ? trafficSim?.where(simBus) : null;
+    if (w) [bus.x, bus.z, bus.heading] = [w.x, w.z, w.heading];
+    return !!w;
+  };
+  if (simBus === null || !follow()) {
+    // (No lane of the traffic here: the trotro is drawn by the story, on the road line.)
+    put(STOP - 45);
+    streetTraffic.story.unshift(bus);
+  }
   story.hidePlayer = true;
   // Seen from further along the kerb, looking back at the traffic: the trotro comes in and stops.
   const T = { x: Math.sin(lane(0).heading), z: -Math.cos(lane(0).heading) };
@@ -2770,10 +2822,21 @@ async function arriveByBus(): Promise<number | null> {
   void toRoadDeg;
   void cine.say('', 'Circle. Noise, crowds, hawkers everywhere. You made it to Accra.', 3.4);
   const t0 = gameClock;
-  while (gameClock - t0 < 4) {
-    const k = Math.min(1, (gameClock - t0) / 4);
-    put(STOP - 45 * (1 - k) * (1 - k)); // slows to a stop
-    await pause(0.02);
+  if (simBus !== null && follow()) {
+    // Until it has come to rest at the stop (or, at worst, in the queue nearby).
+    while (gameClock - t0 < 25) {
+      follow();
+      const st = trafficSim!.storyState(simBus);
+      if (!st || (st.stopped && (st.atStop || gameClock - t0 > 12))) break;
+      await pause(0.02);
+    }
+    follow();
+  } else {
+    while (gameClock - t0 < 4) {
+      const k = Math.min(1, (gameClock - t0) / 4);
+      put(STOP - 45 * (1 - k) * (1 - k)); // slows to a stop
+      await pause(0.02);
+    }
   }
   bus.moving = false;
   honk(2, true);
@@ -2792,9 +2855,11 @@ async function arriveByBus(): Promise<number | null> {
   // The trotro pulls away and is gone.
   bus.moving = true;
   // It pulls away down its lane, behind whatever is ahead (never through it), and is let go out of sight.
-  driveAway(bus, lane, STOP, 12, 40, () => {
-    streetTraffic!.story = streetTraffic!.story.filter((q) => q !== bus);
-  });
+  if (simBus !== null && trafficSim?.where(simBus)) trafficSim.release(simBus);
+  else
+    driveAway(bus, lane, STOP, 12, 40, () => {
+      streetTraffic!.story = streetTraffic!.story.filter((q) => q !== bus);
+    });
   state.heading = state.camHeading = lane(0).heading; // watching it go
   await pause(1.9);
   // Then you stand there taking it in, amazed by Accra's noise and crowds: you look one way down the
@@ -3017,6 +3082,16 @@ async function playOpening(start: StartChoice) {
     me.seat = null;
     [state.x, state.z, state.heading] = [standX, standZ, stall.chair.face];
     const park = lane ? parkingNear(lane, stall) : null;
+    if (park && trafficSim) {
+      // Parked clear of every traffic lane (owner, 28 Oct 2026: nothing passes through it): further
+      // in to the kerb until a vehicle passing in the nearest lane misses it.
+      const R = { x: Math.cos(park.heading), z: Math.sin(park.heading) };
+      for (let k = 0; k < 12 && trafficSim.laneClearance(park.x, park.z) < 2.5; k++) {
+        park.x += R.x * 0.25;
+        park.z += R.z * 0.25;
+        park.off += 0.25;
+      }
+    }
     // The streets of the ride home start loading now (they are ready when you set off).
     void nimaRoute.then((way) => {
       if (!way) return;
@@ -3035,13 +3110,51 @@ async function playOpening(start: StartChoice) {
       // While the screen is black: his way in (and out again later) is clear of traffic.
       clearStoryPath([-48, -30, -15, -5, 0].map((d) => pullIn(lane, park, d)));
       story.shot = frameShot((park.x + stall.chair.x) / 2, (park.z + stall.chair.z) / 2, sideBearing, 12, 70);
+      // He drives in the traffic like everyone (owner, 28 Oct 2026: the lights, the queues, never
+      // through a car) to about 10 m before his parking place; then eases off the road into it.
+      const entry = pullIn(lane, park, -10);
+      const simCar = trafficSim?.addStory({ kind: 'car', type: 'car', colour: '#b3261e', x: entry.x, z: entry.z, heading: entry.heading, back: 30 }) ?? null;
+      const follow = () => {
+        const w = simCar !== null ? trafficSim?.where(simCar) : null;
+        if (w) put(w);
+        return !!w;
+      };
       await cine.black(false, 0.6);
       const t0 = gameClock;
-      while (gameClock - t0 < 5) {
-        const k = Math.min(1, (gameClock - t0) / 5);
-        const e = 1 - (1 - k) * (1 - k); // slows to a stop
-        put(pullIn(lane, park, -40 * (1 - e)));
-        await pause(0.02);
+      if (simCar !== null && follow()) {
+        uCar.shown = false; // (the traffic draws it while it drives)
+        trafficSim!.stopAt(simCar, entry.x, entry.z);
+        while (gameClock - t0 < 25) {
+          follow();
+          const st = trafficSim!.storyState(simCar);
+          if (!st || (st.stopped && (st.atStop || gameClock - t0 > 14))) break;
+          await pause(0.02);
+        }
+        follow();
+        trafficSim!.remove_(simCar);
+        uCar.shown = true;
+        // Off the road into the parking place, on a smooth curve, slowing to a stop (waiting if anyone is in the way).
+        const curve = easeCurve({ x: uCar.x, z: uCar.z, heading: uCar.heading }, pullIn(lane, park, 0));
+        let d = 0;
+        let v = 4;
+        let last = gameClock;
+        while (d < curve.length) {
+          const dt = Math.min(0.1, gameClock - last);
+          last = gameClock;
+          const ahead = curve.at(Math.min(curve.length, d + 3.2));
+          if (trafficSim?.vehicleNear(ahead.x, ahead.z, 1.1)) v = 0;
+          else v = Math.max(0.8, Math.min(4, v + 2 * dt, ((curve.length - d) / 3) * 4));
+          d += v * dt;
+          put(curve.at(Math.min(d, curve.length)));
+          await pause(0.02);
+        }
+      } else {
+        while (gameClock - t0 < 5) {
+          const k = Math.min(1, (gameClock - t0) / 5);
+          const e = 1 - (1 - k) * (1 - k); // slows to a stop
+          put(pullIn(lane, park, -40 * (1 - e)));
+          await pause(0.02);
+        }
       }
       uCar.moving = false;
       honk(5, true);
@@ -3109,14 +3222,36 @@ async function playOpening(start: StartChoice) {
       void cine.say('', 'Uncle Kwame drives you home to Nima.', 2.6);
       let d = 0;
       let last = gameClock;
+      // Out into the traffic lane on a smooth curve, only when the way is clear: nothing in front, and
+      // nothing coming up the lane behind (he waits for a gap, like every Accra driver).
+      const here = { x: uCar.x, z: uCar.z, heading: uCar.heading };
+      const into = trafficSim?.lanePose(here.x, here.z, here.heading, 13) ?? null;
+      const curve = into ? easeCurve(here, into) : null;
+      const gap = () => {
+        if (!trafficSim || !into) return true;
+        const behind = trafficSim.lanePose(into.x, into.z, into.heading, -16);
+        return !trafficSim.vehicleNear(into.x, into.z, 3) && !(behind && trafficSim.vehicleNear(behind.x, behind.z, 7));
+      };
+      let going = false;
       while (gameClock - t0 < 3.4) {
         const t = gameClock - t0;
-        // Out into the road, waiting for a gap if a car is passing in front.
-        const want = t < 2.5 ? 1.4 * t * t : 8.75 + (t - 2.5) * 7;
-        const ahead = pullOut(lane, park, d + 1);
-        if (!storyBlocked(ahead.x, ahead.z, ahead.heading, 2.4)) d = Math.min(want, d + 8 * (gameClock - last));
+        const dt = gameClock - last;
         last = gameClock;
-        const q = pullOut(lane, park, d);
+        let q: { x: number; z: number; heading: number };
+        if (curve) {
+          if (!going) going = gap();
+          if (going) {
+            const ahead = curve.at(Math.min(curve.length, d + 3.4));
+            if (!trafficSim!.vehicleNear(ahead.x, ahead.z, 1.1)) d = Math.min(curve.length, d + Math.min(7, 1.5 + d) * dt);
+          }
+          q = curve.at(d);
+        } else {
+          // Out into the road, waiting for a gap if a car is passing in front.
+          const want = t < 2.5 ? 1.4 * t * t : 8.75 + (t - 2.5) * 7;
+          const ahead = pullOut(lane, park, d + 1);
+          if (!storyBlocked(ahead.x, ahead.z, ahead.heading, 2.4)) d = Math.min(want, d + 8 * dt);
+          q = pullOut(lane, park, d);
+        }
         [uCar.x, uCar.z, uCar.heading] = [q.x, q.z, q.heading];
         [state.x, state.z, state.heading] = [q.x, q.z, q.heading];
         // A low shot from the kerb that turns to follow the car away.
@@ -3180,7 +3315,36 @@ async function rideFilm(way: Way, uCar: NonNullable<typeof streetTraffic>['story
     let bearing = way.at(from + 20).heading;
     let gone = 0; // metres driven in this part
     let tPrev = 0;
+    // Uncle's car is a real driver in the traffic for the ride (owner, 28 Oct 2026: it follows the
+    // road, stops at the lights and waits in the queues, never through a car), steered along the real
+    // way home at every junction. (Without a traffic lane there, it drives the way by itself.)
+    const start = way.at(from);
+    const guide: [number, number][] = [];
+    for (let k = from; k < Math.min(way.length, from + SPEED * LEN + 400); k += 10) {
+      const q = way.at(k);
+      guide.push([q.x, q.z]);
+    }
+    const simRide = trafficSim?.addStory({ kind: 'car', type: 'car', colour: '#b3261e', x: start.x + Math.cos(start.heading) * 1.8, z: start.z + Math.sin(start.heading) * 1.8, heading: start.heading, back: 0, guide }) ?? null;
+    if (simRide !== null) uCar.shown = false;
+    let dAt = from;
+    const followSim = () => {
+      const w = simRide !== null ? trafficSim?.where(simRide) : null;
+      if (!w) return null;
+      [uCar.x, uCar.z, uCar.heading] = [w.x, w.z, w.heading];
+      [state.x, state.z] = [w.x, w.z];
+      // How far along the way it has come (for the road and area signs).
+      let best = dAt, bestD = Infinity;
+      for (let k = dAt - 4; k <= dAt + 40; k += 1) {
+        const q = way.at(k);
+        const dd = Math.hypot(q.x - w.x, q.z - w.z);
+        if (dd < bestD) [best, bestD] = [k, dd];
+      }
+      dAt = Math.max(dAt, best);
+      return dAt;
+    };
     const drive = (t: number) => {
+      const fromSim = followSim();
+      if (fromSim !== null) return fromSim;
       // Gently away at the start of the ride, gently to a stop at the end; an even pace between.
       const pace = Math.min(i === 0 ? Math.min(1, 0.2 + t / 2.5) : 1, i === parts.length - 1 ? Math.max(0.15, Math.min(1, (LEN - t) / 2.5)) : 1);
       // Never into the vehicle ahead: in traffic it slows and waits, like everyone else.
@@ -3220,6 +3384,11 @@ async function rideFilm(way: Way, uCar: NonNullable<typeof streetTraffic>['story
       last = gameClock;
       while (next < RIDE_SIGNS.length && d >= RIDE_SIGNS[next].at) rideSign(RIDE_SIGNS[next++]);
       await pause(0.02);
+    }
+    if (simRide !== null) {
+      // (Its pose is kept for the next part, or for the way in at home.)
+      trafficSim?.remove_(simRide);
+      uCar.shown = true;
     }
     if (i + 1 < parts.length) {
       // Twenty minutes later: the places passed on the way show while the screen is dark.
@@ -3274,6 +3443,8 @@ async function homeAtNima(uCar: NonNullable<typeof streetTraffic>['story'][numbe
       uCar.shown = true;
       uCar.moving = true;
       [uCar.x, uCar.z, uCar.heading] = [drive.at(0).x, drive.at(0).z, drive.at(0).heading];
+      // (At this cut: the traffic on his way along the road is let go.)
+      clearStoryPath([0, 8, 16, 24, 32, 40].map((d) => drive.at(Math.min(d, drive.length))), 3);
     }
     const gateIn = at(0, D - 2);
     story.shot = frameShot(gateIn.x, gateIn.z, (inward * 180) / Math.PI + 32, 17, 62);
@@ -3281,15 +3452,28 @@ async function homeAtNima(uCar: NonNullable<typeof streetTraffic>['story'][numbe
     await cine.black(false, 0.9);
     placeCard('Nima');
     if (uCar && drive) {
+      // Along the road at an easy pace and in through the gate, slowing to a stop under the carport:
+      // stopping for anything ahead and for a red light (owner, 28 Oct 2026: never through a car).
       const t0 = gameClock;
-      const LEN = 6.5;
-      while (gameClock - t0 < LEN) {
-        const k = Math.min(1, (gameClock - t0) / LEN);
-        const e = k < 0.6 ? k / 0.6 * 0.7 : 0.7 + 0.3 * (1 - (1 - (k - 0.6) / 0.4) ** 2); // steady, then slows to a stop
-        const q = drive.at(e * drive.length);
+      let d = 0;
+      let v = 6;
+      let last = gameClock;
+      while (d < drive.length - 0.05 && gameClock - t0 < 20) {
+        const dt = Math.min(0.1, gameClock - last);
+        last = gameClock;
+        const here = drive.at(d);
+        const ahead = drive.at(Math.min(drive.length, d + 3.6));
+        const blocked = (trafficSim?.vehicleNear(ahead.x, ahead.z, 1.2) ?? false) || signals.shouldStop(here.x, here.z, here.heading, 2.4, Date.now() / 1000);
+        const left = drive.length - d;
+        const want = blocked ? 0 : Math.max(0.7, Math.min(7, Math.sqrt(2 * 1.6 * left)));
+        v = want < v ? Math.max(want, v - 5 * dt) : Math.min(want, v + 2 * dt);
+        d = Math.min(drive.length, d + v * dt);
+        const q = drive.at(d);
         [uCar.x, uCar.z, uCar.heading] = [q.x, q.z, q.heading];
         await pause(0.02);
       }
+      const end = drive.at(drive.length);
+      [uCar.x, uCar.z, uCar.heading] = [end.x, end.z, end.heading];
       uCar.moving = false;
     }
     // You both get out: Uncle on the driver's side (left), you on the other.
@@ -3435,6 +3619,31 @@ function parkingNear(lane: Lane, stall: { x: number; z: number; chair: { x: numb
   return { x: p.x, z: p.z, heading: l0.heading, d: d0 + 7.5, off: 0 };
 }
 const smooth = (k: number) => (k <= 0 ? 0 : k >= 1 ? 1 : k * k * (3 - 2 * k));
+/** A smooth curve from one pose to another (both ends along their headings), for easing in and out of the kerb. */
+function easeCurve(a: { x: number; z: number; heading: number }, b: { x: number; z: number; heading: number }) {
+  const L = Math.max(1, Math.hypot(b.x - a.x, b.z - a.z));
+  const ta = { x: Math.sin(a.heading) * L, z: -Math.cos(a.heading) * L };
+  const tb = { x: Math.sin(b.heading) * L, z: -Math.cos(b.heading) * L };
+  const pt = (t: number) => {
+    const t2 = t * t, t3 = t2 * t;
+    const h00 = 2 * t3 - 3 * t2 + 1, h10 = t3 - 2 * t2 + t, h01 = -2 * t3 + 3 * t2, h11 = t3 - t2;
+    return { x: h00 * a.x + h10 * ta.x + h01 * b.x + h11 * tb.x, z: h00 * a.z + h10 * ta.z + h01 * b.z + h11 * tb.z };
+  };
+  const N = 24;
+  const pts = Array.from({ length: N + 1 }, (_, i) => pt(i / N));
+  const cum = [0];
+  for (let i = 1; i <= N; i++) cum.push(cum[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z));
+  return {
+    length: cum[N],
+    at(d: number) {
+      let i = 1;
+      while (i < N && cum[i] < d) i++;
+      const t = Math.max(0, Math.min(1, (d - cum[i - 1]) / (cum[i] - cum[i - 1] || 1)));
+      const p = pts[i - 1], q = pts[i];
+      return { x: p.x + (q.x - p.x) * t, z: p.z + (q.z - p.z) * t, heading: Math.atan2(q.x - p.x, -(q.z - p.z)) };
+    },
+  };
+}
 /** Along the lane to the parking place, easing over to it in the last 10 m (s ≤ 0; 0 = parked). */
 function pullIn(lane: Lane, park: Park, s: number) {
   const p = lane(park.d + s);

@@ -1098,7 +1098,7 @@ export class StreetTraffic {
     if (player) sim.obstacles.push({ x: player.x, z: player.z, r: 0.45 });
     sim.onWaitForPlayer = this.onBlocked;
     this.storyAt = { lon, lat, t };
-    for (const q of this.story) if (q.shown) sim.obstacles.push({ x: q.x, z: q.z, r: KIND_LENGTH[q.kind] / 2 });
+    for (const q of this.story) if (q.shown) sim.obstacles.push({ x: q.x, z: q.z, r: KIND_LENGTH[q.kind] / 2, heading: q.heading, half: (TYPE_BY_KEY.get(q.key)?.len ?? KIND_LENGTH[q.kind]) / 2, halfW: (TYPE_BY_KEY.get(q.key)?.width ?? 2) / 2 });
     for (const q of this.parked) sim.obstacles.push({ x: q.x, z: q.z, r: 2.6 });
     sim.hold = this.hold;
     sim.update(dt, mx, mz);

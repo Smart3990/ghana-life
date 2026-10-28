@@ -449,6 +449,13 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
     - Drivers mind everything in their path: oncoming vehicles are only ignored when they pass beside in their own lane; at crossings the one further in goes first but never into a vehicle it is about to touch; two that already touch (a lane starting on top of another road) separate at once.
     - Measured at Circle in the evening rush (12 checks, about 4,000 vehicle sightings each tier): in a ramp or building 0 (none); overlapping 2 on Light and 2 on Standard, each clearing as one moves out (was 9 to 33); none stuck. About a third of the vehicles near you are up on the flyovers.
 
+  - **The story's vehicles drive by the traffic's rules** (owner, 28 Oct: the arrival trotro must not pass through cars; Uncle's car follows the road and obeys the traffic):
+    - The trotro you arrive in is a real driver in the traffic: it comes along its lane from about 45 m back, stops for the lights, waits behind whatever is ahead, and stops level with you; after you step down it drives on as one of the traffic.
+    - Uncle Kwame's car drives in the traffic to about 10 m before his parking place at Circle, then eases into it on a smooth curve; his parking place is moved in to the kerb until it is clear of every lane. Leaving, it waits for a gap (nothing in front, nothing coming up behind) and eases out. On the ride home it is a real driver steered along the real way to Nima at every junction (the lights, the queues); the last stretch in through the compound gate goes at a real pace and stops for anything ahead and for a red light.
+    - The chase taxi (it has to brake hard to block you) and every story vehicle driving away check their next position against every traffic vehicle and stop short rather than touch one; the traffic sees each story vehicle by its true outline and stops before touching it.
+    - The ambulance is one of the traffic's drivers too (lights flashing, a little faster, in the queues).
+    - Done when: the whole story is played through and no story vehicle ever touches a traffic vehicle (checked: the full story, every 0.1 s, 0 contacts; it was 2 before these changes).
+
 ## Waiting on the owner
 
 - Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.

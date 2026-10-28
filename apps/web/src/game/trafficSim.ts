@@ -167,7 +167,7 @@ export class TrafficSim {
   /** Traffic lights: is it red (or amber) for traffic leaving lane end (x, z) heading `heading`? */
   redLight: ((x: number, z: number, heading: number, t: number) => { stop: boolean; extra: number } | null) | null = null;
   /** Things in the road that vehicles wait behind (the player, the story's vehicles): centre, half length, half width. */
-  obstacles: { x: number; z: number; r: number }[] = [];
+  obstacles: { x: number; z: number; r: number; heading?: number; half?: number; halfW?: number }[] = [];
   /** Called every frame a vehicle is waiting for the player in front of it (the game hoots and shouts). */
   onWaitForPlayer: ((v: { id: number; x: number; z: number; heading: number; kind: string; halfW: number; half: number; waited: number }) => void) | null = null;
   /** Is obstacles[0] the player? */
@@ -617,6 +617,29 @@ export class TrafficSim {
           }
       // 4. Someone or something standing in the road ahead (the player, a parked story vehicle).
       for (const o of this.obstacles) {
+        if (o.heading !== undefined) {
+          // A story vehicle, by its true outline: how far this driver can go before its body would touch it.
+          const ddx = o.x - me.x, ddz = o.z - me.z;
+          if (Math.abs(ddx) > 32 || Math.abs(ddz) > 32) continue;
+          const ofx = Math.sin(o.heading), ofz = -Math.cos(o.heading);
+          const dot = Math.abs(me.fx * ofx + me.fz * ofz), cr = Math.sqrt(Math.max(0, 1 - dot * dot));
+          const reachAlong = o.half! + (car.len / 2) * dot + car.halfW * cr;
+          const reachSide = o.halfW! + car.halfW * dot + (car.len / 2) * cr;
+          const touching = (k: number) => {
+            const cx = me.x + me.fx * k - o.x, cz = me.z + me.fz * k - o.z;
+            return Math.abs(cx * ofx + cz * ofz) < reachAlong + 0.2 && Math.abs(cx * -ofz + cz * ofx) < reachSide + 0.2;
+          };
+          if (touching(0)) continue; // (already beside it: drive on out, never stuck in it)
+          for (let k = 0.5; k <= 25; k += 0.5)
+            if (touching(k)) {
+              if (k - 0.5 < gap) {
+                gap = Math.max(0, k - 0.5);
+                lead = 0;
+              }
+              break;
+            }
+          continue;
+        }
         const dx = o.x - me.x, dz = o.z - me.z;
         const along = dx * me.fx + dz * me.fz;
         if (along <= 0 || along > 25) continue;
@@ -828,6 +851,49 @@ export class TrafficSim {
     this.cars.push(car);
     return car.id;
   }
+  /** A point on the traffic lane nearest (x, z) going the way `heading`, `ahead` metres on along it. */
+  lanePose(x: number, z: number, heading: number, ahead = 0): { x: number; z: number; heading: number } | null {
+    const at = this.laneAt(x, z, heading);
+    if (!at) return null;
+    const p = this.pointAt(at.seg, Math.max(0, Math.min(at.seg.len, at.s + ahead)));
+    return { x: p.x, z: p.z, heading: Math.atan2(p.fx, -p.fz) };
+  }
+  /** How far (x, z) is from the middle of the nearest ground lane in use (Infinity: none within 30 m). */
+  laneClearance(x: number, z: number) {
+    let best = Infinity;
+    const cx = Math.floor(x / 60), cz = Math.floor(z / 60);
+    for (let i = -1; i <= 1; i++)
+      for (let j = -1; j <= 1; j++)
+        for (const seg of this.laneGrid.get(`${cx + i},${cz + j}`) ?? []) {
+          if (seg.bridge || seg.walled || seg.dead) continue;
+          best = Math.min(best, project(seg, x, z).d);
+        }
+    return best;
+  }
+  /** For tests: vehicles whose bodies overlap a box (a story vehicle's body) at (x, z) facing `heading`. */
+  overlapsBox(x: number, z: number, heading: number, half: number, halfW: number, not = -1) {
+    const fx = Math.sin(heading), fz = -Math.cos(heading);
+    let n = 0;
+    for (const c of this.cars) {
+      if (c.id === not || c.seg.bridge) continue;
+      const p = this.pointAt(c.seg, c.s);
+      const dx = p.x - x, dz = p.z - z;
+      if (Math.abs(dx) > 12 || Math.abs(dz) > 12) continue;
+      const dot = Math.abs(p.fx * fx + p.fz * fz), cross = Math.sqrt(Math.max(0, 1 - dot * dot));
+      const along = Math.abs(dx * fx + dz * fz), side = Math.abs(dx * -fz + dz * fx);
+      if (along < half + (c.len / 2) * dot + c.halfW * cross - 0.4 && side < halfW + c.halfW * dot + (c.len / 2) * cross - 0.4) n++;
+    }
+    return n;
+  }
+  /** Is there a vehicle (any) within r metres of (x, z)? (For a story vehicle easing in or out.) */
+  vehicleNear(x: number, z: number, r: number, not = -1) {
+    for (const c of this.cars) {
+      if (c.id === not || c.seg.bridge) continue;
+      const p = this.pointAt(c.seg, c.s);
+      if (Math.hypot(p.x - x, p.z - z) < r + c.len / 2) return true;
+    }
+    return false;
+  }
   /** A story vehicle stops with its middle level with (x, z), on its lane or the next ones. */
   stopAt(id: number, x: number, z: number) {
     const car = this.cars.find((c) => c.id === id);
@@ -862,11 +928,11 @@ export class TrafficSim {
   }
 
   /** Where a vehicle is (x, z, heading), or null if it has gone. */
-  where(id: number): { x: number; z: number; heading: number } | null {
+  where(id: number): { x: number; z: number; heading: number; bridge: boolean } | null {
     const car = this.cars.find((c) => c.id === id);
     if (!car) return null;
     const p = this.pointAt(car.seg, car.s);
-    return { x: p.x, z: p.z, heading: Math.atan2(p.fx, -p.fz) };
+    return { x: p.x, z: p.z, heading: Math.atan2(p.fx, -p.fz), bridge: car.seg.bridge };
   }
   remove_(id: number) {
     const car = this.cars.find((c) => c.id === id);
