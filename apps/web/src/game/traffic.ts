@@ -52,7 +52,7 @@ type VehicleShape = {
   geometry: { type: 'Polygon'; coordinates: number[][][] };
 };
 type Route = { lon: Float64Array; lat: Float64Array; at: Float64Array; total: number; lanes: 1 | 2 }; // at = metres along the route
-export type Vehicle = { id: number; route: number; lane: 0 | 1; kind: Kind; colour: string; offset: number; speed: number };
+export type Vehicle = { id: number; route: number; lane: 0 | 1; kind: Kind; colour: string; offset: number; speed: number; type?: string };
 
 function prepare(raw: number[][][], scale: number, lanes: 1 | 2 = 2): Route[] {
   return raw.map((points) => {

@@ -10,6 +10,8 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
 import type { Kind, Placed, Traffic } from './traffic';
 import { slidingAdMaterial } from './adScreens';
 import { epicGeometry, epicMaterial } from './epicKit';
+import type { TrafficSim } from './trafficSim';
+import { TYPE_BY_KEY, VEHICLE_TYPES, typeFor } from './vehicleTypes';
 
 // Modern vehicles (public/models/vehicles): small models of today's Accra traffic (Corolla-size
 // sedans, Vitz-size hatchbacks, RAV4-size SUVs, Hilux-size pickups, Hiace-size trotros, buses and
@@ -17,23 +19,16 @@ import { epicGeometry, epicMaterial } from './epicKit';
 // scripts/vehicles. Each file has a "paint" part (repainted per vehicle) and a "fixed" part (glass,
 // lights, tyres). Until they have downloaded, the shapes built in code below are shown.
 // Batches: each kind, plus a second car model so the streets mix sedans and hatchbacks.
-export type BatchKey = Kind | 'hatch' | 'motorking' | 'sprinter' | 'ambulance';
+// A batch per vehicle type (vehicleTypes.ts: every road vehicle of the Epic City pack, and our tricycles).
+export type BatchKey = string;
+/** The type (model) a vehicle is drawn as. */
+export const keyOf = (v: { kind: Kind; id: number; type?: string }): BatchKey => v.type ?? typeFor(v.kind, v.id).key;
 // The Low Poly Epic City pack's vehicles (public/models/epic/vehicles, step 4 of the Epic City plan):
 // which pack model plays each Accra vehicle, and which of its colours is the paintwork (repainted per
 // vehicle); `white` colours are made white (the trotro's roof). The tricycles stay our own.
-const PACK: Partial<Record<BatchKey, { file: string; paint: string[]; white?: string[] }>> = {
-  car: { file: 'car-passenger', paint: ['dbdbda'] },
-  hatch: { file: 'car-passenger', paint: ['dbdbda'] },
-  suv: { file: 'car-passenger', paint: ['dbdbda'] },
-  taxi: { file: 'car-taxi', paint: ['fdcf24'] },
-  pickup: { file: 'car-baywatch', paint: ['fdcf24'] },
-  trotro: { file: 'car-hippie-van', paint: ['35ccdd'], white: ['b7f0f2'] },
-  sprinter: { file: 'car-hippie-van', paint: ['35ccdd'], white: ['b7f0f2'] },
-  bus: { file: 'bus-passenger', paint: ['dbdbda'] },
-  truck: { file: 'truck', paint: ['e44935'] },
-  okada: { file: 'motorbike-old', paint: ['ca3038'] },
-  ambulance: { file: 'car-ambulance-pickup', paint: [] },
-};
+const PACK: Record<BatchKey, { file: string; paint: string[]; white?: string[] }> = Object.fromEntries(
+  VEHICLE_TYPES.filter((t) => t.file).map((t) => [t.key, { file: t.file!, paint: t.paint ?? [], white: t.white }]),
+);
 // Advert wraps on the pack's vehicles: [half width, bottom, top, back end, front end, back face].
 const PACK_PANELS: Partial<Record<BatchKey, [number, number, number, number, number, number]>> = {
   trotro: [0.9, 0.58, 1.6, -1.95, 1.15, -2.08],
@@ -596,7 +591,10 @@ export class StreetTraffic {
   ) {
     const paintMat = new THREE.MeshStandardMaterial({ roughness: 0.38, metalness: 0.25 });
     const fixedMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, metalness: 0.1 });
-    const models: Record<BatchKey, Model> = { car: car(false), hatch: car(false), sprinter: trotro(), motorking: motorKing(), taxi: car(true), trotro: trotro(), tricycle: pragya(), okada: okada(), bus: bus(), truck: truck(), pickup: pickup(), suv: suv(), ambulance: trotro() };
+    // Until each pack model has loaded, a shape built in code for its kind stands in.
+    const byKind: Record<Kind, () => Model> = { car: () => car(false), taxi: () => car(true), trotro: trotro, tricycle: pragya, okada, bus, truck, pickup, suv };
+    const models: Record<BatchKey, Model> = {};
+    for (const t of VEHICLE_TYPES) models[t.key] = t.key === 'motorking' ? motorKing() : byKind[t.kind]();
     this.batches = {} as typeof this.batches;
     const adCanvas = this.adCanvas;
     const adMat = adMaterial(adAtlas(DEFAULT_ADS, adCanvas));
@@ -825,7 +823,7 @@ export class StreetTraffic {
   }
   /** What a vehicle is and which advert it carries (null: no advert space on it). */
   vehicleInfo(v: Placed['v']) {
-    const key: BatchKey = v.kind === 'car' && v.id % 3 === 0 ? 'hatch' : v.kind === 'trotro' && v.id % 3 === 0 ? 'sprinter' : v.kind === 'tricycle' && v.id % 2 === 0 ? 'motorking' : v.kind;
+    const key = keyOf(v);
     const r = ((v.id * 2246822519) >>> 0) / 4294967296;
     const ad = this.ads[key] && r < 0.8 ? Math.floor(r * 1.25 * AD_ROWS) % AD_ROWS : null;
     return { key, ad };
@@ -850,7 +848,51 @@ export class StreetTraffic {
   hold = new Set<number>();
   private blockedTotal = new Map<number, number>();
 
+  /** The traffic drivers (trafficSim.ts): when set, vehicles drive by the rules instead of the timetable. */
+  sim: TrafficSim | null = null;
+  private lastReal = 0;
+  private simUpdate(lon: number, lat: number, t: number, player?: { x: number; z: number }) {
+    const sim = this.sim!;
+    const now = performance.now() / 1000;
+    const dt = this.lastReal ? now - this.lastReal : 0;
+    this.lastReal = now;
+    const [mx, mz] = this.toLocal(lon, lat);
+    // What drivers wait behind: the player, the story's vehicles and the parked ones.
+    sim.obstacles = [];
+    sim.playerFirst = !!player;
+    if (player) sim.obstacles.push({ x: player.x, z: player.z, r: 0.45 });
+    sim.onWaitForPlayer = this.onBlocked;
+    this.storyAt = { lon, lat, t };
+    for (const q of this.story) if (q.shown) sim.obstacles.push({ x: q.x, z: q.z, r: KIND_LENGTH[q.kind] / 2 });
+    for (const q of this.parked) sim.obstacles.push({ x: q.x, z: q.z, r: 2.6 });
+    sim.hold = this.hold;
+    sim.update(dt, mx, mz);
+    const placed = sim.near(mx, mz, this.radiusM, this.limit).filter((p) => !this.hide.has(p.v.id) && this.routeOk(p));
+    this.placed = placed;
+    this.boxes = [];
+    for (const p of placed) {
+      if (p.bridge) continue;
+      const [x, z] = this.toLocal(p.lon, p.lat);
+      const type = TYPE_BY_KEY.get(keyOf(p.v));
+      this.boxes.push({ x, z, fx: Math.sin(p.heading), fz: -Math.cos(p.heading), half: (type?.len ?? KIND_LENGTH[p.v.kind]) / 2, halfW: (type?.width ?? KIND_WIDTH[p.v.kind]) / 2 });
+    }
+    for (const q of this.parked) this.boxes.push({ x: q.x, z: q.z, fx: Math.sin(q.heading), fz: -Math.cos(q.heading), half: 2.7, halfW: 0.95 });
+    for (const q of this.story) if (q.shown) this.boxes.push({ x: q.x, z: q.z, fx: Math.sin(q.heading), fz: -Math.cos(q.heading), half: KIND_LENGTH[q.kind] / 2, halfW: KIND_WIDTH[q.kind] / 2 });
+    this.draw(placed, t, lon, lat);
+  }
+
+  private storyAt = { lon: 0, lat: 0, t: 0 };
+  /**
+   * Road routes near the player for the story to drive along (Uncle Kwame's car, the ambulance):
+   * the timetable routes, which are not drawn when the drivers (sim) are on. Use with routeAt.
+   */
+  storyRoutes(): Placed[] {
+    if (!this.sim) return this.placed;
+    return this.traffic.near(this.storyAt.lon, this.storyAt.lat, this.storyAt.t, this.radiusM, 60, this.lane);
+  }
+
   update(lon: number, lat: number, t: number, lane: number, player?: { x: number; z: number }) {
+    if (this.sim) return this.simUpdate(lon, lat, t, player);
     this.lane = lane;
     const dt = this.lastT ? Math.min(0.1, Math.max(0, t - this.lastT)) : 0;
     // How far the shared clock really moved on (a slow phone can take longer than 0.1 s per frame):
@@ -1055,9 +1097,14 @@ export class StreetTraffic {
     this.boxes = local.filter((a) => !a.up).map((a) => ({ x: a.x, z: a.z, fx: a.fx, fz: a.fz, half: a.half, halfW: a.halfW }));
     for (const q of this.parked) this.boxes.push({ x: q.x, z: q.z, fx: Math.sin(q.heading), fz: -Math.cos(q.heading), half: 2.7, halfW: 0.95 });
     for (const q of this.story) if (q.shown) this.boxes.push({ x: q.x, z: q.z, fx: Math.sin(q.heading), fz: -Math.cos(q.heading), half: KIND_LENGTH[q.kind] / 2, halfW: KIND_WIDTH[q.kind] / 2 });
+    this.draw(placed, t, lon, lat);
+  }
+
+  /** Draw the vehicles in `placed` (and the story's and parked ones). */
+  private draw(placed: Placed[], t: number, lon: number, lat: number) {
     const adCount: Partial<Record<BatchKey, number>> = {};
     let signs = 0;
-    const counts: Record<BatchKey, number> = { car: 0, hatch: 0, sprinter: 0, motorking: 0, taxi: 0, trotro: 0, tricycle: 0, okada: 0, bus: 0, truck: 0, pickup: 0, suv: 0, ambulance: 0 };
+    const counts: Record<BatchKey, number> = Object.fromEntries(Object.keys(this.batches).map((k) => [k, 0]));
     let shadowCount = 0;
     type Draw = { key: BatchKey; id: number; x: number; z: number; ground: number; heading: number; colour: string; bounce: boolean };
     const draws: Draw[] = [];
@@ -1065,11 +1112,7 @@ export class StreetTraffic {
     for (const p of placed) {
       // Cars are a mix: about one in three is a small hatchback. About a third of trotros are the
       // longer Sprinter type. Tricycles: half carry passengers (pragya), half goods (motor king).
-      const key: BatchKey =
-        p.v.kind === 'car' && p.v.id % 3 === 0 ? 'hatch'
-        : p.v.kind === 'trotro' && p.v.id % 3 === 0 ? 'sprinter'
-        : p.v.kind === 'tricycle' && p.v.id % 2 === 0 ? 'motorking'
-        : p.v.kind;
+      const key = keyOf(p.v);
       const [x, z] = this.toLocal(p.lon, p.lat);
       // On a flyover: at the deck's height.
       // Off it: on the tarmac, which sits a little below the pavement.
@@ -1109,8 +1152,8 @@ export class StreetTraffic {
       if (d.key === 'taxi' && !this.packTaxi) this.taxiSigns.setMatrixAt(signs++, this.m);
       if (this.night > 0.02) {
         // Lights at the front and back, sized to the vehicle (its model's front is +z).
-        const kind: Kind = d.key === 'hatch' ? 'car' : d.key === 'sprinter' || d.key === 'ambulance' ? 'trotro' : d.key === 'motorking' ? 'tricycle' : d.key;
-        const half = KIND_LENGTH[kind] / 2, halfW = KIND_WIDTH[kind] / 2;
+        const type = TYPE_BY_KEY.get(d.key);
+        const half = (type?.len ?? 4.5) / 2, halfW = (type?.width ?? 1.8) / 2;
         this.headlights.setMatrixAt(lit, this.lamp.makeScale(halfW, 1, 1).setPosition(0, 0, half - 0.05).premultiply(this.m));
         this.taillights.setMatrixAt(lit++, this.lamp.makeScale(halfW, 1, 1).setPosition(0, 0, -half + 0.05).premultiply(this.m));
       }
@@ -1120,11 +1163,13 @@ export class StreetTraffic {
     }
     for (const [kind, b] of Object.entries(this.batches) as [BatchKey, (typeof this.batches)[BatchKey]][]) {
       b.body.count = b.fixed.count = counts[kind];
+      b.body.visible = b.fixed.visible = counts[kind] > 0; // (an empty batch costs no draw)
       b.body.instanceMatrix.needsUpdate = b.fixed.instanceMatrix.needsUpdate = true;
       if (b.body.instanceColor) b.body.instanceColor.needsUpdate = true;
       const f = this.far[kind];
       if (f) {
         f.body.count = f.fixed.count = farCounts[kind] ?? 0;
+        f.body.visible = f.fixed.visible = f.body.count > 0;
         f.body.instanceMatrix.needsUpdate = f.fixed.instanceMatrix.needsUpdate = true;
         if (f.body.instanceColor) f.body.instanceColor.needsUpdate = true;
       }

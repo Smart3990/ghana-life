@@ -15,9 +15,10 @@ import { StreetBuildings } from '../game/streetBuildings';
 import { applyStreetStyle } from '../map/streetStyle';
 import { StreetLife } from '../game/streetLife';
 import type { Nearby } from '../game/streetScenes';
-import { Signals, lightFor } from '../game/signals';
+import { Signals, lightFor, stopLineAt } from '../game/signals';
 import { Flyovers } from '../game/flyovers';
 import { EpicRoads } from '../game/epicRoads';
+import { TrafficSim } from '../game/trafficSim';
 import { GameTime, dayLook, forTheHour, roadFill, type DayLook } from '../game/dayNight';
 import { setEpicNight } from '../game/epicKit';
 import { BigScreen } from '../game/bigScreen';
@@ -1743,7 +1744,7 @@ function updateAmbulance(t: number) {
   a.next = t + 10; // (try again soon if no road fits)
   // A vehicle 35 to 80 m away driving towards you: the ambulance comes along its road from there.
   let pick: (typeof streetTraffic.placed)[number] | null = null;
-  for (const q of streetTraffic.placed) {
+  for (const q of streetTraffic.storyRoutes()) {
     if (q.bridge) continue;
     const [x, z] = [(q.lon - START[0]) * M_LON, (START[1] - q.lat) * M_LAT];
     const d = Math.hypot(x - state.x, z - state.z);
@@ -3336,7 +3337,8 @@ function driveIn(home: { face: number }, at: (u: number, v: number) => { x: numb
 /** A traffic route that passes close to a point (Uncle Kwame drives along it), and where on it. */
 function routeNear(x: number, z: number) {
   if (!streetTraffic) return null;
-  const cands = streetTraffic.placed
+  const cands = streetTraffic
+    .storyRoutes()
     .filter((p) => !p.bridge && (p.v.kind === 'car' || p.v.kind === 'taxi'))
     .map((p) => {
       const at = streetTraffic!.routeAt(p.v, p.s);
@@ -3581,7 +3583,9 @@ addEventListener('keydown', (e) => {
 // Trees, lights, kiosks, umbrellas, polytanks and people, placed along the same streets.
 let life: StreetLife | null = null;
 let trafficModel: Traffic | null = null;
-const pendingBatches: { pts: [number, number][]; lanes: 1 | 2; half: number; bridge: boolean }[][] = [];
+const pendingBatches: { pts: [number, number][]; lanes: 1 | 2; half: number; bridge: boolean; oneway?: boolean }[][] = [];
+const simBatches: typeof pendingBatches = [];
+let trafficSim: TrafficSim | null = null;
 const buildings = new StreetBuildings(
   (lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT],
   { light: 220, standard: 320, ultra: 450 }[tier],
@@ -3605,9 +3609,12 @@ const buildings = new StreetBuildings(
         lanes: (r.kind === 'minor_road' ? 1 : 2) as 1 | 2,
         half: ROAD_HALF[r.kind] ?? 4,
         bridge: !!r.bridge,
+        oneway: !!r.oneway,
       }));
     if (trafficModel) trafficModel.addRoads(batch);
     else pendingBatches.push(batch);
+    if (trafficSim) trafficSim.addRoads(batch);
+    else simBatches.push(batch);
   },
 );
 scene.add(buildings.group);
@@ -3930,7 +3937,7 @@ async function start() {
     trafficModel = traffic;
     for (const b of pendingBatches.splice(0)) traffic.addRoads(b);
     // Busy roads (raised from the first budget of 15 / 40 / 100: they are drawn in batches, so they cost little).
-    const limit = { light: 130, standard: 280, ultra: 360 }[tier];
+    const limit = { light: 170, standard: 320, ultra: 420 }[tier];
     streetTraffic = new StreetTraffic(traffic, (lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT], limit, { light: 105, standard: 170, ultra: 220 }[tier]);
     scene.add(streetTraffic.group);
     streetTraffic.deckHeight = (x, z) => flyovers.heightAt(x, z);
@@ -3939,8 +3946,26 @@ async function start() {
     streetTraffic.signals = signals;
     if (life) life.vehicleAt = vehicleAt;
     streetTraffic.onBlocked = onVehicleBlocked;
+    // The drivers: every vehicle drives by the traffic rules (trafficSim.ts), on all the streets loaded.
+    const toLngLat = (x: number, z: number): [number, number] => [START[0] + x / M_LON, START[1] - z / M_LAT];
+    trafficSim = new TrafficSim((lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT], toLngLat, { light: { max: 420, radius: 135, seen: 112 }, standard: { max: 650, radius: 200, seen: 170 }, ultra: { max: 900, radius: 260, seen: 220 } }[tier]);
+    for (const b of simBatches.splice(0)) trafficSim.addRoads(b);
+    trafficSim.redLight = (x, z, heading) => {
+      // A traffic light at the junction this lane runs into: red or amber means stop at its line.
+      const fx = Math.sin(heading), fz = -Math.cos(heading);
+      for (const j of signals.junctions) {
+        const dx = j.x - x, dz = j.z - z;
+        if (Math.abs(dx) > 30 || Math.abs(dz) > 30) continue;
+        const along = dx * fx + dz * fz;
+        if (along < 0 || Math.abs(dx * -fz + dz * fx) > j.half + 3) continue;
+        const light = lightFor(j, heading, Date.now() / 1000);
+        return { stop: light !== 'green', extra: Math.max(0, stopLineAt(j) - along) };
+      }
+      return null;
+    };
+    streetTraffic.sim = trafficSim;
     void loadDriver();
-    if (debug) Object.assign(window, { __street: { state, sky, look, life, story, thief, signals, lightFor, flyovers, pinch, bigScreen, roadSigns, getStation: () => station, places, fuelWhy, bag, driver, shove, uncle, compound, props, camera3d, adCard, frameShot, placeCompound, buildings, nimaRoute, rideSign, RIDE_SIGNS, map, placeCarTag, fullMap, phone, camAvoid, camAt, viewBlocked, heightAtView, solidAt, traffic: streetTraffic, driveIn, parkingNear, pullIn, pullOut, roadLineNear, compoundAt, music, streetSound, epicRoads, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
+    if (debug) Object.assign(window, { __street: { state, sky, look, life, story, thief, signals, lightFor, flyovers, pinch, bigScreen, roadSigns, getStation: () => station, places, fuelWhy, bag, driver, shove, uncle, compound, props, camera3d, adCard, frameShot, placeCompound, buildings, nimaRoute, rideSign, RIDE_SIGNS, map, placeCarTag, fullMap, phone, camAvoid, camAt, viewBlocked, heightAtView, solidAt, traffic: streetTraffic, driveIn, parkingNear, pullIn, pullOut, roadLineNear, compoundAt, music, streetSound, epicRoads, trafficSim: () => trafficSim, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
   }
 
   document.getElementById('loading')!.remove();
@@ -4014,6 +4039,7 @@ async function start() {
       // Vehicles are cheap to draw (a few batches): the roads always stay at least three-quarters full.
       // Rush hours fill the roads; a struggling phone thins them a little (never below three-quarters).
       if (streetTraffic) streetTraffic.density = roadFill(day.hour) * Math.max(0.75, density);
+      if (trafficSim) trafficSim.fill = roadFill(day.hour) * Math.max(0.75, density);
       void baseLimit;
       if (debug) debugLine.textContent = `${tier} (${reason}) · ${Math.round(fps)} fps · ${renderer.info.render.triangles} tris · busy ${Math.round(density * 100)}%`;
     }

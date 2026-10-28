@@ -384,6 +384,19 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
     - Scene on Light at the evening rush: about 300,000 to 316,000 triangles.
     - **Done when:** at the evening rush on the test site the roads round Circle are full of the pack's cars, taxis, trotros and buses, the junctions are jammed, and the game stays smooth on the cheap Android.
 
+  - **Traffic that drives by the rules, every Epic City road vehicle, many more cars** (owner, 28 Oct):
+    - The owner saw vehicles passing through each other and swerving in the middle of roads. Cause: each vehicle followed a timetable along a fixed loop (the same on every phone), and only checked the vehicles right beside it; at tile joins and loop joins its path could jump. Now `src/game/trafficSim.ts`: each vehicle is its own driver, as in the pack's traffic system:
+      - every road is cut into lanes (Ghana drives on the right; main roads two lanes each way, one-way roads, such as each side of a dual carriageway, all their lanes one way); a vehicle keeps to its lane and turns only at a real junction, along a smooth curve into the lane it turns into (left turns from the inner lane, right turns from the outer);
+      - it keeps a safe distance from whatever is ahead, speeding up and braking smoothly (the intelligent driver rule of real traffic simulators), and also looks out of its windscreen for anything in the space ahead on any road (map roads that run side by side or cross with no junction on the map);
+      - it stops at the line on red, and enters a junction only when nothing on a crossing path is in it and there is room in the lane it turns into;
+      - it picks its way at every junction (straight on most often) and drives on for ever. Around the player the roads are kept full (fuller in the rush hours): new vehicles join out of sight, far ones are let go.
+      - Checked on the test machine: no vehicles overlapping and none stuck in most checks; vehicles wait at red lights.
+      - Traffic is now worked out on each phone (no longer the same on every phone); the story's own drives (Uncle Kwame's car, the ambulance) still use the old routes, which are not drawn.
+    - Every road vehicle of the Epic City pack is on the streets (`src/game/vehicleTypes.ts`): besides the saloons, taxis, trotros, buses, pickups, box trucks and okadas, now police cars, old cars, racing cars, open jeeps, the odd formula car and golf cart, tow trucks, fire pickups, ambulances, the school bus, tippers, tankers, cement mixers, fire engines, armoured trucks, and slow road rollers, bulldozers, excavators, cranes and forklifts. The special ones keep the pack's colours; each type has its own length and width for the drivers. (Bicycles, scooters, boats, trains, planes, the helicopter and the balloon come with step 7.)
+    - Many more cars: on Light up to 420 vehicles drive round you (170 drawn), Standard 650 (320), Ultra 900 (420); about one vehicle every 7.5 m of lane in the rush.
+    - Not used: the "ARCADE Ultimate Vehicles Pack" file the owner sent has a note inside saying it was uploaded by unityassetcollection.com, a site that gives out paid packs without the makers' permission, so it is not licensed for the game; the unpacked copy was deleted. Bought from the Unity Asset Store, it can be added.
+    - Scene on Light: about 315,000 to 325,000 triangles.
+
 ## Waiting on the owner
 
 - Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.
