@@ -14,6 +14,7 @@ import type { Roof, StreetLine } from './streetBuildings';
 import { CrowdBatch, lookFor, MIX, type Clip, type CrowdBody, type Kind as PersonKind, type Look } from './crowd';
 import { PosedCrowd, type Pose } from './posedCrowd';
 import { StreetScenes } from './streetScenes';
+import { foodGeometry, foodMaterial, foodPick, STALL_FOOD, TABLE_FOOD, type FoodName } from './foodKit';
 
 type Part = THREE.BufferGeometry;
 type Spot = { x: number; z: number; angle: number; scale: number; colour: number; light?: { along: number; across: number; mid: number } };
@@ -149,8 +150,9 @@ function polytank(): Part {
 const KIOSK_COLOURS = [0x2f8f57, 0xe3a92b, 0xc8442e, 0x1f5fa8, 0xf2efe6, 0x7a3e9d];
 const UMBRELLA_COLOURS = [0xe3a92b, 0xc8442e, 0x2f8f57, 0x1f5fa8, 0xf2efe6];
 
-// follows: drawn at the same places as another batch (the pack's umbrellas over the sellers' tables).
-type Batch = { mesh: THREE.InstancedMesh; all: Spot[]; tint: boolean; max?: number; follows?: Batch };
+// follows: drawn at the same places as another batch (the pack's umbrellas over the sellers' tables);
+// pick: only at some of them (each stall sells one kind of food); near: drawn only this close (metres).
+type Batch = { mesh: THREE.InstancedMesh; all: Spot[]; tint: boolean; max?: number; follows?: Batch; pick?: (s: Spot) => boolean; near?: number };
 
 // Circle's market (Epic City plan, step 6): the open ground round the junction packed with stalls.
 const MARKET_INNER = 55; // the junction itself stays open (metres from the middle of Circle)
@@ -186,16 +188,17 @@ type Agent = {
   lastX?: number;
   lastZ?: number;
   lastH?: number;
-  // Walking on and on (never back and forth): along which way, from which time, and the bit of road
-  // being crossed to the next pavement.
-  rev?: boolean;
+  // Walking a few steps along the pavement and back: the stretch (from, length, the stop at each end)
+  // and from which time.
+  pace?: { from: number; len: number; rest: number };
+  resting?: boolean; // stopped at the end of their stretch, about to turn back
+  blocked?: number; // seconds held up by a vehicle in the way (then they turn back)
   /** Stepping across the pavement round a kiosk or stall, or apart from someone (metres to the right). */
   avoid?: number;
   avoidT?: number; // where they are stepping to (smoothed, so they never shake)
   /** The way ahead is blocked right across the pavement: turn back. */
   turn?: boolean;
   legT?: number;
-  cross?: { ax: number; az: number; bx: number; bz: number; len: number } | null;
 };
 
 // A phone stand: a table with a glass case of phones, chargers hanging on a board, and a small
@@ -370,6 +373,22 @@ export class StreetLife {
     this.canopies.follows = this.umbrellas;
     this.stands = pack('props/marketplace-stand-simple.glb', this.opts.light ? 50 : this.opts.props >= 2000 ? undefined : 150);
     this.carts = pack('props/hot-dog-stand.glb', this.opts.light ? 10 : this.opts.props >= 2000 ? undefined : 30);
+    // The food on the stalls and umbrella tables (foodKit.ts): one kind per stall, only near you.
+    const food = (names: readonly FoodName[], on: Batch, max: number | undefined, near: number) =>
+      names.forEach((name, i) => {
+        const b = make(new THREE.BufferGeometry(), false);
+        b.mesh.castShadow = false;
+        b.follows = on;
+        b.pick = (s) => foodPick(s.x, s.z, names.length) === i;
+        b.near = near;
+        if (max !== undefined) b.max = max;
+        void foodGeometry(name).then((g) => {
+          b.mesh.geometry = g;
+          b.mesh.material = foodMaterial();
+        });
+      });
+    food(STALL_FOOD, this.stands, opts.light ? 3 : rich ? undefined : 10, opts.light ? 35 : rich ? 90 : 60);
+    food(TABLE_FOOD, this.umbrellas, opts.light ? 4 : rich ? undefined : 12, opts.light ? 35 : rich ? 90 : 60);
     this.busStops = pack('props/bus-stop.glb', lightCap(8));
     this.stopSigns = pack('props/bus-stop-sign.glb', lightCap(8));
     this.benches = pack('props/bench-old.glb', lightCap(30));
@@ -414,6 +433,9 @@ export class StreetLife {
     this.group.add(this.shadowBatch);
     const loadMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0.2 });
     this.loads = { basin: new THREE.InstancedMesh(headLoad('basin'), loadMat, opts.people), tray: new THREE.InstancedMesh(headLoad('tray'), loadMat, opts.people) };
+    // Once the food has loaded: oranges in the basins, bread on the trays.
+    void foodGeometry('head-oranges').then((g) => ((this.loads.basin.geometry = g), (this.loads.basin.material = foodMaterial())));
+    void foodGeometry('head-bread').then((g) => ((this.loads.tray.geometry = g), (this.loads.tray.material = foodMaterial())));
     this.bags = new THREE.InstancedMesh(backpack(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 }), opts.people);
     this.bags.count = 0;
     this.bags.frustumCulled = false;
@@ -1054,13 +1076,12 @@ export class StreetLife {
     for (const b of this.batches) {
       let n = 0;
       // The nearest ones first, so a full batch never leaves gaps close to the player.
-      const far0 = b === this.boards || b === this.roofBoards ? boardR2 : r2;
-      let list = (b.follows ?? b).all.filter((q) => (q.x - x) ** 2 + (q.z - z) ** 2 <= far0);
+      const far0 = b === this.boards || b === this.roofBoards ? boardR2 : b.near ? Math.min(r2, b.near ** 2) : r2;
+      let list = (b.follows ?? b).all.filter((q) => (q.x - x) ** 2 + (q.z - z) ** 2 <= far0 && (!b.pick || b.pick(q)));
       const max = b.max ?? this.opts.props;
       if (list.length > max) list = list.sort((a, c) => (a.x - x) ** 2 + (a.z - z) ** 2 - ((c.x - x) ** 2 + (c.z - z) ** 2));
       for (const s of list) {
-        const far = b === this.boards || b === this.roofBoards ? boardR2 : r2; // billboards are tall: seen from much further
-        if ((s.x - x) ** 2 + (s.z - z) ** 2 > far) continue;
+        if ((s.x - x) ** 2 + (s.z - z) ** 2 > far0) continue; // (billboards are tall: seen from much further)
         if (n >= max) {
           // Not drawn (too many), but its light on the ground still is.
           if (s.light && this.night > 0.02 && this.poolCount < this.pools.instanceMatrix.count) {
@@ -1511,6 +1532,7 @@ export class StreetLife {
       let px: number;
       let pz: number;
       let heading: number;
+      let resting = false;
       if (a.spot) {
         // Standing at a kiosk or a vendor's umbrella, facing it (on a free side of it: never inside the
         // next kiosk, never on the road).
@@ -1533,61 +1555,47 @@ export class StreetLife {
           const w = a.run;
           [qx, qz, dir] = this.pointOn(w, a.s0 % w.total);
         } else if (leader && leader.lastX !== undefined) {
-          // In a group: a step or two behind the leader, the same way.
+          // In a group: a step or two behind the leader, the same way (stopping when they stop).
+          resting = !!leader.resting;
           const lh = leader.lastH ?? 0;
           const back = 1 + ((i - a.leader) % 3) * 0.9;
           [qx, qz, dir] = [leader.lastX - Math.sin(lh) * back, leader.lastZ! + Math.cos(lh) * back, lh];
         } else {
-          // On and on along the pavements: at the end of one, across to the next that carries on
-          // (over a side road if need be); back the other way only at a real dead end.
+          // A few steps along the pavement and back (owner, 29 Oct 2026): out to the end of their
+          // stretch, a short stop, then back. Nobody walks off for ever, and nobody crosses the road
+          // (no one left standing out in the traffic).
           const tt = t - held;
-          if (a.legT === undefined) {
-            a.rev = hash(i, 41) < 0.5;
-            a.legT = tt - (a.s0 % a.run.total) / a.speed;
-            a.cross = null;
+          const w = a.run;
+          if (a.legT === undefined || !a.pace) {
+            const len = Math.min(w.total, 7 + hash(i, 43) * 16);
+            a.pace = { from: Math.min(a.s0 % w.total, w.total - len), len, rest: 0.8 + hash(i, 44) * 1.8 };
+            a.legT = tt - hash(i, 41) * 2 * (len / a.speed + a.pace.rest);
           }
-          let d = (tt - a.legT) * a.speed;
-          if (a.turn && !a.cross) {
-            // Back the way they came, from where they stand.
+          const { from, len, rest } = a.pace;
+          const walk = len / a.speed;
+          const period = 2 * (walk + rest);
+          const phase = (v: number) => ((v % period) + period) % period;
+          if (a.turn) {
+            // Blocked right across: back the way they came, from where they stand.
             a.turn = false;
-            a.rev = !a.rev;
-            a.legT = tt - (a.run.total - Math.max(0, Math.min(a.run.total, d))) / a.speed;
-            d = (tt - a.legT) * a.speed;
+            a.legT = tt - phase(2 * walk + rest - phase(tt - a.legT));
           }
-          for (let guard = 0; guard < 4; guard++) {
-            if (a.cross) {
-              if (d < a.cross.len) break;
-              a.legT += a.cross.len / a.speed;
-              a.cross = null;
-              d = (tt - a.legT) * a.speed;
-              continue;
-            }
-            if (d <= a.run.total) break;
-            this.nextLeg(a);
-            d = (tt - a.legT!) * a.speed;
-          }
-          if (a.cross) {
-            const c = a.cross;
-            // At the kerb: wait until no vehicle is on the way across, then go.
-            if (d < 0.6 && this.vehicleAt && Math.abs(c.ax - x) < 70 && Math.abs(c.az - z) < 70) {
-              let busy = false;
-              for (const k of [0.2, 0.5, 0.8]) if (this.vehicleAt(c.ax + (c.bx - c.ax) * k, c.az + (c.bz - c.az) * k, 3)) busy = true;
-              if (busy && !leader) {
-                a.held = (a.held ?? 0) + dt;
-                d = Math.max(0, d - a.speed * dt);
-              }
-            }
-            const k = Math.max(0, Math.min(1, d / (c.len || 1)));
-            [qx, qz] = [c.ax + (c.bx - c.ax) * k, c.az + (c.bz - c.az) * k];
-            // Out on the road: the drivers stop for them (vehicles3d.ts, walkers).
-            if (d > 0.3 && d < c.len - 0.3) this.crossers.push({ x: qx, z: qz });
-            dir = Math.atan2(c.bx - c.ax, -(c.bz - c.az));
+          const u = phase(tt - a.legT);
+          let s: number;
+          if (u < walk) s = u * a.speed;
+          else if (u < walk + rest) {
+            s = len;
+            resting = true;
+            forward = u < walk + rest / 2; // (turning round halfway through the stop)
+          } else if (u < 2 * walk + rest) {
+            s = len - (u - walk - rest) * a.speed;
+            forward = false;
           } else {
-            const w = a.run;
-            const sAt = Math.max(0, Math.min(w.total, a.rev ? w.total - d : d));
-            [qx, qz, dir] = this.pointOn(w, sAt);
-            if (a.rev) forward = false;
+            s = 0;
+            resting = true;
+            forward = u >= 2 * walk + rest * 1.5;
           }
+          [qx, qz, dir] = this.pointOn(w, from + Math.max(0, Math.min(len, s)));
         }
         heading = forward ? dir : dir + Math.PI;
         if (a.still) heading = dir;
@@ -1604,7 +1612,7 @@ export class StreetLife {
           const fx = Math.sin(heading), fz = -Math.cos(heading); // the way they face
           const ahead = a.still ? 0 : 2.0;
           // (Crossing a road to the next pavement they are on the road anyway: only kiosks count.)
-          const ok = (ox: number, oz: number) => !this.solid(ox, oz, 0.28) && (!!a.cross || !this.onRoad(ox, oz, 0.05));
+          const ok = (ox: number, oz: number) => !this.solid(ox, oz, 0.28) && !this.onRoad(ox, oz, 0.05);
           const free = (o: number) => ok(px + rx * o, pz + rz * o) && (ahead === 0 || ok(px + rx * o + fx * ahead, pz + rz * o + fz * ahead));
           const cur = a.avoid ?? 0;
           const OFFS = [0.45, -0.45, 0.9, -0.9, 1.35, -1.35, 1.8, -1.8, 2.3, -2.3];
@@ -1672,6 +1680,8 @@ export class StreetLife {
           pz += rz * a.avoid;
         }
         a.lastH = heading;
+        a.resting = resting;
+        if (!a.waiting) a.blocked = 0;
         // Talking with the player: stand still, face them, talk with the hands.
         if ((a.talkUntil ?? 0) > t) {
           if (!a.still) a.held = (a.held ?? 0) + dt;
@@ -1682,9 +1692,22 @@ export class StreetLife {
             batch.setLook(a.slot, a.look, 'talk', t);
           }
         }
+        // At the end of their stretch: a moment standing before turning back.
+        else if (resting && !a.still) {
+          if (!a.waiting) {
+            a.waiting = true;
+            batch.setLook(a.slot, a.look, 'idle', t);
+          }
+        }
         // A vehicle in the way: wait where you are (standing, not walking on the spot) until it moves.
         else if (!a.still && this.vehicleAt && Math.abs(px - x) < 60 && Math.abs(pz - z) < 60 && this.vehicleAt(px, pz, 0.35)) {
           if (!leader) a.held = (a.held ?? 0) + dt;
+          // Never stuck there: after a moment they turn back the way they came.
+          a.blocked = (a.blocked ?? 0) + dt;
+          if (a.blocked > 1.5 && !leader) {
+            a.blocked = 0;
+            a.turn = true;
+          }
           if (a.lastX !== undefined) [px, pz] = [a.lastX, a.lastZ!];
           // If the vehicle comes right up to where they stand, they step aside out of its way.
           const b = this.vehicleAt(px, pz, 0.2);
@@ -1767,39 +1790,6 @@ export class StreetLife {
     const w = a.run!;
     const [px, pz] = this.pointOn(w, a.s0 % w.total);
     return Math.hypot(px - x, pz - z) > far;
-  }
-
-  /** At the end of a pavement: the next one that carries on (crossing to it), or back the way they came. */
-  private nextLeg(a: Agent) {
-    const w = a.run!;
-    a.legT! += w.total / a.speed;
-    const n = w.pts.length;
-    const [ex, ez] = a.rev ? [w.pts[0], w.pts[1]] : [w.pts[n - 2], w.pts[n - 1]];
-    // The way they were going at the end.
-    const [px, pz] = a.rev ? [w.pts[2], w.pts[3]] : [w.pts[n - 4], w.pts[n - 3]];
-    const gx = ex - px;
-    const gz = ez - pz;
-    const gl = Math.hypot(gx, gz) || 1;
-    let best: { w: Walkway; rev: boolean; x: number; z: number; score: number } | null = null;
-    for (const o of this.nearWalkways) {
-      if (o === w || o.total < 6) continue;
-      const m = o.pts.length;
-      for (const [atEnd, ox, oz] of [[false, o.pts[0], o.pts[1]], [true, o.pts[m - 2], o.pts[m - 1]]] as const) {
-        const d = Math.hypot(ox - ex, oz - ez);
-        if (d > 13) continue;
-        // Which way the next one goes from there, compared with the way they were walking.
-        const [nx, nz] = atEnd ? [o.pts[m - 4], o.pts[m - 3]] : [o.pts[2], o.pts[3]];
-        const dot = ((nx - ox) * gx + (nz - oz) * gz) / ((Math.hypot(nx - ox, nz - oz) || 1) * gl);
-        if (dot < -0.3) continue; // that would send them back
-        const score = d - dot * 6 + hash(ox, oz + a.slot) * 3;
-        if (!best || score < best.score) best = { w: o, rev: atEnd, x: ox, z: oz, score };
-      }
-    }
-    if (best) {
-      a.cross = { ax: ex, az: ez, bx: best.x, bz: best.z, len: Math.hypot(best.x - ex, best.z - ez) };
-      a.run = best.w;
-      a.rev = best.rev;
-    } else a.rev = !a.rev; // a real dead end: back the way they came
   }
 }
 

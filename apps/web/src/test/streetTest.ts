@@ -13,6 +13,7 @@ import type { Traffic } from '../game/traffic';
 import { createStreetNetwork } from '../game/streetNetwork';
 import { AD_ASPECT, AD_ROWS, StreetTraffic } from '../game/vehicles3d';
 import { StreetBuildings } from '../game/streetBuildings';
+import { foodGeometry, foodMaterial } from '../game/foodKit';
 import { applyStreetStyle } from '../map/streetStyle';
 import { StreetLife } from '../game/streetLife';
 import type { Nearby } from '../game/streetScenes';
@@ -1770,6 +1771,11 @@ const props = {
   food: mkProp(merge([paint(box(0.15, 0.1, 0.12, 0, 0, 0), '#c9a46a'), paint(box(0.13, 0.035, 0.1, 0, 0.06, 0), '#d88a1c')])),
   money: mkProp(merge([paint(box(0.15, 0.012, 0.07, 0, 0, 0), '#3f8f4f'), paint(box(0.15, 0.012, 0.07, 0.012, 0.014, 0.01), '#5aa66a')])),
 };
+// The kelewele: a paper of fried plantain cubes and groundnuts (foodKit.ts), in place of the plain box.
+void foodGeometry('kelewele-wrap').then((g) => {
+  props.food.geometry = g;
+  props.food.material = foodMaterial();
+});
 type Carry = { prop: THREE.Mesh; from: Person; to: Person | null; t0: number; len: number };
 const carries: Carry[] = [];
 const rightHand = (p: Person, out: THREE.Vector3) => (p.bones.hand_r ?? p.root).getWorldPosition(out);
@@ -2318,8 +2324,6 @@ function stallModel() {
     paint(box(0.06, 0.76, 0.06, 0.5, 0.38, 0.4), '#5a3f28'),
     paint(box(0.06, 0.76, 0.06, -0.5, 0.38, 0.4), '#5a3f28'),
     paint(new THREE.CylinderGeometry(0.2, 0.15, 0.32, 10).translate(0.75, 0.16, -0.25), '#2b2b2b'), // coal pot
-    paint(new THREE.CylinderGeometry(0.3, 0.22, 0.08, 14).translate(0.75, 0.36, -0.25), '#1a1a1a'), // pan
-    paint(new THREE.CylinderGeometry(0.26, 0.26, 0.02, 14).translate(0.75, 0.39, -0.25), '#d88a1c'), // the kelewele
     paint(box(0.46, 0.05, 0.44, 0.2, 0.44, 1.05), '#1f5fa8'), // blue chair (the customer's)
     paint(box(0.46, 0.45, 0.05, 0.2, 0.68, 1.27), '#1f5fa8'),
     paint(box(0.46, 0.05, 0.44, -0.75, 0.44, 0.7), '#c8442e'), // red chair
@@ -2329,6 +2333,13 @@ function stallModel() {
   const solid = new THREE.Mesh(merge(parts), mat);
   solid.castShadow = true;
   g.add(solid);
+  // The pan of kelewele on the coal pot (foodKit.ts).
+  void foodGeometry('kelewele-pan').then((geo) => {
+    const pan = new THREE.Mesh(geo, foodMaterial());
+    pan.position.set(0.75, 0.32, -0.25);
+    pan.scale.setScalar(0.8);
+    g.add(pan);
+  });
   // Red and yellow umbrella.
   const canopy = new THREE.ConeGeometry(1.35, 0.45, 8, 1, true).translate(0, 2.35, 0.1);
   const cols: number[] = [];
