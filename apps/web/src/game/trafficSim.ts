@@ -64,7 +64,7 @@ type Car = {
   special?: 'ambulance';
   /** A story vehicle (the trotro you arrive in, Uncle Kwame's car): a real driver in the traffic,
    *  steered to its stop and along its way; never let go until the story releases it. */
-  story?: { stop: { seg: Seg; s: number } | null; guide: Float32Array | null; released: boolean; side?: number; sideNow?: number; yaw?: number };
+  story?: { stop: { seg: Seg; s: number } | null; guide: Float32Array | null; released: boolean; side?: number; sideNow?: number; yaw?: number; hurry?: boolean };
 };
 
 // Driving behaviour (intelligent driver model): comfortable, Accra-busy.
@@ -564,7 +564,8 @@ export class TrafficSim {
       // Nobody waits more than 10 seconds, anywhere (owner, 29 Oct 2026, a strict rule): after 6.5 s
       // standing, a driver stops waiting for the light (still giving way to anyone in the junction, and
       // never driving into anyone).
-      const impatient = car.stuck > 6.5 && !car.story && !this.hold.has(car.id);
+      // (A story vehicle in a hurry, Uncle on the film of the ride home, after 2 s.)
+      const impatient = (car.story?.hurry ? car.stuck > 2 : car.stuck > 6.5 && !car.story) && !this.hold.has(car.id);
       // 2. The end of the lane: stop at the line for red, or to give way, or with nowhere to go.
       if (!seg.link) {
         if (!car.plan || car.plan.dead) this.choose(car);
@@ -880,7 +881,7 @@ export class TrafficSim {
    * lane's start). Vehicles in its place are let go (call it at a camera cut). `guide`: the way it
    * should go at junctions. Returns its number, or null when there is no lane there.
    */
-  addStory(o: { kind: Kind; type: string; colour: string; x: number; z: number; heading: number; back: number; guide?: [number, number][] }): number | null {
+  addStory(o: { kind: Kind; type: string; colour: string; x: number; z: number; heading: number; back: number; guide?: [number, number][]; hurry?: boolean }): number | null {
     const at = this.laneAt(o.x, o.z, o.heading);
     if (!at) return null;
     const car = this.newCar(at.seg, 0, o.kind);
@@ -889,7 +890,8 @@ export class TrafficSim {
     car.len = TYPE_BY_KEY.get(o.type)?.len ?? car.len;
     car.halfW = (TYPE_BY_KEY.get(o.type)?.width ?? car.halfW * 2) / 2;
     car.s = Math.max(car.len / 2 + 0.5, Math.min(at.seg.len - car.len / 2, at.s - o.back));
-    car.story = { stop: null, guide: o.guide ? Float32Array.from(o.guide.flat()) : null, released: false };
+    car.story = { stop: null, guide: o.guide ? Float32Array.from(o.guide.flat()) : null, released: false, hurry: o.hurry };
+    if (o.hurry) car.v = Math.min(car.v0, at.seg.speed) * 0.8; // (a film shot opens on it already driving)
     // Room for it: anyone where it appears is let go, and (called at a camera cut) anyone on its lane
     // between there and the point it is sent to, so it never queues behind them on its way in.
     for (const c of [...at.seg.cars]) if (Math.abs(c.s - car.s) < (c.len + car.len) / 2 + 2 || (c.s > car.s && c.s < at.s + 30)) this.drop(c);
@@ -960,6 +962,11 @@ export class TrafficSim {
       }
     }
     return false;
+  }
+  /** Fill the roads round the player at once, in sight too (after a camera cut to another part of the city). */
+  fillNow() {
+    this.started = this.time || 0.0001;
+    this.activeAt = [1e9, 1e9];
   }
   /** The story vehicle pulls over to the kerb as it comes to its stop: `metres` to the right of its lane. */
   pullOver(id: number, metres: number) {

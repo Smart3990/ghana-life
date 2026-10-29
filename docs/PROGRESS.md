@@ -545,6 +545,11 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
   - **The owner's trotro clip, and a quieter night** (owner, 29 Oct: "replace the video… too colourful, doesn't look like a city… neon very slightly"):
     - The opening film is now the owner's own 2.2 s clip of the trotro driving off at sunset (as sent, without its sound; the music plays over it), subtitle "The trotro to Accra."
     - Night from the sky: the map's buildings mostly dark, some with warm lit windows, a few softly pink, violet or teal (3 in 20); the glowing orange roads and lamp dots stay. The 3D windows near you: mostly warm lamplight, now and then a soft pink, violet or cyan.
+  - **Auntie Dede's stall from the pack, and the ride home as a real film of the road** (owner, 29 Oct):
+    - **Her stall:** the Epic City pack's striped market stand over a table of kelewele (the pan heaped with it, groundnuts, khebab on sticks, fried yam), her coal pot with the big pan of kelewele beside it, two plastic chairs in front. (Her line now says "the kelewele stall".)
+    - **The ride home to Nima, under 40 s, at street level:** four shots of about 7 s along the real way (Ring Road Central at Kokomlemle; Ring Road Central's big junction; the Nima Roundabout and clinic; Nima Market, almost home), the camera low behind Uncle's car (every other shot more from its side). Before each shot, behind the black (at most 2.5 s on the real clock), the streets there are built all round (roads, buildings, kiosks, people, traffic lights and poles, signs) and the traffic fills them; his road ahead is clear for the shot. He drives as a real driver in the traffic, curving through the junctions; he opens each shot already driving and waits at most 2 s anywhere; if his car is ever held up for 1.5 s, the film cuts to the next shot. The road and place signs slide in as before; "Twenty minutes later" is gone.
+    - Checked (test browser, `?scene=ride`): no errors; about 41 s from the first shot to the arrival at home in a slow test browser.
+    - Done when: the ride to Nima feels like a real drive through Accra's streets (traffic, kiosks, people, lights and poles), never shows the car stuck, and takes under 40 s; Auntie Dede's stall is the pack's market stand with kelewele on the table.
 
 ## Waiting on the owner
 

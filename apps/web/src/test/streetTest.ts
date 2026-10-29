@@ -22,7 +22,7 @@ import { Flyovers } from '../game/flyovers';
 import { EpicRoads } from '../game/epicRoads';
 import { TrafficSim } from '../game/trafficSim';
 import { GameTime, dayLook, forTheHour, roadFill, type DayLook } from '../game/dayNight';
-import { setEpicNight } from '../game/epicKit';
+import { epicGeometry, epicMaterial, setEpicNight } from '../game/epicKit';
 import { BigScreen } from '../game/bigScreen';
 import { RoadSigns } from '../game/roadSigns';
 import { planStation } from '../game/trotroStation';
@@ -2327,47 +2327,45 @@ const auntie = {
     if (this.person) act(this.person, on ? 'talk' : 'idle');
   },
 };
-// Umbrella, table, coal pot with the pan of kelewele, and two plastic chairs. Built facing +z (the
-// auntie stands at -z behind the table, the customer's chair is at +z).
+// Her stall, from the Epic City pack (owner, 29 Oct 2026: "use the big pack… more real"): its striped
+// market stand over a table of kelewele (the pan heaped with it, groundnuts, khebab on sticks, fried
+// yam: foodKit.ts), her coal pot with the big pan beside it, and two plastic chairs for customers in
+// front. Built facing +z (she stands at -z behind the table, the customer's chair is at +z).
 function stallModel() {
   const g = new THREE.Group();
-  const parts = [
-    paint(new THREE.CylinderGeometry(0.03, 0.03, 2.3, 6).translate(0, 1.15, 0.1), '#d9d2c2'),
-    paint(box(1.1, 0.06, 0.7, 0, 0.78, 0.1), '#7a5636'),
-    paint(box(0.06, 0.76, 0.06, 0.5, 0.38, -0.2), '#5a3f28'),
-    paint(box(0.06, 0.76, 0.06, -0.5, 0.38, -0.2), '#5a3f28'),
-    paint(box(0.06, 0.76, 0.06, 0.5, 0.38, 0.4), '#5a3f28'),
-    paint(box(0.06, 0.76, 0.06, -0.5, 0.38, 0.4), '#5a3f28'),
-    paint(new THREE.CylinderGeometry(0.2, 0.15, 0.32, 10).translate(0.75, 0.16, -0.25), '#2b2b2b'), // coal pot
-    paint(box(0.46, 0.05, 0.44, 0.2, 0.44, 1.05), '#1f5fa8'), // blue chair (the customer's)
-    paint(box(0.46, 0.45, 0.05, 0.2, 0.68, 1.27), '#1f5fa8'),
-    paint(box(0.46, 0.05, 0.44, -0.75, 0.44, 0.7), '#c8442e'), // red chair
-    paint(box(0.46, 0.45, 0.05, -0.75, 0.68, 0.92), '#c8442e'),
-  ];
-  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7 });
-  const solid = new THREE.Mesh(merge(parts), mat);
-  solid.castShadow = true;
-  g.add(solid);
-  // The pan of kelewele on the coal pot (foodKit.ts).
+  void epicGeometry('props/marketplace-stand-simple.glb').then((geo) => {
+    const stand = new THREE.Mesh(geo, epicMaterial());
+    stand.position.z = 0.1;
+    stand.castShadow = true;
+    g.add(stand);
+  });
+  void foodGeometry('stall-kelewele').then((geo) => {
+    const table = new THREE.Mesh(geo, foodMaterial());
+    table.position.z = 0.1;
+    table.castShadow = true;
+    g.add(table);
+  });
+  // The coal pot beside the stand, the big pan of kelewele on it.
+  const pot = new THREE.Mesh(paint(new THREE.CylinderGeometry(0.2, 0.15, 0.32, 10).translate(1.95, 0.16, -0.05), '#2b2b2b'), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 }));
+  pot.castShadow = true;
+  g.add(pot);
   void foodGeometry('kelewele-pan').then((geo) => {
     const pan = new THREE.Mesh(geo, foodMaterial());
-    pan.position.set(0.75, 0.32, -0.25);
+    pan.position.set(1.95, 0.32, -0.05);
     pan.scale.setScalar(0.8);
     g.add(pan);
   });
-  // Red and yellow umbrella.
-  const canopy = new THREE.ConeGeometry(1.35, 0.45, 8, 1, true).translate(0, 2.35, 0.1);
-  const cols: number[] = [];
-  const pos = canopy.getAttribute('position');
-  for (let i = 0; i < pos.count; i++) {
-    const a = Math.atan2(pos.getZ(i) - 0.1, pos.getX(i));
-    const c = new THREE.Color(Math.floor(((a + Math.PI) / (Math.PI * 2)) * 8) % 2 ? '#e3a92b' : '#c8442e');
-    cols.push(c.r, c.g, c.b);
-  }
-  canopy.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
-  const umbrella = new THREE.Mesh(canopy, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, side: THREE.DoubleSide }));
-  umbrella.castShadow = true;
-  g.add(umbrella);
+  const chairs = new THREE.Mesh(
+    merge([
+      paint(box(0.46, 0.05, 0.44, 0.2, 0.44, 1.05), '#1f5fa8'), // blue chair (the customer's)
+      paint(box(0.46, 0.45, 0.05, 0.2, 0.68, 1.27), '#1f5fa8'),
+      paint(box(0.46, 0.05, 0.44, -0.95, 0.44, 1.25), '#c8442e'), // red chair
+      paint(box(0.46, 0.45, 0.05, -0.95, 0.68, 1.47), '#c8442e'),
+    ]),
+    new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7 }),
+  );
+  chairs.castShadow = true;
+  g.add(chairs);
   return g;
 }
 
@@ -3473,7 +3471,7 @@ async function playOpening(start: StartChoice) {
     const girl = playerBody === 'female';
     await cine.say('AUNTIE DEDE', girl ? 'Hello? Is this Uncle Kwame? Your niece is here with me at Circle. A boy took her bag.' : 'Hello? Is this Uncle Kwame? Your nephew is here with me at Circle. A boy took his bag.');
     await cine.say('UNCLE KWAME', girl ? 'Ei! Okay, no problem. Tell her to stay there. I am coming very soon.' : 'Ei! Okay, no problem. Tell him to stay there. I am coming very soon.');
-    await cine.say('AUNTIE DEDE', 'By the lorry station, the kelewele umbrella. Okay, okay. Bye bye.');
+    await cine.say('AUNTIE DEDE', 'By the lorry station, the kelewele stall. Okay, okay. Bye bye.');
     cine.call(null);
     dropProp(props.phone);
     if (dede) act(dede, 'idle');
@@ -3742,11 +3740,14 @@ async function rideFilm(way: Way, uCar: NonNullable<typeof streetTraffic>['story
   const SPEED = 15;
   // (The first 400 m of the way go up over the Kwame Nkrumah Interchange flyover: the ride starts just
   // past it, down on Ring Road Central, where the car is on the street.)
-  // (Owner, 28 Oct 2026: the drive home in under 10 s: two short glimpses of the way.)
+  // (Owner, 29 Oct 2026: the drive home a real film of the road, under 40 s: four shots of about 7 s,
+  // each where the streets are built all round first, with their traffic lights, poles and traffic.)
   const parts: [number, number][] = [
-    [490, 4], // from (metres along the way), for (seconds)
-    [Math.max(490 + SPEED * 4 + 20, way.length - 20 - SPEED * 3), 3],
-  ];
+    [490, 7], // from (metres along the way), for (seconds): Ring Road Central, Kokomlemle
+    [1430, 7], // Ring Road Central at its big junction
+    [2330, 7], // Nima Roundabout and the clinic
+    [Math.max(2650, way.length - 20 - SPEED * 6), 6], // Nima Market, almost home
+  ].filter(([from]) => from < way.length - 40) as [number, number][];
   let next = 0;
   while (next < RIDE_SIGNS.length && RIDE_SIGNS[next].at < parts[0][0] - 30) next++; // (Circle's own signs: seen there already)
   uCar.moving = true;
@@ -3759,12 +3760,23 @@ async function rideFilm(way: Way, uCar: NonNullable<typeof streetTraffic>['story
     // road, stops at the lights and waits in the queues, never through a car), steered along the real
     // way home at every junction. (Without a traffic lane there, it drives the way by itself.)
     const start = way.at(from);
+    // Behind the black: the streets there are built all round first (roads, buildings, kiosks, people,
+    // traffic lights and poles), and the traffic fills them, so the shot opens on a real street.
+    {
+      [state.x, state.z] = [start.x, start.z];
+      trafficSim?.fillNow();
+      // (On the real clock: behind the black the street runs slowly, and the wait must stay short.)
+      const t0 = performance.now();
+      while (performance.now() - t0 < 2500 && (performance.now() - t0 < 1000 || buildings.loading || epicRoads.loading)) await new Promise((r) => setTimeout(r, 100));
+    }
     const guide: [number, number][] = [];
     for (let k = from; k < Math.min(way.length, from + SPEED * LEN + 400); k += 10) {
       const q = way.at(k);
       guide.push([q.x, q.z]);
     }
-    const simRide = trafficSim?.addStory({ kind: 'car', type: 'car', colour: '#b3261e', x: start.x + Math.cos(start.heading) * 1.8, z: start.z + Math.sin(start.heading) * 1.8, heading: start.heading, back: 0, guide }) ?? null;
+    // Its road ahead clear for this shot (still behind the black): it drives on, never through anyone.
+    clearStoryPath(guide.slice(0, 14).map(([x, z]) => ({ x, z })), 2.6);
+    const simRide = trafficSim?.addStory({ kind: 'car', type: 'car', colour: '#b3261e', x: start.x + Math.cos(start.heading) * 1.8, z: start.z + Math.sin(start.heading) * 1.8, heading: start.heading, back: 0, guide, hurry: true }) ?? null;
     if (simRide !== null) uCar.shown = false;
     let dAt = from;
     const followSim = () => {
@@ -3804,10 +3816,11 @@ async function rideFilm(way: Way, uCar: NonNullable<typeof streetTraffic>['story
     };
     const shoot = (t: number, turn: number) => {
       // Low and close behind the car (over the road, never out over the buildings), swaying a little,
-      // turning with the road gently.
+      // turning with the road gently; every other shot from a little more to its side, so the street,
+      // its lights and poles go by.
       bearing += angleDiff(uCar.heading, bearing) * turn;
-      const b = bearing + 0.16 * Math.sin(t * 0.35 + i * 2);
-      story.shot = frameShot(uCar.x, uCar.z, (b * 180) / Math.PI, 13, 70);
+      const b = bearing + 0.16 * Math.sin(t * 0.35 + i * 2) + (i % 2 ? 0.55 : 0);
+      story.shot = frameShot(uCar.x, uCar.z, (b * 180) / Math.PI, i % 2 ? 10 : 12, i % 2 ? 74 : 71);
       placeCarTag(uCar.x, uCar.z);
     };
     drive(0);
@@ -3817,9 +3830,14 @@ async function rideFilm(way: Way, uCar: NonNullable<typeof streetTraffic>['story
     void cine.black(false, 0.7);
     const t0 = gameClock;
     let last = t0;
+    let still = 0;
     while (gameClock - t0 < LEN) {
       const t = gameClock - t0;
       const d = drive(t);
+      // Never a shot of the car standing still: held up for 1.5 s, the film cuts to the next shot.
+      const st = simRide !== null ? trafficSim?.storyState(simRide) : null;
+      still = st && st.v < 0.3 ? still + (gameClock - last) : 0;
+      if (still > 1.5 && t > 2.5) break;
       shoot(t, Math.min(1, (gameClock - last) * 1.4));
       last = gameClock;
       while (next < RIDE_SIGNS.length && d >= RIDE_SIGNS[next].at) rideSign(RIDE_SIGNS[next++]);
@@ -3837,9 +3855,7 @@ async function rideFilm(way: Way, uCar: NonNullable<typeof streetTraffic>['story
       const skip = parts[i + 1][0];
       const between: RideSign[] = [];
       while (next < RIDE_SIGNS.length && RIDE_SIGNS[next].at < skip) between.push(RIDE_SIGNS[next++]);
-      void cine.title('Twenty minutes later', between.filter((g) => g.kind !== 'road').map((g) => g.name).join(' · ') || 'Ring Road Central', 1.6);
       for (const g of between) rideSign(g);
-      await pause(1.6);
     }
   }
   while (next < RIDE_SIGNS.length) rideSign(RIDE_SIGNS[next++]);
