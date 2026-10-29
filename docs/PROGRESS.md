@@ -535,6 +535,7 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
     - **The trotro steers:** it turns its nose towards the kerb as it pulls over and straightens as it stops (and steers back out as it leaves, only while rolling), instead of sliding sideways.
     - **The door:** once it stops, its sliding door opens (the dark doorway opens from its front edge backwards, so it suits every van's advert), you step out through it onto the kerb, and it shuts behind you.
     - Done when: no voices at all, no glimpse of the street before the city is seen from the sky, the trotro visibly steers in to the kerb, and the door opens before you step out.
+  - **The trotro's way in is clear from the first moment** (owner, 29 Oct: vehicles seen from the sky vanished when the trotro scene began): the trotro and its clear lane are made behind the black, before the camera comes down. The cars on its lane in front of it are let go then (unseen), it waits out of sight about 45 m back (held, so nothing gets in front of it and no new car is added there), and is let go when its scene starts. The traffic on the other lanes keeps passing. Checked: from the fly-down to "Last stop", no vehicle within 45 m of the stop vanished, nothing was ever in front of the trotro, and about 40 vehicles passed nearby.
 
 ## Waiting on the owner
 

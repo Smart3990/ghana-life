@@ -3117,37 +3117,17 @@ function arrivalShot() {
   return frameShot(state.x - T.x * 3, state.z - T.z * 3, along + lean, 11, 70);
 }
 
-async function arriveByBus(): Promise<number | null> {
-  const spot = { x: state.x, z: state.z };
-  const toRoad = life?.roadDirNear(spot.x, spot.z, 30, 2) ?? null;
-  const lane = roadLineNear(spot.x, spot.z);
-  /** Skipped (the film's Skip): you are simply standing at Circle, facing the road. */
-  const skipTo = () => {
-    story.hidePlayer = false;
-    story.autoRun = null;
-    state.speed = 0;
-    [state.x, state.z] = [spot.x, spot.z];
-    if (toRoad !== null) state.heading = state.camHeading = toRoad;
-    return lane ? lane(0).heading + Math.PI : null;
-  };
-  if (cine.skipped) return skipTo();
-  if (!lane || toRoad === null || !streetTraffic) {
-    story.hidePlayer = false;
-    await cine.say('', 'Circle. Noise, crowds, hawkers everywhere. You made it to Accra.');
-    return null;
-  }
-  // The stop is a clear bit of pavement (the kiosks there stand back), so the camera sees it all.
-  life?.clearArea(spot.x, spot.z, 13);
+/** The trotro that brings you to Circle, waiting (held) about 45 m back along its lane, its way to the
+ *  kerb clear. Made behind the black, before the camera comes down from the sky. */
+let trotroIn: ReturnType<typeof prepareTrotro> | null = null;
+function prepareTrotro(spot: { x: number; z: number }, lane: NonNullable<ReturnType<typeof roadLineNear>>) {
   const bus = { key: 'trotro' as const, kind: 'trotro' as const, id: 900003, x: 0, z: 0, heading: 0, colour: '#f1ece0', shown: true, moving: true };
   const STOP = -3; // its door (front right) comes level with you
-  const put = (d: number) => {
-    const p = lane(d);
-    [bus.x, bus.z, bus.heading] = [p.x, p.z, p.heading];
-  };
   // The trotro is a real driver in the traffic (owner, 28 Oct 2026: it must never pass through a car):
   // it comes along its lane from about 45 m back, stops for the lights and waits behind the traffic
-  // like everyone, and stops level with you. (Its lane is cleared at this camera cut, so it is not
-  // stuck far behind a queue.)
+  // like everyone, and stops level with you. Its lane in front of it is cleared behind the black, and
+  // it waits (held) out of sight while the camera comes down, so nothing on its way in to the kerb
+  // ever vanishes in view; the traffic on the other lanes keeps passing (owner, 29 Oct 2026).
   clearStoryPath([-55, -30, -10, STOP, STOP + 12].map((d) => lane(d)));
   const stopAt = lane(STOP);
   const simBus = trafficSim?.addStory({ kind: 'trotro', type: 'trotro', colour: '#f1ece0', x: stopAt.x, z: stopAt.z, heading: stopAt.heading, back: 45 }) ?? null;
@@ -3164,6 +3144,45 @@ async function arriveByBus(): Promise<number | null> {
       trafficSim!.pullOver(simBus, Math.max(0, Math.min(8, edge - 1.35)));
     }
   }
+  if (simBus !== null) trafficSim!.hold.add(simBus);
+  return { bus, simBus, STOP, stopAt };
+}
+
+async function arriveByBus(): Promise<number | null> {
+  const spot = { x: state.x, z: state.z };
+  const toRoad = life?.roadDirNear(spot.x, spot.z, 30, 2) ?? null;
+  const lane = roadLineNear(spot.x, spot.z);
+  /** Skipped (the film's Skip): you are simply standing at Circle, facing the road. */
+  const skipTo = () => {
+    // (The trotro waiting for you goes on its way with the traffic.)
+    if (trotroIn?.simBus != null) {
+      trafficSim?.hold.delete(trotroIn.simBus);
+      trafficSim?.release(trotroIn.simBus);
+    }
+    trotroIn = null;
+    story.hidePlayer = false;
+    story.autoRun = null;
+    state.speed = 0;
+    [state.x, state.z] = [spot.x, spot.z];
+    if (toRoad !== null) state.heading = state.camHeading = toRoad;
+    return lane ? lane(0).heading + Math.PI : null;
+  };
+  if (cine.skipped) return skipTo();
+  if (!lane || toRoad === null || !streetTraffic) {
+    story.hidePlayer = false;
+    await cine.say('', 'Circle. Noise, crowds, hawkers everywhere. You made it to Accra.');
+    return null;
+  }
+  // The stop is a clear bit of pavement (the kiosks there stand back), so the camera sees it all.
+  life?.clearArea(spot.x, spot.z, 13);
+  // (Normally made behind the black before the camera comes down: see prepareTrotro.)
+  const { bus, simBus, STOP } = trotroIn ?? prepareTrotro(spot, lane);
+  trotroIn = null;
+  if (simBus !== null) trafficSim?.hold.delete(simBus); // off it goes
+  const put = (d: number) => {
+    const p = lane(d);
+    [bus.x, bus.z, bus.heading] = [p.x, p.z, p.heading];
+  };
   const follow = () => {
     const w = simBus !== null ? trafficSim?.where(simBus) : null;
     if (w) [bus.x, bus.z, bus.heading] = [w.x, w.z, w.heading];
@@ -3300,6 +3319,8 @@ async function playOpening(start: StartChoice) {
     if (life?.roadAt(state.x, state.z, 0.4)) placeOnPavement();
     life?.clearArea(state.x, state.z, 13);
     story.shot = arrivalShot();
+    const lane = roadLineNear(state.x, state.z);
+    if (lane && streetTraffic) trotroIn = prepareTrotro({ x: state.x, z: state.z }, lane);
     story.fly = { t: performance.now() / 1000, length: 9, hold: true };
     await cine.wait(0.5); // (the street's next frames move the camera up)
     await new Promise<void>((done) => {
