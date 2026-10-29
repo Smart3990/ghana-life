@@ -31,7 +31,7 @@ The plastic chairs and football (`src/game/streetScenes.ts`) are built in code. 
 ## Opening film clip (public/film)
 
 - `opening-480.mp4`, `opening-480.webm`, `opening-360.mp4`, `opening-360.webm` (a lighter copy for slow networks), `opening-poster.jpg`: the owner's 23-second opening film (Grandma's goodbye in the village, the ₵50 and the letter, the lorry park and the trotro to Accra), made by the owner with ImagineArt and sent on 2026-10-28, with its own sound. Shrunk for phones (about 1.3 MB each format). All people invented; the "SIKA Mobile Money" on the trotro is a made-up name. Same commercial-use check as the pictures above before launch.
-- Cut on 2026-10-29 (owner's choice): only the last 2.8 seconds are kept (0:20 to the end, the trotro driving off down the red road at sunset), with the film's own sound taken out (our music plays instead). The full clip is in Git history (commit 93ce0b3).
+- Cut on 2026-10-29 (owner's choice): only the trotro driving off down the red road at sunset is kept (0:21.15 to 0:22.3, past the fade from black), its brightness evened out frame by frame and slowed with in-between frames to 3.5 seconds, with the film's own sound taken out (our music plays instead). The full clip is in Git history (commit 93ce0b3).
 - Removed on 2026-10-28: `journey-480.*` and `journey-poster.jpg` (the earlier 10-second clip), replaced by the opening film above.
 
 ## Billboard advert photos (public/ads/)

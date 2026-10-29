@@ -523,6 +523,12 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
     - Grandma is gone everywhere: no ₵50 from her (your ₵50 is your own savings), no letter (the thief takes "your money, your phone, everything"), no Grandma in the phone's contacts. The film files are now 0.2 to 0.4 MB instead of about 1.3 MB.
     - Checked (test browser, Light): the cards, the film and the fly-down to Circle play in order, no errors.
     - Done when: on the phone, after START you see the three cards with music, the trotro clip, then Circle; Grandma never appears.
+  - **Opening and arrival polish** (owner, 29 Oct: cards shorter, no fade in the clip, the trotro a little longer, no flashes; the trotro comes in to the kerb and you are seen stepping down):
+    - Title cards about 2.5 s each: "You are {name}" / "A university graduate in {subject}, from {hometown}." · "{hometown}" / "You studied hard, but there is still no work at home." · "Accra" / "So you are going to Accra, to stay with your uncle and hustle."
+    - The film: the clean part of the trotro shot only (0:21.15 to 0:22.3, past the fade from black), brightness evened out frame by frame and slowed with in-between frames to 3.5 s.
+    - Flash check (touch phone, frame by frame): black from START through the cards and the film; the city first shows at the fly-down.
+    - Arrival: the trotro now drives in with an empty lane (cars on its lane in front of it are let go at the camera cut, and no new car is added in front of it), pulls over to the kerb over its last 16 m (to the road's edge, less half its width) and stops. The camera watches from the pavement beside the door: a moment for the door, you step out and onto the kerb, then the old shot as you walk to the stop.
+    - Done when: on the phone the cards are short, the trotro clip has no fade and lasts about 3.5 s, nothing of the city flashes before the fly-down, and at Circle the trotro stops beside the pavement and you see yourself step down.
 
 ## Waiting on the owner
 

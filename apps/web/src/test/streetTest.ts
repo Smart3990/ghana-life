@@ -1622,8 +1622,8 @@ const DEGREES = ['Computer Science', 'Business Administration', 'Accounting', 'M
 /**
  * The opening (owner, 29 Oct 2026: no Grandma, nobody gives you money): with the music playing, title
  * cards say who you are (your name, a fresh graduate from the hometown you picked, off to hustle in
- * Accra and stay with Uncle Kwame), then the film: the last seconds of the owner's clip, the trotro on
- * the road to Accra (public/film/opening-*, cut from 0:20 to the end, no sound of its own).
+ * Accra and stay with Uncle Kwame), then the film: the trotro on the road to Accra (public/film/opening-*:
+ * the owner's clip from 0:21.15 to 0:22.3, brightness evened out, slowed to 3.5 s, no sound of its own).
  * On a slow network: "Loading…" on the black until the film can play.
  */
 async function playFilm(home: string, body: 'male' | 'female') {
@@ -1631,9 +1631,10 @@ async function playFilm(home: string, body: 'male' | 'female') {
   cine.coverNow();
   streetSound.setQuiet(true); // (the music only)
   const degree = DEGREES[[...home].reduce((n, c) => n + c.charCodeAt(0), new Date().getDay()) % DEGREES.length];
-  await cine.title(`You are ${dayNameFor(body)}`, `A fresh university graduate in ${degree}, from ${home}.`, 3.6);
-  await cine.title(home, 'Four years of study, and still no work here. The work is in the city.', 3.6);
-  await cine.title('Accra', 'Today you go to hustle in Accra, and stay with your uncle, Uncle Kwame.', 3.8);
+  // (About 2.5 seconds each: owner, 29 Oct 2026, "it shouldn't keep that long".)
+  await cine.title(`You are ${dayNameFor(body)}`, `A university graduate in ${degree}, from ${home}.`, 2.2);
+  await cine.title(home, 'You studied hard, but there is still no work at home.', 2.2);
+  await cine.title('Accra', 'So you are going to Accra, to stay with your uncle and hustle.', 2.4);
   if (cine.skipped) return false;
   const t0 = performance.now();
   while (!cine.videoReady() && !cine.skipped && performance.now() - t0 < 25000) {
@@ -1643,7 +1644,7 @@ async function playFilm(home: string, body: 'male' | 'female') {
   cine.loadingNote(false);
   if (!cine.videoReady() || cine.skipped) return false;
   return cine.video(
-    [[0.2, '', 'The trotro to Accra.', 2.5]],
+    [[0.3, '', 'The trotro to Accra.', 3]],
     true,
   );
 }
@@ -3138,7 +3139,19 @@ async function arriveByBus(): Promise<number | null> {
   clearStoryPath([-55, -30, -10, STOP, STOP + 12].map((d) => lane(d)));
   const stopAt = lane(STOP);
   const simBus = trafficSim?.addStory({ kind: 'trotro', type: 'trotro', colour: '#f1ece0', x: stopAt.x, z: stopAt.z, heading: stopAt.heading, back: 45 }) ?? null;
-  if (simBus !== null) trafficSim!.stopAt(simBus, stopAt.x, stopAt.z);
+  if (simBus !== null) {
+    trafficSim!.stopAt(simBus, stopAt.x, stopAt.z);
+    // It pulls over right beside the pavement (owner, 29 Oct 2026: "not in the middle of the street"):
+    // how far the road's edge is to the right of its lane, less half its width and a hand's breadth.
+    // (Measured from the traffic lane it really drives in.)
+    const at = trafficSim!.lanePose(stopAt.x, stopAt.z, stopAt.heading) ?? stopAt;
+    const rx = Math.cos(at.heading), rz = Math.sin(at.heading);
+    if ((spot.x - at.x) * rx + (spot.z - at.z) * rz > 0) {
+      let edge = 0;
+      while (edge < 12 && life?.roadAt(at.x + rx * (edge + 0.25), at.z + rz * (edge + 0.25), 0)) edge += 0.25;
+      trafficSim!.pullOver(simBus, Math.max(0, Math.min(8, edge - 1.35)));
+    }
+  }
   const follow = () => {
     const w = simBus !== null ? trafficSim?.where(simBus) : null;
     if (w) [bus.x, bus.z, bus.heading] = [w.x, w.z, w.heading];
@@ -3183,11 +3196,17 @@ async function arriveByBus(): Promise<number | null> {
   bus.moving = false;
   honk(2, true);
   await cine.say('BUS MATE', 'Circle! Circle! Last stop! Everybody down, down!', 2.4);
-  // You step down from the door and onto the pavement.
+  // You step down from the door and onto the pavement, seen from the pavement beside the door.
   const right = { x: Math.cos(bus.heading), z: Math.sin(bus.heading) };
-  const door = { x: bus.x + T.x * 1.9 + right.x * 1.4, z: bus.z + T.z * 1.9 + right.z * 1.4 };
+  const door = { x: bus.x + T.x * 1.9 + right.x * 0.8, z: bus.z + T.z * 1.9 + right.z * 0.8 };
+  const kerb = { x: bus.x + T.x * 1.9 + right.x * 2.1, z: bus.z + T.z * 1.9 + right.z * 2.1 };
+  story.shot = frameShot(door.x, door.z, (toRoad * 180) / Math.PI + 35 * Math.sign(lean || 1), 5.5, 72);
+  await pause(0.6); // (the door slides open)
   [state.x, state.z, state.heading] = [door.x, door.z, toRoad + Math.PI];
   story.hidePlayer = false;
+  story.autoRun = { x: kerb.x, z: kerb.z, walk: true };
+  await waitUntil(() => !story.autoRun || Math.hypot(kerb.x - state.x, kerb.z - state.z) < 0.4, 2.5);
+  await pause(0.3);
   story.shot = frameShot(spot.x, spot.z, along + lean * 1.6, 7, 72);
   story.autoRun = { x: spot.x, z: spot.z, walk: true };
   await waitUntil(() => !story.autoRun || Math.hypot(spot.x - state.x, spot.z - state.z) < 0.5, 4);

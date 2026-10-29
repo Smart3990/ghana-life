@@ -64,7 +64,7 @@ type Car = {
   special?: 'ambulance';
   /** A story vehicle (the trotro you arrive in, Uncle Kwame's car): a real driver in the traffic,
    *  steered to its stop and along its way; never let go until the story releases it. */
-  story?: { stop: { seg: Seg; s: number } | null; guide: Float32Array | null; released: boolean };
+  story?: { stop: { seg: Seg; s: number } | null; guide: Float32Array | null; released: boolean; side?: number; sideNow?: number };
 };
 
 // Driving behaviour (intelligent driver model): comfortable, Accra-busy.
@@ -668,6 +668,15 @@ export class TrafficSim {
         }
       }
       // 5. A story vehicle's stop: it comes to rest with its middle there.
+      if (car.story) {
+        // Pulling over to the kerb (drawn that far to the right of its lane): in over its last 16 m,
+        // back out gently once it drives on.
+        const st = car.story;
+        const d0 = st.stop && st.side ? this.distAlong(car, st.stop) : null;
+        const want = d0 !== null && !st.released ? (st.side ?? 0) * smooth01(1 - Math.max(0, d0) / 16) : st.released ? 0 : (st.sideNow ?? 0);
+        const now = st.sideNow ?? 0;
+        st.sideNow = st.released ? now + Math.max(-0.9 * dt, Math.min(0.9 * dt, want - now)) : want;
+      }
       if (car.story?.stop) {
         const d = this.distAlong(car, car.story.stop);
         if (d === null || d < -1) car.story.stop = null;
@@ -771,6 +780,8 @@ export class TrafficSim {
         const kind = kindFor(hash(this.nextId * 7 + 1));
         const len = typeFor(kind, this.nextId).len;
         if (!this.roomAt(lane, s, len) || this.crowded(p.x, p.z, len / 2 + 3, lane.bridge)) continue;
+        // Never in front of a story vehicle on its way to its stop (the trotro must reach the kerb).
+        if (lane.cars.some((c) => c.story?.stop && !c.story.released && s > c.s - 5 && s < (c.story.stop.seg === lane ? c.story.stop.s : lane.len) + 25)) continue;
         const car = this.newCar(lane, s, kind);
         car.v = Math.min(car.v0, lane.speed) * 0.6;
         this.insert(car, lane);
@@ -861,8 +872,9 @@ export class TrafficSim {
     car.halfW = (TYPE_BY_KEY.get(o.type)?.width ?? car.halfW * 2) / 2;
     car.s = Math.max(car.len / 2 + 0.5, Math.min(at.seg.len - car.len / 2, at.s - o.back));
     car.story = { stop: null, guide: o.guide ? Float32Array.from(o.guide.flat()) : null, released: false };
-    // Room for it: anyone where it appears is let go.
-    for (const c of [...at.seg.cars]) if (Math.abs(c.s - car.s) < (c.len + car.len) / 2 + 2) this.drop(c);
+    // Room for it: anyone where it appears is let go, and (called at a camera cut) anyone on its lane
+    // between there and the point it is sent to, so it never queues behind them on its way in.
+    for (const c of [...at.seg.cars]) if (Math.abs(c.s - car.s) < (c.len + car.len) / 2 + 2 || (c.s > car.s && c.s < at.s + 30)) this.drop(c);
     const p = this.pointAt(at.seg, car.s);
     for (const c of [...this.cars]) {
       const q = this.pointAt(c.seg, c.s);
@@ -931,6 +943,17 @@ export class TrafficSim {
     }
     return false;
   }
+  /** The story vehicle pulls over to the kerb as it comes to its stop: `metres` to the right of its lane. */
+  pullOver(id: number, metres: number) {
+    const car = this.cars.find((c) => c.id === id);
+    if (car?.story) car.story.side = metres;
+  }
+  /** Where a vehicle is drawn: a story vehicle pulling over is that far to the right of its lane. */
+  private drawnAt(car: Car) {
+    const p = this.pointAt(car.seg, car.s);
+    const side = car.story?.sideNow ?? 0;
+    return side ? { ...p, x: p.x - p.fz * side, z: p.z + p.fx * side } : p;
+  }
   /** Has the story vehicle come to rest at its stop (or is it waiting in a queue)? */
   storyState(id: number): { stopped: boolean; atStop: boolean; v: number } | null {
     const car = this.cars.find((c) => c.id === id);
@@ -952,7 +975,7 @@ export class TrafficSim {
   where(id: number): { x: number; z: number; heading: number; bridge: boolean } | null {
     const car = this.cars.find((c) => c.id === id);
     if (!car) return null;
-    const p = this.pointAt(car.seg, car.s);
+    const p = this.drawnAt(car);
     return { x: p.x, z: p.z, heading: Math.atan2(p.fx, -p.fz), bridge: car.seg.bridge };
   }
   remove_(id: number) {
@@ -964,7 +987,7 @@ export class TrafficSim {
   near(x: number, z: number, radius: number, limit: number): Placed[] {
     const out: Placed[] = [];
     for (const car of this.cars) {
-      const p = this.pointAt(car.seg, car.s);
+      const p = this.drawnAt(car);
       const d = Math.hypot(p.x - x, p.z - z);
       if (d > radius) continue;
       const [lon, lat] = this.toLngLat(p.x, p.z);
@@ -1002,6 +1025,10 @@ export class TrafficSim {
   }
 }
 
+const smooth01 = (t: number) => {
+  const k = Math.max(0, Math.min(1, t));
+  return k * k * (3 - 2 * k);
+};
 /** The nearest point of a piece to (x, z): how far along it, and how far away. */
 function project(seg: { pts: Float32Array; cum: Float32Array | number[] }, x: number, z: number) {
   let best = { s: 0, d: Infinity };
