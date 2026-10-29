@@ -41,9 +41,9 @@ test, and goes live only after the owner has seen it work. Agreed with the owner
    - People never walk into kiosks, stalls, cars or each other; crowded pavements everywhere.
 6. **Buildings and street things.**
    - Pack buildings on the real Accra building shapes. (Done, 6b: places, flats, offices, houses, villas in the wealthy areas.)
-   - Kiosks, stalls, umbrellas, benches, bins, signs and trees from the pack.
+   - Kiosks, stalls, umbrellas, benches, bins, signs and trees from the pack. (Done, 6d: stands, umbrellas, food carts, bus shelters, benches, bins, trees and palms; our container kiosks stay.)
    - **Circle junction packed with sellers:** rows of kiosks and stalls so full that you can see at once
-     this is a busy market place, all on the pavements and the open ground, none on the road.
+     this is a busy market place, all on the pavements and the open ground, none on the road. (Done, 6d.)
    - Uncle's compound in Nima rebuilt in the pack's style. (Done, 6c: a quiet street of pack houses off a main road; his white modern family house, his wife and children; your room at the back.)
 7. **The living world.** Trains on the real railway with level crossings; planes taking off and
    landing at Kotoka; a helicopter, a hot-air balloon and boats at the coast.

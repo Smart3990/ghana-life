@@ -129,10 +129,9 @@ function kiosk(): Part {
   ]);
 }
 
+// The seller's table under an umbrella (the umbrella itself is the pack's, drawn as its own batch).
 function umbrella(): Part {
   return merge([
-    paint(new THREE.ConeGeometry(1.4, 0.55, 8).translate(0, 2.25, 0), '#ffffff'),
-    paint(new THREE.CylinderGeometry(0.03, 0.03, 2.2, 5).translate(0, 1.1, 0), '#d0d0d0'),
     paint(box(0.9, 0.06, 0.6, 0, 0.75, 0), '#6b4f37'),
     paint(box(0.06, 0.75, 0.06, 0.4, 0.37, 0.25), '#6b4f37'),
     paint(box(0.06, 0.75, 0.06, -0.4, 0.37, -0.25), '#6b4f37'),
@@ -150,7 +149,14 @@ function polytank(): Part {
 const KIOSK_COLOURS = [0x2f8f57, 0xe3a92b, 0xc8442e, 0x1f5fa8, 0xf2efe6, 0x7a3e9d];
 const UMBRELLA_COLOURS = [0xe3a92b, 0xc8442e, 0x2f8f57, 0x1f5fa8, 0xf2efe6];
 
-type Batch = { mesh: THREE.InstancedMesh; all: Spot[]; tint: boolean; max?: number };
+// follows: drawn at the same places as another batch (the pack's umbrellas over the sellers' tables).
+type Batch = { mesh: THREE.InstancedMesh; all: Spot[]; tint: boolean; max?: number; follows?: Batch };
+
+// Circle's market (Epic City plan, step 6): the open ground round the junction packed with stalls.
+const MARKET_INNER = 55; // the junction itself stays open (metres from the middle of Circle)
+const MARKET_COL = 3.4; // one stall's width, with a hand's breadth between neighbours
+const MARKET_BLOCK = 7.6; // two rows back to back (2 m apart), then a 3.6 m walking aisle
+const MARKET_CROSS = 6; // every sixth stall a gap, so people can cross between aisles
 
 
 // ---------- People on the pavements ----------
@@ -336,7 +342,38 @@ export class StreetLife {
       this.group.add(l);
     }
     this.kiosks = make(kiosk(), true);
-    this.umbrellas = make(umbrella(), true);
+    this.umbrellas = make(umbrella(), false);
+    // The pack's street things (Epic City plan, step 6). Each is one batch with the pack's material,
+    // drawn once its model has loaded. Light phones get the simpler tree and fewer of the heavier pieces.
+    const pack = (file: string, max?: number, turn = 0) => {
+      const b = make(new THREE.BufferGeometry(), false);
+      b.mesh.castShadow = !opts.light;
+      if (max !== undefined) b.max = max;
+      void epicGeometry(file, turn).then((g) => {
+        b.mesh.geometry = g;
+        b.mesh.material = epicMaterial();
+      });
+      return b;
+    };
+    const lightCap = (n: number) => (opts.light ? n : undefined);
+    const rich = !opts.light && opts.props >= 2000; // Ultra
+    for (const b of [this.trees, this.palms]) b.tint = false;
+    void epicGeometry(rich ? 'nature/tree-lime.glb' : 'nature/tree-round.glb').then((g) => {
+      this.trees.mesh.geometry = g;
+      this.trees.mesh.material = epicMaterial();
+    });
+    void epicGeometry('nature/palm.glb').then((g) => {
+      this.palms.mesh.geometry = g;
+      this.palms.mesh.material = epicMaterial();
+    });
+    this.canopies = pack('beach/sunscreen.glb', lightCap(120));
+    this.canopies.follows = this.umbrellas;
+    this.stands = pack('props/marketplace-stand-simple.glb', lightCap(50));
+    this.carts = pack('props/hot-dog-stand.glb', lightCap(10));
+    this.busStops = pack('props/bus-stop.glb', lightCap(8));
+    this.stopSigns = pack('props/bus-stop-sign.glb', lightCap(8));
+    this.benches = pack('props/bench-old.glb', lightCap(30));
+    this.bins = pack('props/bin-wheelie.glb', lightCap(30));
     this.tanks = make(polytank(), false);
     this.phones = make(phoneStand(), false);
     this.poles = make(powerPole(), false);
@@ -394,6 +431,14 @@ export class StreetLife {
   private lights: Batch;
   private kiosks: Batch;
   private umbrellas: Batch;
+  private canopies: Batch;
+  private stands: Batch;
+  private carts: Batch;
+  private busStops: Batch;
+  private stopSigns: Batch;
+  private benches: Batch;
+  private bins: Batch;
+  private marketSpots = new Set<Spot>(); // the stalls laid out by fillMarket (the rest are roadside)
   private tanks: Batch;
   private phones!: Batch;
   private poles!: Batch;
@@ -549,6 +594,16 @@ export class StreetLife {
     this.palms.all = clear(this.palms.all, 0.5);
     this.poles.all = clear(this.poles.all, 0.3);
     this.boards.all = clear(this.boards.all, 2.5);
+    this.clearPack((p, margin) => !this.onRoad(p.x, p.z, margin, this.railGrid));
+  }
+  /** Keeps only the pack's street things that pass the test (given each one's room around it). */
+  private clearPack(keep: (p: Spot, margin: number) => boolean) {
+    this.stands.all = this.stands.all.filter((p) => keep(p, 1.6));
+    this.carts.all = this.carts.all.filter((p) => keep(p, 1.3));
+    this.busStops.all = this.busStops.all.filter((p) => keep(p, 0.8));
+    this.stopSigns.all = this.stopSigns.all.filter((p) => keep(p, 0.25));
+    this.benches.all = this.benches.all.filter((p) => keep(p, 0.5));
+    this.bins.all = this.bins.all.filter((p) => keep(p, 0.35));
   }
   /** New roads and roofs from a tile: place things along them. */
   add(allRoads: StreetLine[], roofs: Roof[]) {
@@ -569,6 +624,13 @@ export class StreetLife {
     this.poles.all = clear(this.poles.all, 0.3);
     this.boards.all = clear(this.boards.all, 2.5);
     this.banners.all = clear(this.banners.all, 0.25);
+    this.clearPack((p, margin) => !this.onRoad(p.x, p.z, margin));
+    // The market's stalls also give way to buildings that arrived after them.
+    const offBuildings = (p: Spot) => Math.hypot(p.x, p.z) > MARKET_INNER + 140 || !this.blocked(p.x, p.z, 0.3);
+    this.stands.all = this.stands.all.filter(offBuildings);
+    this.carts.all = this.carts.all.filter(offBuildings);
+    this.umbrellas.all = this.umbrellas.all.filter(offBuildings);
+    this.kiosks.all = this.kiosks.all.filter(offBuildings);
     this.namePlates = this.namePlates.filter((n) => !this.onRoad(n.x, n.z, 0.2));
     const spans: number[] = [];
     for (let i = 0; i < this.spans.length; i += 5) {
@@ -683,6 +745,19 @@ export class StreetLife {
               if (!this.onRoad(wx, wz, 0.3)) this.walkLights.all.push({ x: wx, z: wz, angle: lf, scale: 1, colour: 0, light: { along: spacing * every * 1.3, across: size.walk + 0.9, mid: (size.walk - 0.55) / 2 } }); // (its front faces the road)
             }
           }
+          // A bus stop on the main roads about every 240 m (the sides take turns): the pack's shelter at
+          // the back of the pavement, its sign at the kerb, both facing the road.
+          if (road.kind !== 'minor_road' && lampAt % 24 === 13) {
+            const bs = lampAt % 48 === 13 ? 1 : -1;
+            const bf = angle + (bs > 0 ? -Math.PI / 2 : Math.PI / 2);
+            const back = H + size.walk - 0.75;
+            const [sx, sz] = [x - dz * back * bs, z + dx * back * bs];
+            if (this.free(sx, sz, 0.8) && !this.busStops.all.some((o) => Math.hypot(o.x - sx, o.z - sz) < 60)) {
+              this.busStops.all.push({ x: sx, z: sz, angle: bf, scale: 1, colour: 0 });
+              const [gx, gz] = [x + dx * 3.4 - dz * (H + 0.4) * bs, z + dz * 3.4 + dx * (H + 0.4) * bs];
+              if (!this.onRoad(gx, gz, 0.05) && !this.blocked(gx, gz, 0.1)) this.stopSigns.all.push({ x: gx, z: gz, angle: bf, scale: 1, colour: 0 });
+            }
+          }
           // Accra's roadsides: trees, then kiosks and umbrella stalls almost everywhere.
           // Accra's roadsides, on both sides: hardly a gap. Kiosks in rows (shops behind shops),
           // umbrella stalls and phone stands on the pavement's edge, a tree now and then.
@@ -697,6 +772,9 @@ export class StreetLife {
               if (this.free(tx, tz, 1.2)) {
                 const b = rr < 0.045 ? this.palms : this.trees;
                 b.all.push({ x: tx, z: tz, angle: rr * 40, scale: 0.85 + hash(tx, tz) * 0.45, colour: 0xffffff });
+                // A bench in the shade beside it, facing the road.
+                const [bx, bz] = [tx + dx * 1.6, tz + dz * 1.6];
+                if (b === this.trees && hash(tx, tz * 3) < 0.6 && this.free(bx, bz, 0.5)) this.benches.all.push({ x: bx, z: bz, angle: face, scale: 1, colour: 0 });
               }
             } else if (rr < 0.58) {
               // A row of container shops, and more behind it where there is open ground.
@@ -706,17 +784,27 @@ export class StreetLife {
                 if (!this.free(kx, kz, 1.4)) break;
                 this.kiosks.all.push({ x: kx, z: kz, angle: face, scale: 1, colour: KIOSK_COLOURS[Math.floor(hash(kx, kz) * KIOSK_COLOURS.length)] });
               }
+              // A bin at the end of the row now and then.
+              const [nx, nz] = put(1.5);
+              const [ix, iz] = [nx + dx * 1.75, nz + dz * 1.75];
+              if (hash(ix, iz) < 0.2 && this.free(ix, iz, 0.35)) this.bins.all.push({ x: ix, z: iz, angle: face, scale: 1, colour: 0 });
             } else if (rr < 0.72) {
               // A phone and accessories stand: the "Circle boys" selling phones, chargers and earpieces.
+              // Or a food cart (kelewele, waakye, roasted corn) on the open ground just behind the pavement.
               const [px, pz] = put(-size.walk / 2);
-              if (size.walk && this.free(px, pz, 0.8)) this.phones.all.push({ x: px, z: pz, angle: face, scale: 1, colour: 0 });
+              const [cx, cz] = put(1.6);
+              if (hash(px * 2, pz) < 0.3) {
+                if (this.free(cx, cz, 1.3)) this.carts.all.push({ x: cx, z: cz, angle: face, scale: 1, colour: 0 });
+              } else if (size.walk && this.free(px, pz, 0.8)) this.phones.all.push({ x: px, z: pz, angle: face, scale: 1, colour: 0 });
             } else {
-              // Market stalls fill the open ground behind the pavement too.
+              // Market stalls fill the open ground behind the pavement too: the pack's market stands
+              // facing the road, and umbrellas over sellers' tables.
               for (const extra of [2.2, 5.4, 8.6, 11.8]) {
                 if (hash(x + extra, z * 1.7 + sd) > 0.82) break;
                 const [mx, mz] = put(extra);
                 if (!this.free(mx, mz, 1)) break;
-                this.umbrellas.all.push({ x: mx, z: mz, angle: hash(mx, mz) * 30, scale: 1, colour: UMBRELLA_COLOURS[Math.floor(hash(mx, mz) * UMBRELLA_COLOURS.length)] });
+                if (hash(mx, mz * 2) < 0.5 && this.free(mx, mz, 1.6)) this.stands.all.push({ x: mx, z: mz, angle: face, scale: 1, colour: 0 });
+                else this.umbrellas.all.push({ x: mx, z: mz, angle: hash(mx, mz) * 30, scale: 1, colour: UMBRELLA_COLOURS[Math.floor(hash(mx, mz) * UMBRELLA_COLOURS.length)] });
               }
               const [ux, uz] = put(-size.walk / 2);
               if (size.walk && this.free(ux, uz, 0.9)) this.umbrellas.all.push({ x: ux, z: uz, angle: rr * 30, scale: 1, colour: UMBRELLA_COLOURS[Math.floor(hash(ux, uz) * UMBRELLA_COLOURS.length)] });
@@ -739,8 +827,9 @@ export class StreetLife {
         if (total > 15) this.centreWays.push({ pts: road.pts, cum, total, cx: road.pts[0], cz: road.pts[1] });
       }
     }
+    this.fillMarket();
     this.gatherings = [];
-    for (const k of this.kiosks.all.concat(this.umbrellas.all, this.phones.all)) this.gatherings.push({ x: k.x, z: k.z, face: k.angle });
+    for (const k of this.kiosks.all.concat(this.umbrellas.all, this.phones.all, this.stands.all, this.carts.all)) this.gatherings.push({ x: k.x, z: k.z, face: k.angle });
     // Open ground beside side streets, where children kick a ball about.
     for (const road of roads) {
       if (road.kind !== 'minor_road') continue;
@@ -763,6 +852,61 @@ export class StreetLife {
       if (hash(roof.x, roof.z) < 0.35) this.tanks.all.push({ x: roof.x, z: roof.z, angle: roof.id, scale: 1, colour: 0, y: roof.top } as Spot & { y: number });
     }
     this.lastRefresh = { x: Infinity, z: Infinity }; // show the new things straight away
+  }
+
+  /**
+   * Circle's market: the open ground round the junction packed with stalls, so you see at once that
+   * this is a busy market place. Rows of market stands, umbrellas, container kiosks and food carts,
+   * back to back in pairs, each pair facing out onto a walking aisle. Never on a road, the railway, a
+   * building or a place kept clear for the story; the junction itself stays open. Laid out again each
+   * time more streets arrive (always the same layout, from fixed random numbers), so it never overlaps
+   * the roadside stalls or the roads and buildings that came in later.
+   */
+  private fillMarket() {
+    const R = this.opts.light ? 85 : this.opts.props >= 2000 ? 135 : 115;
+    const mine = (s: Spot) => !this.marketSpots.has(s);
+    for (const b of [this.stands, this.umbrellas, this.kiosks, this.carts]) b.all = b.all.filter(mine);
+    this.marketSpots.clear();
+    const place = (b: Batch, s: Spot) => {
+      b.all.push(s);
+      this.marketSpots.add(s);
+    };
+    // What stands near the market already (roadside kiosks and stalls), in 3 m squares.
+    const taken = new Set<string>();
+    const cell = (x: number, z: number) => `${Math.floor(x / 3)},${Math.floor(z / 3)}`;
+    for (const list of [this.kiosks.all, this.umbrellas.all, this.stands.all, this.phones.all, this.carts.all, this.trees.all, this.palms.all])
+      for (const s of list) if (Math.abs(s.x) < R + 5 && Math.abs(s.z) < R + 5) taken.add(cell(s.x, s.z));
+    const near = (x: number, z: number) => {
+      for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) if (taken.has(`${Math.floor(x / 3) + i},${Math.floor(z / 3) + j}`)) return true;
+      return false;
+    };
+    for (let bz = Math.floor(-R / MARKET_BLOCK); bz * MARKET_BLOCK <= R; bz++) {
+      for (const row of [0, 1]) {
+        const z = bz * MARKET_BLOCK + row * 2;
+        // The first row of a pair faces the aisle before it (north), the second the aisle after it.
+        const angle = row === 0 ? 0 : Math.PI;
+        for (let col = Math.floor(-R / MARKET_COL); col * MARKET_COL <= R; col++) {
+          if (((col % MARKET_CROSS) + MARKET_CROSS) % MARKET_CROSS === 0) continue;
+          const x = col * MARKET_COL;
+          const from = Math.hypot(x, z);
+          if (from < MARKET_INNER || from > R) continue;
+          if (near(x, z)) continue; // something from the roadside is right here: leave it its room
+          const pick = hash(x * 1.7 + 3, z * 2.3 - 1);
+          const spot = { x, z, angle, scale: 1, colour: 0 };
+          if (pick < 0.5) {
+            if (this.free(x, z, 1.6)) place(this.stands, spot);
+          } else if (pick < 0.72) {
+            if (this.free(x, z, 1)) place(this.umbrellas, { ...spot, angle: hash(x, z) * 30, colour: UMBRELLA_COLOURS[Math.floor(hash(z, x) * UMBRELLA_COLOURS.length)] });
+          } else if (pick < 0.86) {
+            // A container shop (only in the first row: it is deeper than a stand).
+            if (row === 0 && this.free(x, z - 0.3, 1.4)) place(this.kiosks, { ...spot, z: z - 0.3, colour: KIOSK_COLOURS[Math.floor(hash(x, z) * KIOSK_COLOURS.length)] });
+          } else if (pick < 0.94) {
+            if (this.free(x, z, 1.3)) place(this.carts, spot);
+          }
+          // (the rest: a gap, where a seller sits on the ground or people squeeze through)
+        }
+      }
+    }
   }
 
   private addWalkways(pts: Float32Array, off: number) {
@@ -845,7 +989,9 @@ export class StreetLife {
       const byDistance = <T extends { x: number; z: number }>(list: T[], max: number) =>
         list.filter((s) => Math.hypot(s.x - x, s.z - z) < 70).sort((a, b) => Math.hypot(a.x - x, a.z - z) - Math.hypot(b.x - x, b.z - z)).slice(0, max);
       const share = Math.max(2, Math.floor(this.opts.scenes / 6));
-      this.scenes.rebuild(byDistance(this.kiosks.all, share), byDistance(this.umbrellas.all, share), byDistance(this.footballSpots, 1), this.time.value, byDistance(this.phones.all, Math.ceil(share / 2)));
+      // Market stands are served like kiosks (a seller at the counter, customers in front); food carts
+      // like the umbrella tables (a seller, plastic chairs round it).
+      this.scenes.rebuild(byDistance(this.kiosks.all.concat(this.stands.all), share), byDistance(this.umbrellas.all.concat(this.carts.all), share), byDistance(this.footballSpots, 1), this.time.value, byDistance(this.phones.all, Math.ceil(share / 2)));
     }
     const r2 = this.opts.radiusM ** 2;
     let shadows = 0;
@@ -856,7 +1002,7 @@ export class StreetLife {
       let n = 0;
       // The nearest ones first, so a full batch never leaves gaps close to the player.
       const far0 = b === this.boards || b === this.roofBoards ? boardR2 : r2;
-      let list = b.all.filter((q) => (q.x - x) ** 2 + (q.z - z) ** 2 <= far0);
+      let list = (b.follows ?? b).all.filter((q) => (q.x - x) ** 2 + (q.z - z) ** 2 <= far0);
       const max = b.max ?? this.opts.props;
       if (list.length > max) list = list.sort((a, c) => (a.x - x) ** 2 + (a.z - z) ** 2 - ((c.x - x) ** 2 + (c.z - z) ** 2));
       for (const s of list) {
@@ -883,8 +1029,8 @@ export class StreetLife {
           this.pools.setMatrixAt(this.poolCount++, this.mm.multiplyMatrices(this.m, this.pool));
           if (b === this.walkLights) this.globes.setMatrixAt(this.globeCount++, this.m);
         }
-        if (y === 0 && b !== this.lights && b !== this.poles && b !== this.boards && b !== this.banners && shadows < this.opts.props) {
-          const size = b === this.kiosks ? 3.4 : b === this.umbrellas ? 2.6 : b === this.phones ? 2 : 3.2 * s.scale;
+        if (y === 0 && b !== this.lights && b !== this.poles && b !== this.boards && b !== this.banners && !b.follows && b !== this.stopSigns && shadows < this.opts.props) {
+          const size = b === this.kiosks ? 3.4 : b === this.umbrellas ? 2.6 : b === this.phones ? 2 : b === this.stands ? 3.4 : b === this.carts ? 2.6 : b === this.busStops ? 5 : b === this.benches ? 1.8 : b === this.bins ? 0.9 : 3.2 * s.scale;
           this.m.compose(this.p.set(s.x, 0.04, s.z), this.q, this.sc.set(size, 1, size));
           this.shadowBatch.setMatrixAt(shadows++, this.m);
         }
@@ -973,6 +1119,20 @@ export class StreetLife {
     near(this.poles.all, 0.18);
     near(this.boards.all, 0.2); // only the legs matter; the posters are high up
     near(this.banners.all, 0.08);
+    near(this.carts.all, 0.9);
+    near(this.benches.all, 0.45);
+    near(this.bins.all, 0.35);
+    near(this.stopSigns.all, 0.1);
+    // Long things (market stands 3.1 m, bus shelters 5.1 m): a row of circles along their width.
+    const long = (list: Spot[], halfWidth: number, r: number) => {
+      for (const s of list) {
+        if (Math.abs(s.x - x) > 70 || Math.abs(s.z - z) > 70) continue;
+        const [wx, wz] = [Math.cos(s.angle), Math.sin(s.angle)]; // across the front
+        for (let k = -halfWidth + r; k <= halfWidth - r + 0.01; k += r * 1.5) this.solids.push({ x: s.x + wx * k, z: s.z + wz * k, r, angle: 0, box: false });
+      }
+    };
+    long(this.stands.all, 1.5, 0.75);
+    long(this.busStops.all, 2.5, 0.65);
     // A grid of the solid things (4 m squares), so asking "is something here?" stays quick.
     this.solidGrid.clear();
     for (const o of this.solids) {
@@ -999,6 +1159,9 @@ export class StreetLife {
     };
     view(this.kiosks.all, 1.35, 2.9, true);
     view(this.umbrellas.all, 1.2, 2.5, false);
+    view(this.stands.all, 1.4, 2.4, false);
+    view(this.carts.all, 1.2, 2.5, false);
+    view(this.busStops.all, 1.8, 2.9, false);
     view(this.phones.all, 0.6, 2.1, false);
     view(this.tanks.all, 0.7, 2.2, false);
   }
