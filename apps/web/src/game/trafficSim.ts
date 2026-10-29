@@ -64,7 +64,7 @@ type Car = {
   special?: 'ambulance';
   /** A story vehicle (the trotro you arrive in, Uncle Kwame's car): a real driver in the traffic,
    *  steered to its stop and along its way; never let go until the story releases it. */
-  story?: { stop: { seg: Seg; s: number } | null; guide: Float32Array | null; released: boolean; side?: number; sideNow?: number };
+  story?: { stop: { seg: Seg; s: number } | null; guide: Float32Array | null; released: boolean; side?: number; sideNow?: number; yaw?: number };
 };
 
 // Driving behaviour (intelligent driver model): comfortable, Accra-busy.
@@ -675,7 +675,12 @@ export class TrafficSim {
         const d0 = st.stop && st.side ? this.distAlong(car, st.stop) : null;
         const want = d0 !== null && !st.released ? (st.side ?? 0) * smooth01(1 - Math.max(0, d0) / 16) : st.released ? 0 : (st.sideNow ?? 0);
         const now = st.sideNow ?? 0;
-        st.sideNow = st.released ? now + Math.max(-0.9 * dt, Math.min(0.9 * dt, want - now)) : want;
+        // (Back out only as it rolls forward: a vehicle never moves sideways on the spot.)
+        st.sideNow = st.released ? now + Math.max(-0.14 * car.v * dt, Math.min(0.14 * car.v * dt, want - now)) : want;
+        // It steers: the nose turns the way it is moving across, and straightens as it stops.
+        const ds = car.v * dt;
+        const aim = ds > 0.001 ? Math.atan2(st.sideNow - now, ds) : 0;
+        st.yaw = (st.yaw ?? 0) + (aim - (st.yaw ?? 0)) * Math.min(1, dt * 5);
       }
       if (car.story?.stop) {
         const d = this.distAlong(car, car.story.stop);
@@ -952,7 +957,10 @@ export class TrafficSim {
   private drawnAt(car: Car) {
     const p = this.pointAt(car.seg, car.s);
     const side = car.story?.sideNow ?? 0;
-    return side ? { ...p, x: p.x - p.fz * side, z: p.z + p.fx * side } : p;
+    if (!side && !car.story?.yaw) return p;
+    // Turned by its steering (yaw: to the right is positive, as headings turn clockwise).
+    const y = car.story?.yaw ?? 0, c = Math.cos(y), sn = Math.sin(y);
+    return { x: p.x - p.fz * side, z: p.z + p.fx * side, fx: p.fx * c - p.fz * sn, fz: p.fz * c + p.fx * sn };
   }
   /** Has the story vehicle come to rest at its stop (or is it waiting in a queue)? */
   storyState(id: number): { stopped: boolean; atStop: boolean; v: number } | null {

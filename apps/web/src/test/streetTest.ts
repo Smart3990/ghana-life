@@ -28,7 +28,7 @@ import { RoadSigns } from '../game/roadSigns';
 import { planStation } from '../game/trotroStation';
 import { Places } from '../game/places';
 import { AD_CLOCK } from '../game/adScreens';
-import { Voices, mateCall } from '../game/voices';
+import { mateCall } from '../game/streetCalls';
 import { TALKS, asNode, type TalkNode } from '../game/talks';
 import { box, merge, paint } from '../game/vehicles3d';
 import { SkyTraffic } from '../game/sky3d';
@@ -1012,7 +1012,8 @@ function step(player: Player, dt: number, t: number) {
   if (story.fly) {
     // The opening film: the camera comes down out of the sky over Accra and settles behind you.
     // Film time runs on the clock, not on frames, so it lasts the same on slow and fast phones.
-    const k = Math.min(1, (performance.now() / 1000 - story.fly.t) / story.fly.length);
+    // (Held at the very top until the high view has been drawn behind the black.)
+    const k = story.fly.hold ? 0 : Math.min(1, (performance.now() / 1000 - story.fly.t) / story.fly.length);
     const e = k * k * (3 - 2 * k);
     cam.zoom = 13.4 + (cam.zoom - 13.4) * e;
     cam.pitch = 20 + (cam.pitch - 20) * e;
@@ -1054,11 +1055,6 @@ function step(player: Player, dt: number, t: number) {
       // Calling out to the player: "Sister, come!" to a woman, "Bra, come!" to a man.
       const text = seed === 4242 || (x === state.x && z === state.z) ? said : toMe(said);
       showBubble(x, z, height, text);
-      // Someone calling out near you: you hear them (quieter further away).
-      if (body && !chatting) {
-        const d = Math.hypot(x - state.x, z - state.z);
-        void voices.say(text, { body, seed: seed ?? Math.round(x * 7 + z) }, 1 / (1 + d / 7), 1);
-      }
     };
   }
   if (life) signals.junctions = life.junctions;
@@ -1207,11 +1203,10 @@ function bump() {
 }
 
 
-// ---------- Talking with people, with real voices ----------
+// ---------- Talking with people (words on screen; no voices) ----------
 // Anyone you meet can talk with you: tap GREET (or CHAT with a seller). They speak first, often
 // with a question; you pick an answer on the screen (or press 1, 2, 3) and they reply, out loud and
 // in a bubble. Walking away ends it.
-const voices = new Voices();
 const talkEl = document.getElementById('talk')!;
 let chatting = false;
 let talkEnd: (() => void) | null = null;
@@ -1219,7 +1214,6 @@ let homeTown = 'Ada';
 let dayName = 'Kwame';
 const fill = (t: string) => t.replace(/\{home\}/g, homeTown).replace(/\{name\}/g, dayName);
 type Who = { x: number; z: number; height: number; kind: string; seller: boolean; body: 'male' | 'female' | 'child'; seed: number; words?: string[] };
-const playerVoice = () => ({ body: (playerBody === 'female' ? 'female' : 'male') as 'male' | 'female', seed: 4242 });
 let playerBody: 'male' | 'female' = 'male';
 let playerPerson: Person | null = null;
 /** A line said to the player, in the form for a man or a woman ("my son" / "my daughter"). */
@@ -1291,7 +1285,7 @@ async function chat(who: Who, t: number) {
     if (mine) life?.scenes?.onSpeak?.(state.x, state.z, 1.95, line);
     else showBubble(who.x, who.z, who.height, line, 3 + line.length * 0.05);
     const wait = new Promise((r) => setTimeout(r, Math.max(1600, 700 + line.length * 55)));
-    await Promise.all([voices.say(line, mine ? playerVoice() : { body: who.body, seed: who.seed }, mine ? 0.8 : 1, 2), wait]);
+    await wait;
   };
   // You say hello first.
   await speak(who.kind === 'muslimMan' || who.kind === 'muslimWoman' ? 'Salaam alaikum.' : [forTheHour('Good afternoon!', day.hour), 'Hello!', 'Chale, how far?'][Math.floor(Math.random() * 3)], true);
@@ -1648,16 +1642,6 @@ async function playFilm(home: string, body: 'male' | 'female') {
     true,
   );
 }
-// The film's lines are spoken too (the bus mate, Auntie Dede, Uncle Kwame, you).
-const FILM_VOICES: Record<string, { body: 'male' | 'female' | 'child'; seed: number }> = {
-  'BUS MATE': { body: 'male', seed: 23 },
-  'AUNTIE DEDE': { body: 'female', seed: 37 },
-  'UNCLE KWAME': { body: 'male', seed: 41 },
-};
-cine.onLine = (who, line) => {
-  const v = who === 'YOU' ? playerVoice() : FILM_VOICES[who];
-  if (v) void voices.say(line, v, 1, 2);
-};
 /** Take away the dark loading screen that hides the city (once). */
 function liftCurtain() {
   document.getElementById('loading')?.remove();
@@ -1665,7 +1649,7 @@ function liftCurtain() {
 const story = {
   busy: false, // the story is running (the first goals wait)
   frozen: false, // a film scene is playing: no control
-  fly: null as { t: number; length: number } | null,
+  fly: null as { t: number; length: number; hold?: boolean } | null,
   goal: '',
   auntie: null as { x: number; z: number; reached: () => void } | null,
   shot: null as { x: number; z: number; bearing: number; zoom: number; pitch: number } | null,
@@ -2697,7 +2681,6 @@ function onVehicleBlocked(v: { id: number; x: number; z: number; heading: number
     n.shout = now;
     const line = toMe(v.kind === 'trotro' && v.id % 2 ? pick(MATE_SHOUTS, v.id + now) : pick(SHOUTS, v.id * 7 + now));
     showBubble(mouthX, mouthZ, 2.3, line);
-    void voices.say(line, { body: 'male', seed: v.id }, 1, 1);
   }
   // 2. Horns: the front one, and the whole queue behind it (each its own moment and note).
   if (waited > 1.6 && now - n.hoot > 2.2) {
@@ -2730,7 +2713,6 @@ function onVehicleBlocked(v: { id: number; x: number; z: number; heading: number
     const [qx, qz] = [(q.lon - START[0]) * M_LON, (START[1] - q.lat) * M_LAT];
     const line = toMe(pick(COMPLAINTS, q.v.id + now));
     showBubble(qx, qz, 2.1, line);
-    void voices.say(line, { body: q.v.id % 3 ? 'male' : 'female', seed: q.v.id }, 1 / (1 + Math.hypot(qx - state.x, qz - state.z) / 9), 1);
   }
   nagged.set(v.id, n);
   if (nagged.size > 200) nagged.clear();
@@ -2761,7 +2743,6 @@ function onVehicleBlocked(v: { id: number; x: number; z: number; heading: number
     scene.add(driver.person.root);
     const line = toMe(driver.who === 'passer' ? pick(HELPER_LINES, v.id) : pick(PUSH_LINES, v.id));
     showBubble(driver.x, driver.z, 1.9, line);
-    void voices.say(line, { body: 'male', seed: v.id + 5 }, 1, 2);
   }
 }
 function updateDriver(dt: number) {
@@ -2876,7 +2857,6 @@ async function runChase(gone: Promise<void>) {
   cine.begin(); // a new scene: Skip from the film does not cut this short
   story.handsOnHead = true;
   life?.scenes?.onSpeak?.(state.x, state.z, 1.9, 'Hey! My bag! Thief!', playerBody, 4242);
-  void voices.say('Hey! My bag! Thief!', playerVoice(), 1, 2);
   void cine.say('', 'A boy grabs your bag: your money, your phone, everything!', 2.6);
   await pause(1.9);
   story.handsOnHead = false;
@@ -2903,7 +2883,6 @@ async function runChase(gone: Promise<void>) {
       shoutAt = gameClock;
       const line = CHASE_SHOUTS[shout++ % CHASE_SHOUTS.length];
       life?.scenes?.onSpeak?.(state.x, state.z, 1.9, line, playerBody, 4242);
-      void voices.say(line, playerVoice(), 1, 1);
     }
   };
   story.autoRun = { x: thief.x, z: thief.z };
@@ -2972,7 +2951,6 @@ async function runChase(gone: Promise<void>) {
   state.speed = 0;
   story.handsOnHead = true;
   showBubble(car.x, car.z, 2.2, toMe('Ei! Massa, watch the road!'));
-  void voices.say(toMe('Ei! Massa, watch the road!'), { body: 'male', seed: 77 }, 1, 2);
   thief.escape = true;
   await pause(1.2);
   story.handsOnHead = false;
@@ -3105,6 +3083,40 @@ function rideSign(sg: RideSign) {
  * you step down and walk to the pavement, the trotro drives off, and you turn to face the road.
  * Returns the direction along the pavement (the thief comes that way), or null.
  */
+// The trotro's sliding door (the van has none of its own that opens): as it slides back, the dark
+// doorway opens from its front edge backwards, on the van's right side a little ahead of the middle
+// (only the opening is drawn, so it suits every van's paint and advert). Built in the van's own frame:
+// +z is its front, -x its right side (as the vehicles are turned).
+const busDoor = (() => {
+  const doorway = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.3, 0.95).translate(0, 0, -0.475), new THREE.MeshStandardMaterial({ color: '#111214', roughness: 0.9 }));
+  doorway.visible = false;
+  scene.add(doorway);
+  /** Where the van is and how open its door is (0 shut, 1 open). */
+  const set = (x: number, z: number, heading: number, open: number) => {
+    doorway.visible = open > 0.01;
+    doorway.position.set(x, 0, z);
+    doorway.rotation.y = Math.PI - heading;
+    // (Moved out to the van's side and forward to the door's front edge, in the van's frame.)
+    doorway.translateX(-0.925);
+    doorway.translateY(1.12);
+    doorway.translateZ(1.025);
+    doorway.scale.z = Math.max(0.01, open);
+  };
+  return { set, hide: () => (doorway.visible = false) };
+})();
+
+/** The first shot at Circle: from further along the kerb, looking back at the traffic (the trotro
+ *  comes in there). The camera's way down from the sky ends exactly here. */
+function arrivalShot() {
+  const toRoad = life?.roadDirNear(state.x, state.z, 30, 2) ?? null;
+  const lane = roadLineNear(state.x, state.z);
+  if (!lane || toRoad === null) return null;
+  const T = { x: Math.sin(lane(0).heading), z: -Math.cos(lane(0).heading) };
+  const along = (lane(0).heading * 180) / Math.PI + 180; // looking back along the road
+  const lean = angleDiff(toRoad, lane(0).heading + Math.PI) > 0 ? -28 : 28; // the camera a little out over the road
+  return frameShot(state.x - T.x * 3, state.z - T.z * 3, along + lean, 11, 70);
+}
+
 async function arriveByBus(): Promise<number | null> {
   const spot = { x: state.x, z: state.z };
   const toRoad = life?.roadDirNear(spot.x, spot.z, 30, 2) ?? null;
@@ -3196,17 +3208,31 @@ async function arriveByBus(): Promise<number | null> {
   bus.moving = false;
   honk(2, true);
   await cine.say('BUS MATE', 'Circle! Circle! Last stop! Everybody down, down!', 2.4);
-  // You step down from the door and onto the pavement, seen from the pavement beside the door.
+  // The door slides open, then you step out through the doorway onto the pavement, seen from the
+  // pavement beside the door (owner, 29 Oct 2026: the door opens first; nobody walks through the van).
   const right = { x: Math.cos(bus.heading), z: Math.sin(bus.heading) };
-  const door = { x: bus.x + T.x * 1.9 + right.x * 0.8, z: bus.z + T.z * 1.9 + right.z * 0.8 };
-  const kerb = { x: bus.x + T.x * 1.9 + right.x * 2.1, z: bus.z + T.z * 1.9 + right.z * 2.1 };
-  story.shot = frameShot(door.x, door.z, (toRoad * 180) / Math.PI + 35 * Math.sign(lean || 1), 5.5, 72);
-  await pause(0.6); // (the door slides open)
+  const fwd = { x: Math.sin(bus.heading), z: -Math.cos(bus.heading) };
+  const at = (ahead: number, out: number) => ({ x: bus.x + fwd.x * ahead + right.x * out, z: bus.z + fwd.z * ahead + right.z * out });
+  const door = at(0.55, 0.45); // just inside the doorway
+  const kerb = at(0.55, 2.1);
+  story.shot = frameShot(at(0.55, 0.9).x, at(0.55, 0.9).z, (toRoad * 180) / Math.PI + 35 * Math.sign(lean || 1), 5.5, 72);
+  const slide = async (from: number, to: number, seconds: number) => {
+    const t0 = gameClock;
+    while (gameClock - t0 < seconds) {
+      busDoor.set(bus.x, bus.z, bus.heading, from + (to - from) * smooth((gameClock - t0) / seconds));
+      await pause(0.02);
+    }
+    busDoor.set(bus.x, bus.z, bus.heading, to);
+  };
+  busDoor.set(bus.x, bus.z, bus.heading, 0);
+  await pause(0.4);
+  await slide(0, 1, 0.8);
   [state.x, state.z, state.heading] = [door.x, door.z, toRoad + Math.PI];
   story.hidePlayer = false;
   story.autoRun = { x: kerb.x, z: kerb.z, walk: true };
   await waitUntil(() => !story.autoRun || Math.hypot(kerb.x - state.x, kerb.z - state.z) < 0.4, 2.5);
-  await pause(0.3);
+  await slide(1, 0, 0.6); // the mate shuts it behind you
+  await pause(0.2);
   story.shot = frameShot(spot.x, spot.z, along + lean * 1.6, 7, 72);
   story.autoRun = { x: spot.x, z: spot.z, walk: true };
   await waitUntil(() => !story.autoRun || Math.hypot(spot.x - state.x, spot.z - state.z) < 0.5, 4);
@@ -3214,6 +3240,7 @@ async function arriveByBus(): Promise<number | null> {
   state.speed = 0;
   [state.x, state.z] = [spot.x, spot.z];
   // The trotro pulls away and is gone.
+  busDoor.hide();
   bus.moving = true;
   // It pulls away down its lane, behind whatever is ahead (never through it), and is let go out of sight.
   if (simBus !== null && trafficSim?.where(simBus)) trafficSim.release(simBus);
@@ -3264,16 +3291,33 @@ async function playOpening(start: StartChoice) {
   const played = await (earlyFilm ?? playFilm(home, start.body));
   if (!played && !cine.skipped) await cine.title(home, 'The trotro to Accra.', 2.6);
   await cine.title('Accra', 'Hours later. Kwame Nkrumah Circle.', 2.2);
-  // 2. The camera comes down over the city to Circle (the first moment the city is seen).
-  liftCurtain();
+  // 2. The camera comes down over the city to Circle (the first moment the city is seen). Behind the
+  //    black, the camera goes up to the high view first and the map draws it (its tiles loaded), so
+  //    the first thing seen is the city from the sky: never a glimpse of the street (owner, 29 Oct 2026).
   if (!cine.skipped) {
-    story.fly = { t: performance.now() / 1000, length: 9 };
+    // Where you will stand, and the first shot there (the stop kept clear, so nothing pops away later).
+    await waitUntil(() => startPlaced, 15);
+    if (life?.roadAt(state.x, state.z, 0.4)) placeOnPavement();
+    life?.clearArea(state.x, state.z, 13);
+    story.shot = arrivalShot();
+    story.fly = { t: performance.now() / 1000, length: 9, hold: true };
+    await cine.wait(0.5); // (the street's next frames move the camera up)
+    await new Promise<void>((done) => {
+      const t = setTimeout(done, 5000);
+      map.once('idle', () => (clearTimeout(t), done()));
+      map.triggerRepaint();
+    });
+    await cine.wait(0.3);
+    liftCurtain();
+    story.fly.t = performance.now() / 1000;
+    story.fly.hold = false;
     await cine.black(false, 1.2);
     placeCard('Accra');
     await cine.wait(4.5);
     placeCard('Kwame Nkrumah Circle');
     while (story.fly && !cine.skipped) await cine.wait(0.1);
   }
+  liftCurtain();
   story.fly = null;
   for (const id of ['buildings', 'roofs']) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', 'none');
   await cine.black(false, 0.3);
@@ -4373,12 +4417,12 @@ const phone: Phone = new Phone({
   },
   waypoint: () => waypoint,
   feed: () => feedPosts,
-  say: (text, who) => voices.say(text, who, 1, 2),
+  say: (text) => new Promise((r) => setTimeout(r, Math.max(1600, 700 + text.length * 55))), // (time to read it)
   toMe,
-  stopTalking: () => voices.stop(),
+  stopTalking: () => undefined,
   nickname: () => 'Newcomer',
   storyDone: (step) => (step === 'auntie' ? storyStep.auntie : false),
-  muted: () => voices.muted,
+  muted: () => streetSound.muted,
   toggleSound: () => document.getElementById('btn-sound')?.click(),
   tier: () => tier,
 });
@@ -4486,12 +4530,11 @@ const soundButton = document.getElementById('btn-sound')!;
 soundButton.addEventListener('click', () => {
   streetSound.setMuted(!streetSound.muted);
   music.setMuted(streetSound.muted);
-  voices.muted = streetSound.muted;
-  if (voices.muted) voices.stop();
   soundButton.classList.toggle('off', streetSound.muted);
 });
 
 function showBubble(x: number, z: number, height: number, text: string, seconds = 2.6) {
+  if (story.fly) return; // (nobody's words over the camera coming down from the sky)
   const el = document.createElement('div');
   el.className = 'bubble';
   el.textContent = forTheHour(text, day.hour);
@@ -4503,11 +4546,9 @@ function showBubble(x: number, z: number, height: number, text: string, seconds 
 // mates call, and now and then someone nearby calls out.
 let nextShout = 0;
 function streetVoices(t: number) {
-  // What people say shows in speech bubbles. With the owner's Accra recordings playing, those are
-  // the voices you hear (the bubbles are text only); the made-up voices speak only when the
-  // recordings cannot play.
-  const silent = streetSound.recorded;
-  if (t < nextShout || chatting || story.frozen || (!silent && voices.busy)) return;
+  // What people say shows in speech bubbles (words only). The voices you hear are the owner's Accra
+  // recordings.
+  if (t < nextShout || chatting || story.frozen) return;
   nextShout = t + 2.5 + Math.random() * 3.5;
   // A trotro passing close by: its mate shouts where it is going.
   let best: { x: number; z: number; id: number } | null = null;
@@ -4521,7 +4562,6 @@ function streetVoices(t: number) {
   if (best) {
     const line = mateCall(best.id * 31 + Math.floor(Math.random() * 1000));
     showBubble(best.x, best.z, 2.6, line);
-    if (!silent) void voices.say(line, { body: 'male', seed: best.id }, 1 / (1 + bestD / 9), 1);
     return;
   }
   // Near the station: one of its mates.
@@ -4531,7 +4571,6 @@ function streetVoices(t: number) {
     if (m?.words) {
       const line = m.words[Math.floor(Math.random() * m.words.length)];
       showBubble(m.x, m.z, 1.95, line);
-      if (!silent) void voices.say(line, { body: 'male', seed: Math.round(m.x * 3) }, 1 / (1 + Math.hypot(m.x - state.x, m.z - state.z) / 9), 1);
       return;
     }
   }
@@ -4540,7 +4579,6 @@ function streetVoices(t: number) {
   if (w) {
     const line = CHATTER[Math.floor(Math.random() * CHATTER.length)];
     showBubble(w.x, w.z, w.height, line);
-    if (!silent) void voices.say(line, { body: w.body, seed: w.i * 13 }, 0.55 / (1 + Math.hypot(w.x - state.x, w.z - state.z) / 8), 0);
   }
 }
 const CHATTER = [

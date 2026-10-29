@@ -529,6 +529,12 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
     - Flash check (touch phone, frame by frame): black from START through the cards and the film; the city first shows at the fly-down.
     - Arrival: the trotro now drives in with an empty lane (cars on its lane in front of it are let go at the camera cut, and no new car is added in front of it), pulls over to the kerb over its last 16 m (to the road's edge, less half its width) and stops. The camera watches from the pavement beside the door: a moment for the door, you step out and onto the kerb, then the old shot as you walk to the stop.
     - Done when: on the phone the cards are short, the trotro clip has no fade and lasts about 3.5 s, nothing of the city flashes before the fly-down, and at Circle the trotro stops beside the pavement and you see yourself step down.
+  - **No voices, no glimpse before the fly-down, a trotro that drives, a door that opens** (owner, 29 Oct):
+    - **The made-up (AI) voices are gone from the game** (`voices.ts` removed; the street's calls are in `streetCalls.ts`, words only). Everything people say still shows as words (bubbles, subtitles, the phone). The sounds you hear are the street recordings and the music. This was the "Pure water!" heard over "Hours later".
+    - **Fly-down:** behind the black, the camera first goes up to the high view and waits until the map has drawn it; only then does the black lift. The descent ends exactly on the first shot at Circle (no more passing through a billboard at the end), and no speech bubbles show during it. Checked frame by frame as a touch phone: the first frame of the city is the map from high up (zoom 13.4).
+    - **The trotro steers:** it turns its nose towards the kerb as it pulls over and straightens as it stops (and steers back out as it leaves, only while rolling), instead of sliding sideways.
+    - **The door:** once it stops, its sliding door opens (the dark doorway opens from its front edge backwards, so it suits every van's advert), you step out through it onto the kerb, and it shuts behind you.
+    - Done when: no voices at all, no glimpse of the street before the city is seen from the sky, the trotro visibly steers in to the kerb, and the door opens before you step out.
 
 ## Waiting on the owner
 

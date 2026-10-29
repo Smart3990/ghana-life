@@ -2,7 +2,7 @@
 // lives here: Missions, the Map, the Ride app, City Feed, Calls, the Mobile Money wallet, Friends and
 // Settings. No email and no messages app (brief 21): story people reach you by calls and map markers.
 // Plain HTML, built the first time it opens, so it costs nothing while you play.
-import type { Speaker } from '../game/voices';
+import type { Speaker } from '../game/streetCalls';
 
 export type MissionRow = { title: string; goal: string; state: 'done' | 'now' | 'next' | 'locked' };
 export type Destination = { name: string; x: number; z: number; kind: string };
