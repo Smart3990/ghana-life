@@ -347,7 +347,7 @@ export class StreetLife {
     // drawn once its model has loaded. Light phones get the simpler tree and fewer of the heavier pieces.
     const pack = (file: string, max?: number, turn = 0) => {
       const b = make(new THREE.BufferGeometry(), false);
-      b.mesh.castShadow = !opts.light;
+      b.mesh.castShadow = false; // (their soft shadow underneath is drawn already: no second drawing for the sun)
       if (max !== undefined) b.max = max;
       void epicGeometry(file, turn).then((g) => {
         b.mesh.geometry = g;
@@ -368,8 +368,8 @@ export class StreetLife {
     });
     this.canopies = pack('beach/sunscreen.glb', lightCap(120));
     this.canopies.follows = this.umbrellas;
-    this.stands = pack('props/marketplace-stand-simple.glb', lightCap(50));
-    this.carts = pack('props/hot-dog-stand.glb', lightCap(10));
+    this.stands = pack('props/marketplace-stand-simple.glb', this.opts.light ? 50 : this.opts.props >= 2000 ? undefined : 150);
+    this.carts = pack('props/hot-dog-stand.glb', this.opts.light ? 10 : this.opts.props >= 2000 ? undefined : 30);
     this.busStops = pack('props/bus-stop.glb', lightCap(8));
     this.stopSigns = pack('props/bus-stop-sign.glb', lightCap(8));
     this.benches = pack('props/bench-old.glb', lightCap(30));
@@ -557,7 +557,53 @@ export class StreetLife {
       grid.set(k, list);
     }
   }
+  // The roads round the player as a ready-made map of 0.5 m squares (1: road), for the walkers' many
+  // "is this on the road?" questions each frame (with their usual 5 cm margin): one look-up each,
+  // instead of measuring against every road piece near by. Made again when the player has moved on.
+  private mask: { x0: number; z0: number; n: number; data: Uint8Array } | null = null;
+  private static readonly MASK_CELL = 0.5;
+  private static readonly MASK_HALF = 80; // metres each way from the player
+  private makeMask(px: number, pz: number) {
+    const C = StreetLife.MASK_CELL;
+    const n = Math.round((StreetLife.MASK_HALF * 2) / C);
+    const x0 = px - StreetLife.MASK_HALF, z0 = pz - StreetLife.MASK_HALF;
+    const data = new Uint8Array(n * n);
+    const seen = new Set<string>();
+    const [g0x, g1x] = [Math.floor(x0 / 25) - 1, Math.floor((x0 + n * C) / 25) + 1];
+    const [g0z, g1z] = [Math.floor(z0 / 25) - 1, Math.floor((z0 + n * C) / 25) + 1];
+    for (let gx = g0x; gx <= g1x; gx++)
+      for (let gz = g0z; gz <= g1z; gz++) {
+        const list = this.roadGrid.get(`${gx},${gz}`);
+        if (!list) continue;
+        for (let k = 0; k < list.length; k += 5) {
+          const [ax, az, bx, bz, half] = [list[k], list[k + 1], list[k + 2], list[k + 3], list[k + 4]];
+          const id = `${ax},${az},${bx},${bz}`;
+          if (seen.has(id)) continue;
+          seen.add(id);
+          const r = half + 0.05;
+          const i0 = Math.max(0, Math.floor((Math.min(ax, bx) - r - x0) / C)), i1 = Math.min(n - 1, Math.floor((Math.max(ax, bx) + r - x0) / C));
+          const j0 = Math.max(0, Math.floor((Math.min(az, bz) - r - z0) / C)), j1 = Math.min(n - 1, Math.floor((Math.max(az, bz) + r - z0) / C));
+          const dx = bx - ax, dz = bz - az, len2 = dx * dx + dz * dz || 1;
+          for (let j = j0; j <= j1; j++) {
+            const z = z0 + (j + 0.5) * C;
+            for (let i = i0; i <= i1; i++) {
+              if (data[j * n + i]) continue;
+              const x = x0 + (i + 0.5) * C;
+              const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / len2));
+              const ex = ax + dx * t - x, ez = az + dz * t - z;
+              if (ex * ex + ez * ez < r * r) data[j * n + i] = 1;
+            }
+          }
+        }
+      }
+    this.mask = { x0, z0, n, data };
+  }
   private onRoad(x: number, z: number, margin: number, grid = this.roadGrid) {
+    const m = this.mask;
+    if (m && grid === this.roadGrid && margin === 0.05) {
+      const i = Math.floor((x - m.x0) / StreetLife.MASK_CELL), j = Math.floor((z - m.z0) / StreetLife.MASK_CELL);
+      if (i >= 0 && j >= 0 && i < m.n && j < m.n) return m.data[j * m.n + i] === 1;
+    }
     const cx = Math.floor(x / 25);
     const cz = Math.floor(z / 25);
     for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
@@ -827,7 +873,13 @@ export class StreetLife {
         if (total > 15) this.centreWays.push({ pts: road.pts, cum, total, cx: road.pts[0], cz: road.pts[1] });
       }
     }
-    this.fillMarket();
+    // Circle's market is laid out again only when this tile touches it (its roads or buildings).
+    const reach = (this.opts.light ? 85 : this.opts.props >= 2000 ? 135 : 115) + 40;
+    const touches = allRoads.some((r) => {
+      for (let i = 0; i < r.pts.length; i += 2) if (Math.abs(r.pts[i]) < reach && Math.abs(r.pts[i + 1]) < reach) return true;
+      return false;
+    }) || roofs.some((f) => Math.abs(f.x) < reach && Math.abs(f.z) < reach);
+    if (touches) this.fillMarket();
     this.gatherings = [];
     for (const k of this.kiosks.all.concat(this.umbrellas.all, this.phones.all, this.stands.all, this.carts.all)) this.gatherings.push({ x: k.x, z: k.z, face: k.angle });
     // Open ground beside side streets, where children kick a ball about.
@@ -972,6 +1024,7 @@ export class StreetLife {
   private nearSpots: { x: number; z: number; face: number }[] = [];
   private refresh(x: number, z: number) {
     this.lastRefresh = { x, z };
+    this.makeMask(x, z);
     // People stay close to the player (within about 65 m), so the streets around you are packed.
     const reach = Math.min(65, this.opts.radiusM * 0.75);
     this.nearWalkways = this.walkways.filter((w) => {
@@ -1426,7 +1479,7 @@ export class StreetLife {
     this.crossers.length = 0;
     this.posed?.begin();
     for (const b of Object.values(this.crowds)) b!.begin();
-    const FAR_WALKER = 25; // beyond this, walkers are drawn with the simpler shape
+    const FAR_WALKER = this.opts.light ? 18 : 25; // beyond this, walkers are drawn with the simpler shape (sooner on Light phones)
     // Where everyone near was last frame (1 m squares), so people who come too close step apart.
     const near = new Map<number, number[]>();
     for (const [i, a] of this.agents.entries()) {

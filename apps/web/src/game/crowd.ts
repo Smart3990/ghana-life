@@ -237,7 +237,15 @@ async function farShape(g: THREE.BufferGeometry, ratio: number) {
   for (let i = 0; i < pos.count; i++) positions.set([pos.getX(i), pos.getY(i), pos.getZ(i)], i * 3);
   const index = g.index ? new Uint32Array(g.index.array as ArrayLike<number>) : Uint32Array.from({ length: pos.count }, (_, i) => i);
   const target = Math.max(3, Math.floor((index.length * ratio) / 3) * 3);
-  const [kept] = MeshoptSimplifier.simplify(index, positions, 3, target, 0.05, ['LockBorder']);
+  let [kept] = MeshoptSimplifier.simplify(index, positions, 3, target, 0.05, ['LockBorder']);
+  // Open edges (a skirt's hem, a sleeve) held the women's far shape at about 62% of the triangles
+  // instead of 40%: far away a hairline gap at an edge cannot be seen, so let the edges go too.
+  if (kept.length > target * 1.2) [kept] = MeshoptSimplifier.simplify(index, positions, 3, target, 0.12, []);
+  // Still too many (the body is made of separate pieces, which the careful way cannot join): the rough
+  // way, which joins nearby points whatever the pieces (fine at a distance).
+  // (three.js ships this function but its type list leaves it out.)
+  const sloppy = (MeshoptSimplifier as unknown as { simplifySloppy: (i: Uint32Array, p: Float32Array, s: number, lock: null, target: number, error: number) => [Uint32Array, number] }).simplifySloppy;
+  if (kept.length > target * 1.2) [kept] = sloppy(index, positions, 3, null, target, 0.2);
   const out = g.clone();
   out.setIndex(new THREE.BufferAttribute(kept, 1));
   return out;

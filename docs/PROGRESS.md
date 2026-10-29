@@ -501,6 +501,15 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
     - **Cost:** on Light at Circle about 55,000 more triangles (about 495,000 to 550,000, measured in a test browser before the caps were lowered a little more). Light caps: 50 stands, 10 carts, 120 umbrellas, 8 bus stops, 30 benches, 30 bins, nearest first.
     - **Checked:** no errors; the story at Circle plays through (snatch, chase, Auntie Dede, the call, Uncle Kwame, the drive home) with the market in place.
     - Done when: on the phone at Circle (`/street-test?debug`) you see rows of market stands, umbrellas, kiosks and carts around the junction with people between them, bus shelters along the main roads, the pack's trees and palms, and the fps stays as before.
+  - **Smoothness pass, batch 1** (owner, 29 Oct: "the game lags so badly and the first scene video doesn't play well… fix the flashes permanently"). Measured in a test browser at Circle, then fixed:
+    - **Walkers' road checks:** the street life spent most of its time asking "is this on the road?" for every walker several times a frame. Now the roads round the player are a ready-made map of 0.5 m squares (made again when you have moved 30 m): one look-up each. Street life's share of the processor's time went from 19% to 8%.
+    - **Far crowd:** far women were drawn with 62% of their triangles instead of 40% (the skirt's edges held the simplifier back); now a rougher simplifying for far people: 778 → 469 triangles each. On Light, people count as far from 18 m (25 m on the others).
+    - **Light:** 1.25 screen pixels per point instead of 1.5 (a third fewer pixels to colour), 280 drivers simulated instead of 420, and a struggling Light phone may thin its crowd to 65% (others still 85%). Market stands are capped at 150 and food carts at 30 on Standard; the pack's street things no longer cast sun shadows (their soft shadow underneath stays).
+    - **Result on Light at Circle:** about 455,000 triangles (550,000 before).
+    - **Film:** while the black or the film covers the screen, the street runs 5 times a second instead of 30 to 60 (it keeps loading, nothing unseen is drawn), so the phone gives the film its full attention.
+    - **Flashes, for good:** the dark loading screen is now a curtain that stays under the start screen, the black and the film until the story itself shows the city (the camera coming down over Circle). Checked frame by frame as a touch phone: no frame of the city before the fly-down.
+    - Still to look at: the map library underneath (about a quarter of the processor's time at street level).
+    - Done when: on the cheap Android the film plays smoothly, there is no flash from "Tap to play" to the fly-down, and walking round Circle feels smoother; please send the fps from `/street-test?debug`.
 
 ## Waiting on the owner
 

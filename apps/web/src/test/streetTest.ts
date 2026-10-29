@@ -117,6 +117,9 @@ const map = createMap(document.getElementById('map')!, tier, {
 if (debug) (window as unknown as { __map: maplibregl.Map }).__map = map; // for test scripts
 map.setMaxZoom(24);
 map.setMaxPitch(85); // looking up at the sky
+// Light phones colour fewer pixels (1.25 for each screen pixel, not 1.5): on a cheap graphics chip
+// that is most of the work of a frame, and the street still looks sharp.
+if (tier === 'light') map.setPixelRatio(Math.min(window.devicePixelRatio, 1.25));
 // The camera belongs to the player, so the usual map gestures are switched off.
 for (const handler of [map.dragPan, map.scrollZoom, map.boxZoom, map.dragRotate, map.keyboard, map.doubleClickZoom, map.touchZoomRotate, map.touchPitch]) {
   handler.disable();
@@ -1650,6 +1653,10 @@ cine.onLine = (who, line) => {
   const v = who === 'YOU' ? playerVoice() : FILM_VOICES[who];
   if (v) void voices.say(line, v, 1, 2);
 };
+/** Take away the dark loading screen that hides the city (once). */
+function liftCurtain() {
+  document.getElementById('loading')?.remove();
+}
 const story = {
   busy: false, // the story is running (the first goals wait)
   frozen: false, // a film scene is playing: no control
@@ -3225,7 +3232,8 @@ async function playOpening(start: StartChoice) {
   const played = await (earlyFilm ?? playFilm(home));
   if (!played && !cine.skipped) await cine.title(home, 'Grandma’s ₵50 and her letter in your bag. The bus to Accra.', 2.6);
   await cine.title('Accra', 'Hours later. Kwame Nkrumah Circle.', 2.2);
-  // 2. The camera comes down over the city to Circle.
+  // 2. The camera comes down over the city to Circle (the first moment the city is seen).
+  liftCurtain();
   if (!cine.skipped) {
     story.fly = { t: performance.now() / 1000, length: 9 };
     await cine.black(false, 1.2);
@@ -4742,7 +4750,7 @@ async function start() {
     streetTraffic.onBlocked = onVehicleBlocked;
     // The drivers: every vehicle drives by the traffic rules (trafficSim.ts), on all the streets loaded.
     const toLngLat = (x: number, z: number): [number, number] => [START[0] + x / M_LON, START[1] - z / M_LAT];
-    trafficSim = new TrafficSim((lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT], toLngLat, { light: { max: 420, radius: 135, seen: 112 }, standard: { max: 650, radius: 200, seen: 170 }, ultra: { max: 900, radius: 260, seen: 220 } }[tier]);
+    trafficSim = new TrafficSim((lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT], toLngLat, { light: { max: 280, radius: 135, seen: 112 }, standard: { max: 650, radius: 200, seen: 170 }, ultra: { max: 900, radius: 260, seen: 220 } }[tier]);
     for (const b of simBatches.splice(0)) trafficSim.addRoads(b);
     // Strict (owner, 28 Oct 2026): no lane on the ground runs under a low flyover ramp or through a
     // building; such lanes are never used. Checked again as more flyovers and buildings load.
@@ -4765,7 +4773,11 @@ async function start() {
     if (debug) Object.assign(window, { __street: { state, sky, look, life, story, thief, signals, lightFor, flyovers, pinch, bigScreen, roadSigns, getStation: () => station, places, fuelWhy, bag, driver, shove, uncle, compound, props, camera3d, adCard, frameShot, placeCompound, buildings, nimaRoute, rideSign, RIDE_SIGNS, map, placeCarTag, fullMap, phone, camAvoid, camAt, viewBlocked, heightAtView, solidAt, traffic: streetTraffic, railway, driveIn, parkingNear, pullIn, pullOut, roadLineNear, compoundAt, music, streetSound, epicRoads, THREE, horns: () => hornsPlayed, people: () => ({ player: playerPerson, thief: thief.person, auntie, uncle }), vehicleAt: (x: number, z: number, r: number) => vehicleAt(x, z, r), placesSolid: (x: number, z: number, r: number) => places.solid(x, z, r), trafficSim: () => trafficSim, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
   }
 
-  document.getElementById('loading')!.remove();
+  // The dark loading screen is the curtain over the city. Without the story it goes now; with the story
+  // it stays under the start screen, the black and the film until the story itself shows the city (the
+  // camera coming down over Circle), so no moment of the city can ever show early, however the film,
+  // the black and the loading line up on a phone (owner, 29 Oct 2026: "flashes… permanently").
+  if (skipStory || params.get('scene')) liftCurtain();
   startedAt = performance.now();
   if (skipStory) {
     setMoney(0);
@@ -4811,6 +4823,9 @@ async function start() {
     // While the big map is open, the street behind it runs slowly (8 times a second): the traffic
     // on the map still moves, and the phone does not draw two maps at full speed.
     if (fullMap.isOpen && now - last < 120) return;
+    // While the film or the black covers the city, the street runs 5 times a second (it keeps loading
+    // and the story keeps time, but nothing is drawn that nobody sees): the film plays smoothly.
+    if (cine.covering && now - last < 200) return;
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     step(player, dt, now / 1000);
@@ -4832,8 +4847,9 @@ async function start() {
       const cap = PRESET.fps;
       if (fps < cap * 0.72 && density > 0.3) density *= 0.8;
       else if (fps > cap * 0.9 && density < 1) density = Math.min(1, density * 1.15);
-      // The crowd stays (owner: people must not disappear): a struggling phone thins it only a little.
-      life?.setDensity(Math.max(0.85, density));
+      // The crowd stays (owner: people must not disappear): a struggling phone thins it only a little,
+      // a struggling Light phone a little more (owner, 29 Oct 2026: "no lags").
+      life?.setDensity(Math.max(tier === 'light' ? 0.65 : 0.85, density));
       // Vehicles are cheap to draw (a few batches): the roads always stay at least three-quarters full.
       // Rush hours fill the roads; a struggling phone thins them a little (never below three-quarters).
       if (streetTraffic) streetTraffic.density = roadFill(day.hour) * Math.max(0.75, density);

@@ -85,6 +85,14 @@ export class Cinema {
     this.card.classList.add('on', 'black');
   }
 
+  /** Is the city hidden right now (all black, or the film playing full screen)? Then the game can
+   *  draw it far less often, so the film plays smoothly on a cheap phone. */
+  get covering() {
+    const black = this.card.classList.contains('on') && this.card.classList.contains('black');
+    const v = this.videoEl;
+    return black || (this.filmStarted && !!v && !v.paused && !v.ended);
+  }
+
   /** Is the clip downloaded enough to play smoothly? */
   videoReady() {
     return !!this.videoEl && this.videoEl.readyState >= 3 && !this.videoEl.error;
