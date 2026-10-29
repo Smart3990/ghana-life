@@ -30,9 +30,44 @@ export function epicMaterial() {
     dayGlow = tex('emission.png');
     nightGlow = tex('emission-night.png');
     material = new THREE.MeshStandardMaterial({ name: 'epic-atlas', map: atlas, emissiveMap: dayGlow, emissive: new THREE.Color(0.58, 0.58, 0.58), roughness: 0.9, metalness: 0 });
+    // At night the lit windows and signs glow in a colour of their own, block by block: pink,
+    // magenta, cyan, violet, teal, amber and warm white (owner, 29 Oct 2026: "glowing like in the pack
+    // sample… pink, all the type of colours"). By day: the pack's own glow, untouched.
+    material.onBeforeCompile = (shader) => {
+      shader.uniforms.uNeon = neon;
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', `#include <common>
+varying vec3 vNeonPos;`)
+        .replace(
+          '#include <project_vertex>',
+          `#include <project_vertex>
+          vec4 neonP = vec4(transformed, 1.0);
+          #ifdef USE_INSTANCING
+            neonP = instanceMatrix * neonP;
+          #endif
+          vNeonPos = (modelMatrix * neonP).xyz;`,
+        );
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', `#include <common>
+varying vec3 vNeonPos;
+uniform float uNeon;`)
+        .replace(
+          '#include <emissivemap_fragment>',
+          `#include <emissivemap_fragment>
+          if (uNeon > 0.0) {
+            vec2 cell = floor(vNeonPos.xz / 13.0);
+            float h = fract(sin(dot(cell, vec2(12.9898, 78.233))) * 43758.5453);
+            vec3 tint = h < 0.16 ? vec3(1.0, 0.25, 0.72) : h < 0.28 ? vec3(0.85, 0.3, 1.0) : h < 0.4 ? vec3(0.25, 0.9, 1.0)
+              : h < 0.5 ? vec3(0.55, 0.42, 1.0) : h < 0.6 ? vec3(0.3, 1.0, 0.78) : h < 0.75 ? vec3(1.0, 0.62, 0.25) : vec3(1.0, 0.86, 0.62);
+            totalEmissiveRadiance *= mix(vec3(1.0), tint * 1.7, uNeon);
+          }`,
+        );
+    };
+    material.customProgramCacheKey = () => 'epic-neon';
   }
   return material;
 }
+const neon = { value: 0 };
 
 /** The pack's two glow sheets (by day, at night), for materials made from the pack's. */
 export function epicGlowMaps() {
@@ -44,7 +79,8 @@ export function epicGlowMaps() {
 export function setEpicNight(on: boolean) {
   const m = epicMaterial();
   m.emissiveMap = on ? nightGlow : dayGlow;
-  m.emissive.setRGB(on ? 1.24 : 0.58, on ? 0.68 : 0.58, on ? 0.68 : 0.58);
+  m.emissive.setRGB(on ? 1.3 : 0.58, on ? 1.15 : 0.58, on ? 1.05 : 0.58); // (white: the neon colours tint it)
+  neon.value = on ? 1 : 0;
   m.emissiveIntensity = on ? 1.6 : 1;
   m.needsUpdate = true;
 }

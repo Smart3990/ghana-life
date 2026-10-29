@@ -404,9 +404,35 @@ function applyDayLook(force = false) {
     if (map.isStyleLoaded()) {
       map.setSky({ 'sky-color': day.mapSky, 'horizon-color': day.horizon, 'sky-horizon-blend': 0.7, 'horizon-fog-blend': 0.6, 'fog-color': day.fog, 'fog-ground-blend': 0.9 });
       if (map.getLayer('night-dim')) map.setPaintProperty('night-dim', 'fill-opacity', day.dim);
+      if (map.getLayer('night-roads')) map.setPaintProperty('night-roads', 'line-opacity', 0.55 * day.night);
+      if (map.getLayer('night-lamps')) map.setPaintProperty('night-lamps', 'line-opacity', 0.9 * day.night);
+      // The map's blocks (seen from the sky): lit up in every colour at night, painted walls by day.
+      const lit = day.night > 0.5;
+      if (lit !== mapBlocksLit) {
+        mapBlocksLit = lit;
+        for (const id of ['buildings', 'ride-buildings']) {
+          if (!map.getLayer(id)) continue;
+          if (!dayBlockColour.has(id)) dayBlockColour.set(id, map.getPaintProperty(id, 'fill-extrusion-color') as maplibregl.DataDrivenPropertyValueSpecification<string>);
+          map.setPaintProperty(id, 'fill-extrusion-color', lit ? NIGHT_BLOCKS : dayBlockColour.get(id));
+        }
+        for (const id of ['roofs', 'ride-roofs']) {
+          if (!map.getLayer(id)) continue;
+          if (!dayBlockColour.has(id)) dayBlockColour.set(id, map.getPaintProperty(id, 'fill-extrusion-color') as maplibregl.DataDrivenPropertyValueSpecification<string>);
+          map.setPaintProperty(id, 'fill-extrusion-color', lit ? NIGHT_BLOCKS : dayBlockColour.get(id)); // (from the sky you see the roofs)
+        }
+      }
     }
   }
 }
+// The map's blocks at night: half dark, half lit in neon colours (pink, magenta, cyan, violet, teal,
+// amber, warm white), picked from each building's number so they never change.
+const NIGHT_BLOCKS: maplibregl.ExpressionSpecification = [
+  'match', ['%', ['to-number', ['id'], 0], 14],
+  0, '#ff3fa8', 1, '#c84dff', 2, '#36dcff', 3, '#ffb347', 4, '#7a5cff', 5, '#2fffc0', 6, '#ffd98a',
+  '#1d1b33',
+];
+let mapBlocksLit = false;
+const dayBlockColour = new Map<string, maplibregl.DataDrivenPropertyValueSpecification<string>>();
 /** Switch the night lights of everything in the street (0 = day, 1 = full night). */
 function setNightLights(n: number) {
   buildings.setNight(n);
@@ -4819,6 +4845,25 @@ async function start() {
   // At night the map's flat ground (far roads and open ground) is darkened by a sheet over it.
   map.addSource('night-dim', { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [[[-0.6, 5.2], [0.3, 5.2], [0.3, 6.0], [-0.6, 6.0], [-0.6, 5.2]]] } } });
   map.addLayer({ id: 'night-dim', type: 'fill', source: 'night-dim', paint: { 'fill-color': '#0b1226', 'fill-opacity': 0 } }, 'street-3d');
+  // The whole city lit at night, seen from the sky as the camera comes down (owner, 29 Oct 2026: not
+  // only Circle): every road glows sodium orange, with the dots of its street lamps along it.
+  const bigRoads: maplibregl.ExpressionSpecification = ['in', ['get', 'kind'], ['literal', ['highway', 'major_road', 'minor_road']]];
+  const byKind = (hi: number, major: number, minor: number): maplibregl.ExpressionSpecification => ['match', ['get', 'kind'], 'highway', hi, 'major_road', major, minor];
+  map.addLayer({
+    id: 'night-roads', type: 'line', source: 'accra', 'source-layer': 'roads', filter: bigRoads, layout: { 'line-join': 'round', 'line-cap': 'round' },
+    paint: {
+      'line-color': ['match', ['get', 'kind'], 'highway', '#ffb54a', 'major_road', '#ffa94d', '#ff9a5c'],
+      'line-width': ['interpolate', ['exponential', 2], ['zoom'], 11, ['*', 0.5, byKind(5, 3.5, 1.6)], 17, ['*', 16, byKind(5, 3.5, 1.6)]],
+      'line-blur': ['interpolate', ['exponential', 2], ['zoom'], 11, 2, 17, 40],
+      'line-opacity': 0,
+    },
+  }, 'street-3d');
+  map.addLayer({
+    id: 'night-lamps', type: 'line', source: 'accra', 'source-layer': 'roads', filter: bigRoads, layout: { 'line-cap': 'round' },
+    paint: { 'line-color': '#fff0c2', 'line-width': ['interpolate', ['linear'], ['zoom'], 11, 1.2, 16, 3.5], 'line-dasharray': [0.1, 9], 'line-opacity': 0 },
+  }, 'street-3d');
+  // The map's blocks stand above the night's dark sheet, so their lights show from the sky.
+  for (const id of ['buildings', 'roofs', 'ride-buildings', 'ride-roofs']) if (map.getLayer(id)) map.moveLayer(id, 'street-3d');
   // The sky and light for the time now (Accra time), then kept up to date.
   applyDayLook(true);
   map.setLight({ anchor: 'map', color: '#ffe2bd', intensity: 0.45, position: [1.4, 265, 35] });

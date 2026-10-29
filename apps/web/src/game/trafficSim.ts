@@ -173,6 +173,8 @@ export class TrafficSim {
   onWaitForPlayer: ((v: { id: number; x: number; z: number; heading: number; kind: string; halfW: number; half: number; waited: number }) => void) | null = null;
   /** Is obstacles[0] the player? */
   playerFirst = false;
+  /** For tests: vehicles taken off the road close to the player by the 10-second rule's last resort. */
+  nearDrops = 0;
   /** Vehicles that must not move (a driver who got out). */
   hold = new Set<number>();
   /**
@@ -559,6 +561,10 @@ export class TrafficSim {
           next = next.link ? next.next[0] : null;
         }
       }
+      // Nobody waits more than 10 seconds, anywhere (owner, 29 Oct 2026, a strict rule): after 6.5 s
+      // standing, a driver stops waiting for the light (still giving way to anyone in the junction, and
+      // never driving into anyone).
+      const impatient = car.stuck > 6.5 && !car.story && !this.hold.has(car.id);
       // 2. The end of the lane: stop at the line for red, or to give way, or with nowhere to go.
       if (!seg.link) {
         if (!car.plan || car.plan.dead) this.choose(car);
@@ -566,7 +572,7 @@ export class TrafficSim {
         if (toEnd < LOOK && !car.committed) {
           let stop = !car.plan;
           let extra = 0;
-          if (!stop && this.redLight) {
+          if (!stop && this.redLight && !impatient) {
             const end = this.pointAt(seg, seg.len);
             const red = this.redLight(end.x, end.z, Math.atan2(end.fx, -end.fz), t);
             if (red) {
@@ -579,7 +585,9 @@ export class TrafficSim {
             // Take the right of way when close enough to need it (and keep it through the junction).
             const need = (car.v * car.v) / (2 * BRAKE) + 4;
             if (toEnd < need) {
-              if (this.mayGo(car, t)) {
+              // (Someone who has waited 6.5 s edges through a jammed junction: the windscreen check below
+              // still keeps them from ever touching anyone.)
+              if (impatient || this.mayGo(car, t)) {
                 car.committed = true;
                 car.plan!.node!.busy.add(car);
               } else stop = true;
@@ -609,6 +617,9 @@ export class TrafficSim {
             // Already touching (a lane starting on top of another road, a junction curve over a lane):
             // one of the two moves out of it (the lower number), the other waits, so it clears at once.
             if (f.gap < -0.3 && car.id < other.id && f.dot < 0.6) continue;
+            // Two who have both waited 6.5 s across each other's way (a standoff in a junction): the lower
+            // number goes first, the other waits (the 10-second rule).
+            if (impatient && other.stuck > 6.5 && f.dot < 0.9 && car.id < other.id) continue;
             // Oncoming in its own lane, passing beside: not in the way. Oncoming in this car's path (two
             // roads drawn on top of each other, a narrow bend): it is.
             if (f.dot < -0.85 && f.side > car.halfW + other.halfW - 0.5) continue;
@@ -740,7 +751,9 @@ export class TrafficSim {
       // (unless it is already inside something solid, where nobody may see it).
       const walledNow = this.isWalled(car.seg);
       const inside = walledNow && car.seg.wallAt !== undefined && Math.abs(car.seg.wallAt - car.s) < car.len / 2;
-      if (!keep && ((walledNow && (!seen || inside)) || d2 > r2 || (car.stuck > 25 && !car.seg.link && !car.plan && !seen))) this.drop(car);
+      // (And anyone who has waited 8.5 s more than 20 m from the player, or at a dead end where the map's
+      // road stops, leaves, so a jam dissolves; as a last resort, anyone at all at 9.5 s: the 10-second rule.)
+      if (!keep && !this.hold.has(car.id) && ((walledNow && (!seen || inside)) || d2 > r2 || (car.stuck > 8.5 && (d2 > 20 * 20 || (!car.seg.link && !car.plan))) || (car.stuck > 9.5 && ++this.nearDrops > 0) || (car.stuck > 25 && !car.seg.link && !car.plan && !seen))) this.drop(car);
     }
     // Keep each piece's list in order (vehicles only move forward, so this is cheap).
     for (const seg of this.active) seg.cars.sort((a, b) => a.s - b.s);
@@ -1025,6 +1038,12 @@ export class TrafficSim {
         }
       }
     return { overlaps: pairs.slice(0, 6), n: pairs.length, stuck: this.cars.filter((c) => c.stuck > 20).length };
+  }
+
+  /** For tests: the longest any driver (not the story's, not one held) has been standing still, and how many over 10 s. */
+  waits() {
+    const list = this.cars.filter((c) => !c.story && !this.hold.has(c.id)).map((c) => c.stuck);
+    return { longest: Math.max(0, ...list), over10: list.filter((w) => w > 10).length, nearDrops: this.nearDrops };
   }
 
   /** For tests: how many vehicles, lanes and junctions. */

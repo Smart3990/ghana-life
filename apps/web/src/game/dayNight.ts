@@ -36,12 +36,13 @@ type Look = {
   shade: number; // shadow strength
 };
 // From deep night to high noon. In between, everything is blended.
-// (Owner, 28 Oct 2026: "people and cars should never lose their colours at any time of day, just a
-// little shade so we can tell the difference." So the night light is a soft, nearly white moonlight
-// at about three quarters of the day's; the dark sky, lit windows and street lights say it is night.)
+// (Owner, 28 Oct 2026: "people and cars should never lose their colours at any time of day". 29 Oct:
+// "it doesn't look like night… day and night distinctive". So the night is a cool blue moonlight at
+// about a third of the day's light, the map's ground deep navy, and the city lit by its own lights:
+// street lamps, glowing roads and windows in every colour. People keep their colours, a little cooler.)
 const LOOKS: Look[] = [
-  { el: -14, sun: '#e4eaff', sunI: 1.35, sky: '#d6ddf2', ground: '#5d5c66', skyI: 0.95, env: 0.7, mapSky: '#060c1c', horizon: '#131f3c', fog: '#0f182c', dim: 0.32, shade: 0.14 },
-  { el: -6, sun: '#ece2f2', sunI: 1.3, sky: '#dfd4e4', ground: '#5e5052', skyI: 0.94, env: 0.74, mapSky: '#23305a', horizon: '#c0684a', fog: '#3a3550', dim: 0.2, shade: 0.15 },
+  { el: -14, sun: '#a9bcff', sunI: 0.75, sky: '#8796cc', ground: '#2c2b3c', skyI: 0.6, env: 0.32, mapSky: '#04081a', horizon: '#141a3a', fog: '#0b1024', dim: 0.8, shade: 0.12 },
+  { el: -6, sun: '#cbb8ea', sunI: 1.0, sky: '#b4a6d2', ground: '#3e3646', skyI: 0.78, env: 0.55, mapSky: '#1d2550', horizon: '#c0684a', fog: '#332e4a', dim: 0.5, shade: 0.14 },
   { el: -1, sun: '#ffb488', sunI: 1.4, sky: '#f2cbb8', ground: '#5c463a', skyI: 0.92, env: 0.78, mapSky: '#5d5a8a', horizon: '#f59a5a', fog: '#d8a080', dim: 0.1, shade: 0.2 },
   { el: 4, sun: '#ffa868', sunI: 1.8, sky: '#ffd8b0', ground: '#5a4232', skyI: 0.92, env: 0.85, mapSky: '#e8935a', horizon: '#ffd09a', fog: '#f0c49a', dim: 0.05, shade: 0.26 },
   { el: 16, sun: '#ffcb94', sunI: 2.3, sky: '#fff1dc', ground: '#6b4f3a', skyI: 1, env: 1, mapSky: '#f2b36b', horizon: '#f7d9b0', fog: '#f1d7b6', dim: 0, shade: 0.3 },
