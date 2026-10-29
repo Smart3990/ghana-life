@@ -1595,7 +1595,7 @@ function toast(text: string, small = '') {
 
 
 // ---------- The opening story (design brief 6 and 7, first part) ----------
-// A short film made in the game itself: home, Grandma's goodbye and the bus, then the camera comes
+// Who you are (title cards over the music), the trotro leaving for Accra (the film), then the camera comes
 // down over Accra to Circle. A boy snatches your bag; you chase him and lose him; the kelewele
 // auntie calls your uncle. Then the city is yours to explore. ?nostory skips it (for tests).
 
@@ -1614,15 +1614,27 @@ const FILM = slowNet ? '/film/opening-360.mp4' : '/film/opening-480.mp4';
 if (!params.has('nostory') && !params.has('auto')) cine.loadVideo(FILM, '/film/opening-poster.jpg');
 /** The opening film, started in the START tap (it plays while the city and the people load behind it). */
 let earlyFilm: Promise<boolean> | null = null;
+/** The name you get from the day you arrive (brief 5.3). */
+function dayNameFor(body: 'male' | 'female') {
+  return (body === 'female' ? ['Akosua', 'Adwoa', 'Abenaa', 'Akua', 'Yaa', 'Afua', 'Ama'] : ['Kwasi', 'Kwadwo', 'Kwabena', 'Kwaku', 'Yaw', 'Kofi', 'Kwame'])[new Date().getDay()];
+}
+const DEGREES = ['Computer Science', 'Business Administration', 'Accounting', 'Marketing', 'Civil Engineering', 'Communication Studies'];
 /**
- * The opening film (the owner's clip, public/film/opening-*): leaving home, Grandma's ₵50 and her
- * letter, the goodbye, the trotro to Accra, with its own sound and the story's words as subtitles at
- * the moments they happen (no voices). On a slow network: "Loading…" on the black until it can play.
+ * The opening (owner, 29 Oct 2026: no Grandma, nobody gives you money): with the music playing, title
+ * cards say who you are (your name, a fresh graduate from the hometown you picked, off to hustle in
+ * Accra and stay with Uncle Kwame), then the film: the last seconds of the owner's clip, the trotro on
+ * the road to Accra (public/film/opening-*, cut from 0:20 to the end, no sound of its own).
+ * On a slow network: "Loading…" on the black until the film can play.
  */
-async function playFilm(home: string) {
+async function playFilm(home: string, body: 'male' | 'female') {
   cine.begin();
   cine.coverNow();
-  streetSound.setQuiet(true); // (the film's own sound only)
+  streetSound.setQuiet(true); // (the music only)
+  const degree = DEGREES[[...home].reduce((n, c) => n + c.charCodeAt(0), new Date().getDay()) % DEGREES.length];
+  await cine.title(`You are ${dayNameFor(body)}`, `A fresh university graduate in ${degree}, from ${home}.`, 3.6);
+  await cine.title(home, 'Four years of study, and still no work here. The work is in the city.', 3.6);
+  await cine.title('Accra', 'Today you go to hustle in Accra, and stay with your uncle, Uncle Kwame.', 3.8);
+  if (cine.skipped) return false;
   const t0 = performance.now();
   while (!cine.videoReady() && !cine.skipped && performance.now() - t0 < 25000) {
     if (performance.now() - t0 > 1200) cine.loadingNote(true);
@@ -1631,21 +1643,12 @@ async function playFilm(home: string) {
   cine.loadingNote(false);
   if (!cine.videoReady() || cine.skipped) return false;
   return cine.video(
-    [
-      [0.4, '', `${home}. Your last morning at home.`, 2.6],
-      [4.0, '', 'Grandma puts ₵50 and her letter for Uncle Kwame into your hand.', 1.9],
-      [6.1, 'GRANDMA', 'Go well, my child. Greet your uncle for me.', 3.2],
-      [9.6, '', 'You wave goodbye. She watches until you are gone.', 2.2],
-      [12.1, '', 'The lorry park. The trotro to Accra.', 2.6],
-      [15.0, 'MATE', 'Accra! Accra! One more, come!', 2.6],
-      [18.9, '', 'The long road to Accra.', 3.3],
-    ],
+    [[0.2, '', 'The trotro to Accra.', 2.5]],
     true,
   );
 }
-// The film's lines are spoken too (Grandma, the bus mate, Auntie Dede, Uncle Kwame, you).
+// The film's lines are spoken too (the bus mate, Auntie Dede, Uncle Kwame, you).
 const FILM_VOICES: Record<string, { body: 'male' | 'female' | 'child'; seed: number }> = {
-  GRANDMA: { body: 'female', seed: 11 },
   'BUS MATE': { body: 'male', seed: 23 },
   'AUNTIE DEDE': { body: 'female', seed: 37 },
   'UNCLE KWAME': { body: 'male', seed: 41 },
@@ -2873,7 +2876,7 @@ async function runChase(gone: Promise<void>) {
   story.handsOnHead = true;
   life?.scenes?.onSpeak?.(state.x, state.z, 1.9, 'Hey! My bag! Thief!', playerBody, 4242);
   void voices.say('Hey! My bag! Thief!', playerVoice(), 1, 2);
-  void cine.say('', 'A boy grabs your bag: your money, your phone and Grandma’s letter!', 2.6);
+  void cine.say('', 'A boy grabs your bag: your money, your phone, everything!', 2.6);
   await pause(1.9);
   story.handsOnHead = false;
   await pause(0.3);
@@ -3234,14 +3237,13 @@ async function playOpening(start: StartChoice) {
   story.busy = story.frozen = true;
   story.hidePlayer = true; // (you are on the trotro until it stops at Circle and you step down)
   goalChip.classList.add('hidden');
-  setMoney(50, 'From Grandma for the journey');
-  // 1. The opening film (the owner's clip, public/film/opening-480): leaving home, Grandma's ₵50 and
-  //    her letter, the goodbye, the trotro to Accra. The story's words come up over it at the moments
-  //    they happen, with no black screen. Then a title card on black: hours later, Accra.
+  setMoney(50, 'Your savings for the journey');
+  // 1. Who you are (title cards over the music), then the film: the trotro on the road to Accra.
+  //    Then a title card on black: hours later, Accra.
   music.preload();
-  // (The film began in the START tap; it may still be playing while the city loaded.)
-  const played = await (earlyFilm ?? playFilm(home));
-  if (!played && !cine.skipped) await cine.title(home, 'Grandma’s ₵50 and her letter in your bag. The bus to Accra.', 2.6);
+  // (The opening began in the START tap; it may still be playing while the city loaded.)
+  const played = await (earlyFilm ?? playFilm(home, start.body));
+  if (!played && !cine.skipped) await cine.title(home, 'The trotro to Accra.', 2.6);
   await cine.title('Accra', 'Hours later. Kwame Nkrumah Circle.', 2.2);
   // 2. The camera comes down over the city to Circle (the first moment the city is seen).
   liftCurtain();
@@ -4708,7 +4710,8 @@ async function start() {
             cine.coverNow();
             (window as Window & { __goFull?: () => void }).__goFull?.(); // (full screen again, if it was left)
             cine.prepareVideo(FILM, '/film/opening-poster.jpg'); // (downloading since the page opened; unlocked here, in the tap)
-            earlyFilm = playFilm(picked.hometown); // the film starts now, while the city and the people load
+            music.play(2); // the music from the first card (started in the tap: phones allow sound only then)
+            earlyFilm = playFilm(picked.hometown, picked.body); // the opening starts now, while the city and the people load
           });
     })(),
     new Promise<void>((r) => map.once('load', () => r())),
@@ -4716,7 +4719,7 @@ async function start() {
   playerBody = choice.body;
   homeTown = choice.hometown;
   // Day name from the day you arrive (brief 5.3).
-  dayName = (choice.body === 'female' ? ['Akosua', 'Adwoa', 'Abenaa', 'Akua', 'Yaa', 'Afua', 'Ama'] : ['Kwasi', 'Kwadwo', 'Kwabena', 'Kwaku', 'Yaw', 'Kofi', 'Kwame'])[new Date().getDay()];
+  dayName = dayNameFor(choice.body);
   const [player] = await Promise.all([loadPlayer(choice.body), skipStory ? null : loadThief(), skipStory ? null : auntie.load(), skipStory ? null : uncle.load(), skipStory ? null : family.load()]);
   playerPerson = player;
   for (const move of ['jumpLoop', 'jumpLand'] as const) {

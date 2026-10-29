@@ -518,6 +518,11 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
     - **Checked** (test browser, Standard, Circle, 30 s): about 445 walkers moving, none standing still on a road.
     - **Opening film stills:** `docs/film/opening-scenes.jpg`, one numbered picture per second of the 23 s film, for the owner to choose what to cut.
     - Done when: at Circle (`/street-test?debug`) the stalls and umbrella tables show food, people walk on along the streets, nobody stands still in the road, Auntie Dede hands you kelewele in Mission 1, and the fps is as before.
+  - **New opening, no Grandma** (owner, 29 Oct: "there's no grandma anymore… start the video from 21 to 23… after the user selects the character… the music playing in the background"):
+    - After START, with our highlife music playing from the tap: three title cards on black. "You are {day name}" / "A fresh university graduate in {subject}, from {hometown}." · "{hometown}" / "Four years of study, and still no work here. The work is in the city." · "Accra" / "Today you go to hustle in Accra, and stay with your uncle, Uncle Kwame." Then the film, cut to its last 2.8 s (pictures 21 to 23 of `docs/film/opening-scenes.jpg`: the trotro on the red road at sunset), subtitle "The trotro to Accra.", then "Hours later. Kwame Nkrumah Circle." and the fly-down as before.
+    - Grandma is gone everywhere: no ₵50 from her (your ₵50 is your own savings), no letter (the thief takes "your money, your phone, everything"), no Grandma in the phone's contacts. The film files are now 0.2 to 0.4 MB instead of about 1.3 MB.
+    - Checked (test browser, Light): the cards, the film and the fly-down to Circle play in order, no errors.
+    - Done when: on the phone, after START you see the three cards with music, the trotro clip, then Circle; Grandma never appears.
 
 ## Waiting on the owner
 

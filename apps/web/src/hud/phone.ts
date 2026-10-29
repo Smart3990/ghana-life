@@ -61,7 +61,6 @@ export class Phone {
   constructor(private hooks: PhoneHooks) {
     const uncle: Speaker = { body: 'male', seed: 55 };
     const dede: Speaker = { body: 'female', seed: 50 };
-    const grandma: Speaker = { body: 'female', seed: 81 };
     this.contacts = [
       {
         name: 'Uncle Kwame',
@@ -95,19 +94,6 @@ export class Phone {
                 ],
               }
             : { say: 'Hello? I don’t know this number oo. Who is calling?' },
-      },
-      {
-        name: 'Grandma',
-        role: 'Home',
-        who: grandma,
-        color: '#7fa23c',
-        call: () => ({
-          say: 'My child! Have you reached Accra? Are you eating well?',
-          choices: [
-            { text: 'Yes, Grandma. I have reached.', next: { say: 'God be praised. Greet your uncle. And keep the letter safe.' } },
-            { text: 'Grandma, someone stole my bag.', next: { say: 'Ei! Accra people! Don’t worry, my child. Your uncle will help you. Be careful.' } },
-          ],
-        }),
       },
       {
         name: 'Ride Help',
