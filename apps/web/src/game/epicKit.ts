@@ -30,9 +30,9 @@ export function epicMaterial() {
     dayGlow = tex('emission.png');
     nightGlow = tex('emission-night.png');
     material = new THREE.MeshStandardMaterial({ name: 'epic-atlas', map: atlas, emissiveMap: dayGlow, emissive: new THREE.Color(0.58, 0.58, 0.58), roughness: 0.9, metalness: 0 });
-    // At night the lit windows and signs glow in a colour of their own, block by block: pink,
-    // magenta, cyan, violet, teal, amber and warm white (owner, 29 Oct 2026: "glowing like in the pack
-    // sample… pink, all the type of colours"). By day: the pack's own glow, untouched.
+    // At night the lit windows and signs glow block by block: mostly warm lamplight, a few softly
+    // pink, violet or cyan (owner, 29 Oct 2026: neon "very slightly, not too bulky"). By day: the
+    // pack's own glow, untouched.
     material.onBeforeCompile = (shader) => {
       shader.uniforms.uNeon = neon;
       shader.vertexShader = shader.vertexShader
@@ -57,9 +57,10 @@ uniform float uNeon;`)
           if (uNeon > 0.0) {
             vec2 cell = floor(vNeonPos.xz / 13.0);
             float h = fract(sin(dot(cell, vec2(12.9898, 78.233))) * 43758.5453);
-            vec3 tint = h < 0.16 ? vec3(1.0, 0.25, 0.72) : h < 0.28 ? vec3(0.85, 0.3, 1.0) : h < 0.4 ? vec3(0.25, 0.9, 1.0)
-              : h < 0.5 ? vec3(0.55, 0.42, 1.0) : h < 0.6 ? vec3(0.3, 1.0, 0.78) : h < 0.75 ? vec3(1.0, 0.62, 0.25) : vec3(1.0, 0.86, 0.62);
-            totalEmissiveRadiance *= mix(vec3(1.0), tint * 1.7, uNeon);
+            // Mostly warm lamplight; now and then a soft neon (only a hint: owner, 29 Oct 2026).
+            vec3 tint = h < 0.08 ? vec3(1.0, 0.45, 0.8) : h < 0.14 ? vec3(0.75, 0.5, 1.0) : h < 0.2 ? vec3(0.45, 0.9, 1.0)
+              : h < 0.6 ? vec3(1.0, 0.8, 0.55) : vec3(1.0, 0.92, 0.78);
+            totalEmissiveRadiance *= mix(vec3(1.0), tint * 1.15, uNeon);
           }`,
         );
     };

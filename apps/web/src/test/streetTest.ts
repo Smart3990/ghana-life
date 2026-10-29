@@ -424,12 +424,13 @@ function applyDayLook(force = false) {
     }
   }
 }
-// The map's blocks at night: half dark, half lit in neon colours (pink, magenta, cyan, violet, teal,
-// amber, warm white), picked from each building's number so they never change.
+// The map's blocks at night: Circle's own look, dark walls with a few lit (owner, 29 Oct 2026: "too
+// colourful… very slightly" neon): most dark, some with warm lit windows, a few softly pink, violet or
+// teal. Picked from each building's number so they never change.
 const NIGHT_BLOCKS: maplibregl.ExpressionSpecification = [
-  'match', ['%', ['to-number', ['id'], 0], 14],
-  0, '#ff3fa8', 1, '#c84dff', 2, '#36dcff', 3, '#ffb347', 4, '#7a5cff', 5, '#2fffc0', 6, '#ffd98a',
-  '#1d1b33',
+  'match', ['%', ['to-number', ['id'], 0], 20],
+  0, '#5c3a2c', 1, '#56402e', 2, '#4e3a2c', 3, '#5a2f4c', 4, '#3c3058', 5, '#2b4652',
+  '#1e1c2b',
 ];
 let mapBlocksLit = false;
 const dayBlockColour = new Map<string, maplibregl.DataDrivenPropertyValueSpecification<string>>();
@@ -1643,7 +1644,7 @@ const DEGREES = ['Computer Science', 'Business Administration', 'Accounting', 'M
  * The opening (owner, 29 Oct 2026: no Grandma, nobody gives you money): with the music playing, title
  * cards say who you are (your name, a fresh graduate from the hometown you picked, off to hustle in
  * Accra and stay with Uncle Kwame), then the film: the trotro on the road to Accra (public/film/opening-*:
- * the owner's clip from 0:21.15 to 0:22.3, brightness evened out, slowed to 3.5 s, no sound of its own).
+ * the owner's 2.2 s clip sent on 29 Oct 2026, as it is, without its own sound).
  * On a slow network: "Loading…" on the black until the film can play.
  */
 async function playFilm(home: string, body: 'male' | 'female') {
@@ -1664,7 +1665,7 @@ async function playFilm(home: string, body: 'male' | 'female') {
   cine.loadingNote(false);
   if (!cine.videoReady() || cine.skipped) return false;
   return cine.video(
-    [[0.3, '', 'The trotro to Accra.', 3]],
+    [[0.4, '', 'The trotro to Accra.', 1.7]],
     true,
   );
 }

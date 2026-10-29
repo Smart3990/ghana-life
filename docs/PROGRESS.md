@@ -542,6 +542,9 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
     - **The whole city lit** (seen from the sky as the camera comes down): every road glows sodium orange with the dots of its street lamps, and the map's buildings (walls and roofs) are lit in neon colours (pink, magenta, cyan, violet, teal, amber, warm white), half of them dark. By day the map is as before.
     - **Neon windows near you:** the pack's lit windows and signs glow in a colour per block (the same colours), only at night.
     - Done when: no car ever waits more than 10 s; at night (`?hour=23`) it is clearly night, and the fly-down shows the whole city glowing, not only Circle.
+  - **The owner's trotro clip, and a quieter night** (owner, 29 Oct: "replace the video… too colourful, doesn't look like a city… neon very slightly"):
+    - The opening film is now the owner's own 2.2 s clip of the trotro driving off at sunset (as sent, without its sound; the music plays over it), subtitle "The trotro to Accra."
+    - Night from the sky: the map's buildings mostly dark, some with warm lit windows, a few softly pink, violet or teal (3 in 20); the glowing orange roads and lamp dots stay. The 3D windows near you: mostly warm lamplight, now and then a soft pink, violet or cyan.
 
 ## Waiting on the owner
 
