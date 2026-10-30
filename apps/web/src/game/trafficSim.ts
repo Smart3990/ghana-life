@@ -493,6 +493,12 @@ export class TrafficSim {
     const link = car.plan;
     if (!link) return false;
     const node = link.node!;
+    // Nobody pulls out across a story vehicle in a hurry (Uncle on the film of the ride home) as it
+    // comes up to the junction (owner, 30 Oct 2026: "no car that will come and cross the road to block it").
+    for (const h of this.hurrying) {
+      if (h === car || h.plan?.node !== node || h.seg.link) continue;
+      if (h.seg.len - h.s < 45 && (link.conflicts.has(h.plan) || link === h.plan)) return false;
+    }
     for (const other of node.busy) {
       if (other === car) continue;
       const seg = other.committed ? other.plan : other.seg.link ? other.seg : null;
@@ -565,7 +571,11 @@ export class TrafficSim {
       // standing, a driver stops waiting for the light (still giving way to anyone in the junction, and
       // never driving into anyone).
       // (A story vehicle in a hurry, Uncle on the film of the ride home, after 2 s.)
-      const impatient = (car.story?.hurry ? car.stuck > 2 : car.stuck > 6.5 && !car.story) && !this.hold.has(car.id);
+      // (A story vehicle in a hurry, Uncle on the film of the ride home, after 1 s: owner, 30 Oct 2026,
+      // "we stop for 1 second, and then the traffic will just move".)
+      // The drivers just ahead of him in his lane go on through, so no queue forms in front of him.
+      // (They do not queue for the light at all: his way stays open; he himself waits a second at a red.)
+      const impatient = (car.story?.hurry ? car.stuck > 1 : this.leads(car) || (car.stuck > 6.5 && !car.story)) && !this.hold.has(car.id);
       // 2. The end of the lane: stop at the line for red, or to give way, or with nowhere to go.
       if (!seg.link) {
         if (!car.plan || car.plan.dead) this.choose(car);
@@ -625,7 +635,9 @@ export class TrafficSim {
             // roads drawn on top of each other, a narrow bend): it is.
             if (f.dot < -0.85 && f.side > car.halfW + other.halfW - 0.5) continue;
             // Crossing paths: the one further in goes first, but never into a vehicle it is about to touch.
-            if (f.dot < 0.6 && f.gap > 2.5) {
+            // (A story vehicle in a hurry always goes first where paths cross; everyone gives it the way.)
+            if (f.dot < 0.6 && f.gap > 2.5 && car.story?.hurry) continue;
+            if (f.dot < 0.6 && f.gap > 2.5 && !other.story?.hurry) {
               const back = inFront(other, po, car, me, 16);
               if (back && (back.gap > f.gap + 0.5 || (Math.abs(back.gap - f.gap) <= 0.5 && car.id < other.id))) continue; // I go first
             }
@@ -707,7 +719,8 @@ export class TrafficSim {
         lead = 0;
       }
       // The driver's rule: speed up towards the speed they like, brake for what is ahead.
-      const v0 = Math.min(car.v0, seg.speed) * (car.special ? 1.4 : 1);
+      // (Just ahead of a story vehicle in a hurry, even a slow lorry keeps up the road's pace.)
+      const v0 = Math.min(this.leads(car) ? Math.max(car.v0, 14) : car.v0, seg.speed) * (car.special ? 1.4 : 1);
       const dv = car.v - lead;
       const want = MIN_GAP + Math.max(0, car.v * HEADWAY + (car.v * dv) / (2 * Math.sqrt(ACC * BRAKE)));
       let a = ACC * (1 - (car.v / Math.max(0.5, v0)) ** 4);
@@ -774,6 +787,7 @@ export class TrafficSim {
 
   private drop(car: Car) {
     this.remove(car);
+    this.hurrying.delete(car);
     const i = this.cars.indexOf(car);
     if (i >= 0) this.cars.splice(i, 1);
   }
@@ -891,6 +905,7 @@ export class TrafficSim {
     car.halfW = (TYPE_BY_KEY.get(o.type)?.width ?? car.halfW * 2) / 2;
     car.s = Math.max(car.len / 2 + 0.5, Math.min(at.seg.len - car.len / 2, at.s - o.back));
     car.story = { stop: null, guide: o.guide ? Float32Array.from(o.guide.flat()) : null, released: false, hurry: o.hurry };
+    if (o.hurry) this.hurrying.add(car);
     if (o.hurry) car.v = Math.min(car.v0, at.seg.speed) * 0.8; // (a film shot opens on it already driving)
     // Room for it: anyone where it appears is let go, and (called at a camera cut) anyone on its lane
     // between there and the point it is sent to, so it never queues behind them on its way in.
@@ -1009,6 +1024,19 @@ export class TrafficSim {
   remove_(id: number) {
     const car = this.cars.find((c) => c.id === id);
     if (car) this.drop(car);
+    if (car) this.hurrying.delete(car);
+  }
+  /** Story vehicles in a hurry: the others give them the way at junctions. */
+  private hurrying = new Set<Car>();
+  /** Is this driver just ahead of a story vehicle in a hurry, in its lane or on its way through the next junction? */
+  private leads(car: Car) {
+    if (car.story || !this.hurrying.size) return false;
+    for (const h of this.hurrying) {
+      if (car.seg === h.seg && car.s > h.s) return true; // (the whole road ahead of him, up to the junction)
+      if (h.plan && (car.seg === h.plan || car.seg === h.plan.next[0])) return true;
+      if (h.seg.link && car.seg === h.seg.next[0]) return true;
+    }
+    return false;
   }
 
   /** The vehicles nearest the player, nearest first, in the shape the drawing code takes. */

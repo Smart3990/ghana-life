@@ -1027,6 +1027,7 @@ function step(player: Player, dt: number, t: number) {
     cam.pitch += (r.pitch - cam.pitch) * w;
     cam.padding.top *= 1 - w * 0.6;
   }
+  story.beforeCam?.();
   if (story.shot) {
     // A film shot set by the story: looking at two people from the side.
     const sh = story.shot;
@@ -1681,6 +1682,8 @@ const story = {
   auntie: null as { x: number; z: number; reached: () => void } | null,
   shot: null as { x: number; z: number; bearing: number; zoom: number; pitch: number } | null,
   onFrame: null as (() => void) | null,
+  /** Run every frame just before the camera is placed (a film shot that follows a moving car smoothly). */
+  beforeCam: null as (() => void) | null,
   /** Who or where the story is sending you (shown on the big map and the minimap). */
   target: null as null | { x: number; z: number; who?: string; role?: string; icon: string; label: string; mission: string },
   /** A move the scene gives the player (talking in the chair, eating...). */
@@ -3753,13 +3756,13 @@ async function rideFilm(way: Way, uCar: NonNullable<typeof streetTraffic>['story
   const SPEED = 15;
   // (The first 400 m of the way go up over the Kwame Nkrumah Interchange flyover: the ride starts just
   // past it, down on Ring Road Central, where the car is on the street.)
-  // (Owner, 29 Oct 2026: the drive home a real film of the road, under 40 s: four shots of about 7 s,
-  // each where the streets are built all round first, with their traffic lights, poles and traffic.)
+  // (Owner, 29 Oct 2026: the drive home a real film of the road: four shots, each where the streets are
+  // built all round first, with their traffic lights, poles and traffic; 30 Oct: "like 10 seconds" each.)
   const parts: [number, number][] = [
-    [490, 7], // from (metres along the way), for (seconds): Ring Road Central, Kokomlemle
-    [1430, 7], // Ring Road Central at its big junction
-    [2330, 7], // Nima Roundabout and the clinic
-    [Math.max(2650, way.length - 20 - SPEED * 6), 6], // Nima Market, almost home
+    [620, 10], // from (metres along the way), for (seconds): Ring Road Central, Kokomlemle (past the flyover's foot)
+    [1430, 10], // Ring Road Central at its big junction
+    [2330, 10], // Nima Roundabout and the clinic
+    [Math.max(2650, way.length - 20 - SPEED * 9), 9], // Nima Market, almost home
   ].filter(([from]) => from < way.length - 40) as [number, number][];
   let next = 0;
   while (next < RIDE_SIGNS.length && RIDE_SIGNS[next].at < parts[0][0] - 30) next++; // (Circle's own signs: seen there already)
@@ -3789,7 +3792,7 @@ async function rideFilm(way: Way, uCar: NonNullable<typeof streetTraffic>['story
     }
     // Its road ahead clear for this shot (still behind the black): it drives on, never through anyone.
     clearStoryPath(guide.slice(0, 14).map(([x, z]) => ({ x, z })), 2.6);
-    const simRide = trafficSim?.addStory({ kind: 'car', type: 'car', colour: '#b3261e', x: start.x + Math.cos(start.heading) * 1.8, z: start.z + Math.sin(start.heading) * 1.8, heading: start.heading, back: 0, guide, hurry: true }) ?? null;
+    let simRide = trafficSim?.addStory({ kind: 'car', type: 'car', colour: '#b3261e', x: start.x + Math.cos(start.heading) * 1.8, z: start.z + Math.sin(start.heading) * 1.8, heading: start.heading, back: 0, guide, hurry: true }) ?? null;
     if (simRide !== null) uCar.shown = false;
     let dAt = from;
     const followSim = () => {
@@ -3844,18 +3847,38 @@ async function rideFilm(way: Way, uCar: NonNullable<typeof streetTraffic>['story
     const t0 = gameClock;
     let last = t0;
     let still = 0;
-    while (gameClock - t0 < LEN) {
+    let d = from;
+    // The car and the camera move together, every frame, just before the camera is placed (owner,
+    // 30 Oct 2026: the car was shaking; the camera had been moved only every 50 ms).
+    story.beforeCam = () => {
       const t = gameClock - t0;
-      const d = drive(t);
-      // Never a shot of the car standing still: held up for 1.5 s, the film cuts to the next shot.
-      const st = simRide !== null ? trafficSim?.storyState(simRide) : null;
-      still = st && st.v < 0.3 ? still + (gameClock - last) : 0;
-      if (still > 1.5 && t > 2.5) break;
+      d = drive(t);
       shoot(t, Math.min(1, (gameClock - last) * 1.4));
       last = gameClock;
+    };
+    let lastCheck = gameClock;
+    while (gameClock - t0 < LEN) {
+      const t = gameClock - t0;
+      // Never a shot of the car standing for long: stops are a second at most (he goes after 1 s); held
+      // up for 2 s anyway, the film cuts to the next shot.
+      const st = simRide !== null ? trafficSim?.storyState(simRide) : null;
+      still = st && st.v < 0.3 ? still + (gameClock - lastCheck) : 0;
+      lastCheck = gameClock;
+      // Standing from the very start (his lane of the traffic leads nowhere from there): he drives the
+      // way himself instead, from where he is.
+      if (simRide !== null && still > 1.2 && dAt - from < 3) {
+        trafficSim?.remove_(simRide);
+        simRide = null;
+        uCar.shown = true;
+        gone = dAt - from;
+        tPrev = t;
+        still = 0;
+      }
+      if (still > 2 && t > 2.5) break;
       while (next < RIDE_SIGNS.length && d >= RIDE_SIGNS[next].at) rideSign(RIDE_SIGNS[next++]);
       await pause(0.02);
     }
+    story.beforeCam = null;
     if (simRide !== null) {
       // (Its pose is kept for the next part, or for the way in at home.)
       trafficSim?.remove_(simRide);
