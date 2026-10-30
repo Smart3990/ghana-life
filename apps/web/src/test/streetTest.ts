@@ -3427,8 +3427,17 @@ async function playOpening(start: StartChoice) {
     const side = clear(1) ? 1 : -1;
     const sideBearing = ((across + (side > 0 ? Math.PI : 0)) * 180) / Math.PI;
     const twoShot = () => (story.shot = frameShot(mid.x, mid.z, sideBearing, 4.6, 75));
-    const onHer = () => (story.shot = frameShot(stall.x, stall.z, (stall.chair.face * 180) / Math.PI + 180 + 30 * side, 2.6, 76));
-    const onYou = () => (story.shot = frameShot(stall.chair.x, stall.chair.z, (stall.chair.face * 180) / Math.PI + 30 * side, 2.6, 76));
+    // Close shots from the open front of the stall, a little to the clear side (never from behind the
+    // stand's back wall or from behind your head): her face over the table, your face in your chair.
+    const front = { x: -Math.sin(stall.chair.face), z: Math.cos(stall.chair.face) }; // from her towards the road
+    const A = { x: Math.sin(across) * side, z: -Math.cos(across) * side };
+    const from = (tx: number, tz: number, out: number, aside: number, pitch: number) => {
+      const dx = -(front.x * out + A.x * aside);
+      const dz = -(front.z * out + A.z * aside);
+      return frameShot(tx, tz, (Math.atan2(dx, -dz) * 180) / Math.PI, Math.hypot(dx, dz), pitch);
+    };
+    const onHer = () => (story.shot = from(stall.x, stall.z, 2.8, 0.9, 82)); // (low, under the roof's edge)
+    const onYou = () => (story.shot = from(stall.chair.x, stall.chair.z, -1.25, 0.65, 82)); // (over her shoulder: you face her)
     cine.begin();
     twoShot();
     auntie.talk(true);
@@ -3494,8 +3503,8 @@ async function playOpening(start: StartChoice) {
       story.pose = null; // just sitting
       story.eating = true;
     }
-    // Close on you from the side, sitting and eating from your hand, bite after bite.
-    story.shot = frameShot(stall.chair.x, stall.chair.z, sideBearing + 25 * side, 2.2, 78);
+    // Close on you over her shoulder, sitting and eating from your hand, bite after bite.
+    story.shot = from(stall.chair.x, stall.chair.z, -1.15, 0.6, 82);
     await cine.say('', 'Hot, sweet and peppery. For the first time today, you smile.', 3.4);
     await pause(2.4);
     ayekoo('Mission 1 complete', 'You found Auntie Dede. Uncle Kwame is on his way.');
@@ -4979,17 +4988,20 @@ async function start() {
     if (fullMap.isOpen && now - last < 120) return;
     // While the film or the black covers the city, the street runs 5 times a second (it keeps loading
     // and the story keeps time, but nothing is drawn that nobody sees): the film plays smoothly.
-    if (cine.covering && now - last < 200) return;
+    // (Not while skipping: then the scene runs on behind the black at about 6 times its speed.)
+    const fast = cine.fastForward;
+    if (cine.covering && !fast && now - last < 200) return;
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
-    step(player, dt, now / 1000);
+    if (fast) for (let i = 0; i < 6; i++) step(player, 0.05, now / 1000 + i * 0.05);
+    else step(player, dt, now / 1000);
   };
   requestAnimationFrame(loop);
 
   if (autoTest) runAutoTest();
   // Busy, but never slow: every 2 seconds, if the frame rate is low, show fewer people and vehicles;
   // if there is room to spare, bring them back (master plan: draw less when a phone struggles).
-  if (params.has('fps')) debugLine.hidden = false; // (the frame rate on screen only when asked for: ?fps)
+  if (params.has('fps') || debug) debugLine.hidden = false; // (the frame rate on screen only when asked for: ?fps or ?debug)
   if (!params.has('full')) {
     let density = 1;
     const baseLimit = { light: 100, standard: 170, ultra: 260 }[tier];

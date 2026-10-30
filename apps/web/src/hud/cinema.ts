@@ -20,7 +20,7 @@ export class Cinema {
     this.caller = el('div', 'cine-caller');
     this.skipButton = el('button', 'cine-skip');
     this.skipButton.textContent = 'SKIP ›';
-    this.skipButton.addEventListener('click', () => (this.skipping = true));
+    this.skipButton.addEventListener('click', () => this.skip());
     this.pic = el('div', 'cine-pic');
     document.body.append(this.root, this.pic, this.card, this.sub, this.caller, this.skipButton);
   }
@@ -228,14 +228,35 @@ export class Cinema {
     return this.skipping;
   }
 
+  /** Skip: the screen goes black and the rest of the scene runs on at speed behind it (the game
+   *  takes several steps a frame while fastForward is true), so it ends exactly as if watched. */
+  private skip() {
+    if (this.skipping) return;
+    this.skipping = true;
+    this.card.style.transitionDuration = '0.25s';
+    this.card.innerHTML = '<div class="cine-loading">Skipping…</div>';
+    this.card.classList.add('on', 'black', 'skip-cover');
+  }
+  /** Skip was pressed and the scene is still running: the game runs it on at speed. */
+  get fastForward() {
+    return this.skipping && document.body.classList.contains('cine');
+  }
+
   /** Start a scene: bars in, game buttons hidden. */
   begin() {
+    if (this.skipping && this.card.classList.contains('skip-cover')) {
+      this.card.style.transitionDuration = '0.4s';
+      this.card.innerHTML = '';
+      this.card.classList.remove('on', 'black');
+    }
+    this.card.classList.remove('skip-cover');
     this.skipping = false;
     document.body.classList.add('cine');
   }
   /** End a scene: bars out, buttons back. */
   end() {
     document.body.classList.remove('cine');
+    this.card.classList.remove('skip-cover');
     this.sub.classList.remove('on');
     this.card.classList.remove('on', 'black');
     this.caller.classList.remove('on');
@@ -253,6 +274,7 @@ export class Cinema {
 
   /** Fade to black (or back from black). */
   async black(on: boolean, seconds = 0.8) {
+    if (this.skipping && this.card.classList.contains('skip-cover')) return; // (stays black until the scene ends)
     this.card.innerHTML = '';
     this.card.style.transitionDuration = `${seconds}s`;
     this.card.classList.toggle('black', on);
