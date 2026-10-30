@@ -124,7 +124,7 @@ export class StreetScenes {
     for (const m of this.members) {
       this.free[m.body].push(m.slot);
       this.m.makeScale(0, 0, 0);
-      this.crowds[m.body].mesh.setMatrixAt(m.slot, this.m);
+      this.crowds[m.body].setFixed(m.slot, this.m);
     }
     this.members = [];
     this.musicSpots = [];
@@ -335,10 +335,8 @@ export class StreetScenes {
       }
       this.q.setFromAxisAngle(this.up, Math.PI - face);
       this.m.compose(this.p.set(x, 0, z), this.q, this.sc.setScalar(m.look.scale));
-      this.crowds[m.body].mesh.setMatrixAt(m.slot, this.m);
+      this.crowds[m.body].setFixed(m.slot, this.m);
     }
-    this.crowds.male.mesh.instanceMatrix.needsUpdate = true;
-    this.crowds.female.mesh.instanceMatrix.needsUpdate = true;
   }
 
   private switchTo(m: Member, clip: Clip, t: number) {

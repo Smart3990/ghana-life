@@ -314,8 +314,8 @@ export class StreetLife {
     // On Light phones only the nearest lamps are drawn (each is about 150 triangles); their light on
     // the ground is drawn for all of them.
     if (!!opts.light) {
-      this.lights.max = 200;
-      this.walkLights.max = 110;
+      this.lights.max = 120; // (speed pass, 30 Oct 2026: 200 and 110 before)
+      this.walkLights.max = 70;
     }
     // The pack's road lamp in place of ours once it has loaded (its arm turned to reach over the road),
     // and its city lamp on the pavements. They glow yellow at night, like sodium street lights.
@@ -498,8 +498,8 @@ export class StreetLife {
     // 2026. People standing about are the moving bodies, idling and chatting.)
     this.posed = null;
     const [male, female] = await Promise.all([
-      CrowdBatch.create('male', everyone + reserve, this.time, this.opts.smoothCrowd),
-      CrowdBatch.create('female', everyone + reserve, this.time, this.opts.smoothCrowd),
+      CrowdBatch.create('male', everyone + reserve, this.time, this.opts.smoothCrowd, this.opts.light ? 0.16 : 0.4),
+      CrowdBatch.create('female', everyone + reserve, this.time, this.opts.smoothCrowd, this.opts.light ? 0.16 : 0.4),
     ]);
     this.crowds = { male, female };
     this.group.add(male.mesh, female.mesh);
@@ -514,8 +514,8 @@ export class StreetLife {
     const freeSlots = { male: Array.from({ length: reserve }, (_, i) => reserve - 1 - i), female: Array.from({ length: reserve }, (_, i) => reserve - 1 - i) };
     const hidden = new THREE.Matrix4().makeScale(0, 0, 0);
     for (let i = 0; i < reserve; i++) {
-      male.mesh.setMatrixAt(i, hidden);
-      female.mesh.setMatrixAt(i, hidden);
+      male.setFixed(i, hidden);
+      female.setFixed(i, hidden);
     }
     this.scenes = new StreetScenes({ male, female }, freeSlots, this.opts.scenes);
     this.scenes.clear = (x, z) => !this.onRoad(x, z, 0.25) && !this.blocked(x, z, 0.2);
@@ -1499,8 +1499,8 @@ export class StreetLife {
   private movePeople(x: number, z: number, t: number, dt: number) {
     this.crossers.length = 0;
     this.posed?.begin();
-    for (const b of Object.values(this.crowds)) b!.begin();
-    const FAR_WALKER = this.opts.light ? 18 : 25; // beyond this, walkers are drawn with the simpler shape (sooner on Light phones)
+    const FAR_WALKER = this.opts.light ? 12 : 25; // beyond this, walkers are drawn with the simpler shape (sooner on Light phones)
+    for (const b of Object.values(this.crowds)) b!.begin(x, z, FAR_WALKER);
     // Where everyone near was last frame (1 m squares), so people who come too close step apart.
     const near = new Map<number, number[]>();
     for (const [i, a] of this.agents.entries()) {

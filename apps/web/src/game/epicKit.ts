@@ -42,6 +42,12 @@ export function epicRoadMaterial() {
   if (!roadMaterial) roadMaterial = makeEpic(true);
   return roadMaterial;
 }
+/** Light phones have no blue sky light: their tarmac is drawn a little cooler to stay grey. */
+export function setRoadLite(on: boolean) {
+  const m = epicRoadMaterial();
+  m.defines = on ? { EPIC_ROAD: '', EPIC_ROAD_LITE: '' } : { EPIC_ROAD: '' };
+  m.needsUpdate = true;
+}
 function makeEpic(road: boolean) {
   {
     atlas ??= tex('albedo.png');
@@ -91,16 +97,20 @@ float roadNoise(vec2 p) {
             float wide = roadNoise(w * 0.07 + 7.3);      // about 14 m: where the dust lies
             float grain = roadHash(floor(w * 9.0));      // 11 cm grain
             if (lum < 0.09 && sat < 0.03) {
-              // The tarmac: warm and a little sun-faded, with grain and blotches.
-              c *= vec3(1.3, 1.22, 1.1) * (0.84 + 0.24 * big + 0.12 * (grain - 0.5));
+              // The tarmac: sun-faded grey with grain and blotches (a touch cool, so the warm Accra sun
+              // leaves it grey, not brown, also on Light phones that have no blue sky light).
+              c *= vec3(1.14, 1.2, 1.32) * (0.86 + 0.22 * big + 0.12 * (grain - 0.5));
+              #ifdef EPIC_ROAD_LITE
+              c *= vec3(0.86, 1.0, 1.34); // (no blue sky light on Light phones: cooler still, or it reads brown)
+              #endif
               // Patches of newer, darker tarmac where the road was mended.
               if (roadNoise(floor(w / 2.4) * 0.41 + 3.1) > 0.8) c *= 0.7;
               // Red laterite dust blown over it.
-              c = mix(c, vec3(0.32, 0.14, 0.06), smoothstep(0.5, 0.95, wide) * 0.4);
+              c = mix(c, vec3(0.32, 0.14, 0.06), smoothstep(0.62, 0.98, wide) * 0.22); // (a hint: more read as mud)
             } else if (lum > 0.2 && lum < 0.55 && sat < 0.06) {
               // Pavements and kerbs: weathered concrete, dusty in places.
               c *= 0.88 + 0.18 * big + 0.1 * (grain - 0.5);
-              c = mix(c, vec3(0.5, 0.27, 0.14), smoothstep(0.45, 0.9, wide) * 0.3);
+              c = mix(c, vec3(0.5, 0.27, 0.14), smoothstep(0.55, 0.95, wide) * 0.2);
             } else {
               // The painted lines: worn by the traffic.
               c = mix(c, vec3(0.08), (1.0 - smoothstep(0.15, 0.6, big)) * 0.25 + 0.1 * grain);
@@ -122,7 +132,7 @@ float roadNoise(vec2 p) {
           }`,
         );
     };
-    material.customProgramCacheKey = () => (road ? 'epic-road' : 'epic-neon');
+    material.customProgramCacheKey = () => (road ? 'epic-road' + ('EPIC_ROAD_LITE' in (material.defines ?? {}) ? '-lite' : '') : 'epic-neon');
     return material;
   }
 }

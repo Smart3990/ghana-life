@@ -271,14 +271,14 @@ export class CrowdBatch {
   /** Slots drawn where they are (the people at places). */
   fixed = 0;
 
-  private constructor(private baked: Baked, private capacity: number, time: { value: number }, smooth: boolean) {
+  private constructor(private baked: Baked, private capacity: number, time: { value: number }, smooth: boolean, farRatio: number) {
     this.sAnim = new Float32Array(capacity * 4);
     this.sCol = new Float32Array(capacity * 4);
     this.sHair = new Float32Array(capacity);
     const material = crowdMaterial(baked, time, smooth);
     this.near = this.drawList(baked.geometry, material, capacity);
     this.mesh = this.near.mesh;
-    void farShape(baked.geometry, 0.4)
+    void farShape(baked.geometry, farRatio)
       .then((g) => {
         this.far = this.drawList(g, material, capacity);
         this.farReady?.(this.far.mesh);
@@ -307,9 +307,11 @@ export class CrowdBatch {
     return { mesh, anim, colA, hair, n: 0 };
   }
 
-  /** smooth: blend between stored frames (costs twice the bone lookups; off on Light phones). */
-  static async create(body: CrowdBody, capacity: number, time: { value: number }, smooth = false) {
-    return new CrowdBatch(await bake(body), capacity, time, smooth);
+  /** smooth: blend between stored frames (costs twice the bone lookups; off on Light phones).
+   *  farRatio: how much of the body the far shape keeps (0.4; Light phones 0.16: a person 12 m away
+   *  is a few dozen pixels tall on a phone, and the crowd was a third of all the triangles). */
+  static async create(body: CrowdBody, capacity: number, time: { value: number }, smooth = false, farRatio = 0.4) {
+    return new CrowdBatch(await bake(body), capacity, time, smooth, farRatio);
   }
 
   /** Sets person i's look and move (only when they change). */
@@ -318,22 +320,36 @@ export class CrowdBatch {
     this.sAnim.set([c.row, c.frames, c.fps * rate, startTime], i * 4);
     this.sCol.set([packColour(look.skin), packColour(look.top), packColour(look.bottom), packColour(look.shoes)], i * 4);
     this.sHair[i] = packColour(look.hair);
-    if (i < this.fixed) {
-      // A person at a place: straight into their own slot.
-      this.copy(this.near, i, i);
-      this.near.anim.needsUpdate = this.near.colA.needsUpdate = this.near.hair.needsUpdate = true;
-    }
   }
+  /** Where person `slot` at a place stands (an empty place: a matrix of scale 0). */
+  setFixed(slot: number, matrix: THREE.Matrix4) {
+    if (!this.fixedM) this.fixedM = new Float32Array(this.capacity * 16);
+    matrix.toArray(this.fixedM, slot * 16);
+  }
+  private fixedM: Float32Array | null = null;
+  private fm = new THREE.Matrix4();
   private copy(d: Draw, to: number, from: number) {
     d.anim.setXYZW(to, this.sAnim[from * 4], this.sAnim[from * 4 + 1], this.sAnim[from * 4 + 2], this.sAnim[from * 4 + 3]);
     d.colA.setXYZW(to, this.sCol[from * 4], this.sCol[from * 4 + 1], this.sCol[from * 4 + 2], this.sCol[from * 4 + 3]);
     d.hair.setX(to, this.sHair[from]);
   }
 
-  /** Start the frame's list of walkers (after the people at places). */
-  begin() {
-    this.near.n = this.fixed;
+  /**
+   * Start the frame's lists with the people at places: only those really there (an empty place costs
+   * nothing; before, every reserved place was drawn, at scale 0, with the full body), near ones in
+   * full and the rest with the simpler shape (speed pass, 30 Oct 2026). (px, pz): the player.
+   */
+  begin(px = 0, pz = 0, farM = Infinity) {
+    this.near.n = 0;
     if (this.far) this.far.n = 0;
+    const f = this.fixedM;
+    if (!f) return;
+    for (let i = 0; i < this.fixed; i++) {
+      const o = i * 16;
+      if (f[o] === 0 && f[o + 5] === 0 && f[o + 10] === 0) continue; // (empty)
+      this.fm.fromArray(f, o);
+      this.draw(i, this.fm, (f[o + 12] - px) ** 2 + (f[o + 14] - pz) ** 2 > farM * farM);
+    }
   }
   /** Draw person `slot` this frame at `matrix` (far: with the simpler shape, if it is ready). */
   draw(slot: number, matrix: THREE.Matrix4, far = false) {

@@ -573,6 +573,15 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
     - Done when: on the phone, the city looks colourful and solid by day (not washed out), the roads look like Accra's, and the night is warm and glowing without white glare; the frame rate is as before.
     - Done when: the ride to Nima feels like a real drive through Accra's streets (traffic, kiosks, people, lights and poles), never shows the car stuck, and takes under 40 s; Auntie Dede's stall is the pack's market stand with kelewele on the table.
 
+  - **Speed pass 1 for cheap phones (Light)** (owner, 30 Oct: lag on the Samsung Galaxy A07; agreed: speed first). Measured on Light at Circle in the test browser before changing anything: about 445,000 to 480,000 triangles and 175 draws a frame, 280 simulated vehicles (165 drawn); the crowd was a third of the triangles, the pack's props another third. Changes (Light only; Standard and Ultra unchanged):
+    - Crowd: people more than 12 m away (was 18 m) are drawn with a far body of about 16% of the triangles (was 40%); walkers 130 (was 170), people standing 40 (was 50).
+    - The people at places (sellers, customers): only those really there are drawn, near ones in full and far ones with the far body. Before, every reserved place was drawn every frame with the full body, even empty ones (at scale 0).
+    - Street things out to 110 m (was 140 m); 420 props (was 520); 120 road lamps and 70 pavement lamps drawn (was 200 and 110; their light on the ground still everywhere).
+    - Traffic: 200 simulated vehicles within 120 m (was 280 within 135 m), drawn to 85 m (was 105 m), about 95 drawn (was 165); the trotros' wheels have 10 sides (was 14).
+    - After: about 315,000 triangles and 160 draws (about a third fewer triangles). Circle still looks busy (checked in pictures); the story plays through with no errors.
+    - Light's road: Light has no blue sky light, so the warm sun turned the grey tarmac brown there; on Light the tarmac is drawn cooler and stays grey (`setRoadLite`), and Light's fill light carries a little sky blue. The road dust is softer.
+    - Done when: `/street-test?debug` on the A07 shows close to 30 fps walking round Circle (the owner sends the number), and the streets still look full.
+
 ## Waiting on the owner
 
 - Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.

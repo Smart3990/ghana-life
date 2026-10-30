@@ -22,7 +22,7 @@ import { Flyovers } from '../game/flyovers';
 import { EpicRoads } from '../game/epicRoads';
 import { TrafficSim } from '../game/trafficSim';
 import { GameTime, dayLook, forTheHour, roadFill, type DayLook } from '../game/dayNight';
-import { epicGeometry, epicMaterial, setEpicNight } from '../game/epicKit';
+import { epicGeometry, epicMaterial, setEpicNight, epicRoadMaterial, setRoadLite } from '../game/epicKit';
 import { BigScreen } from '../game/bigScreen';
 import { RoadSigns } from '../game/roadSigns';
 import { planStation } from '../game/trotroStation';
@@ -375,6 +375,7 @@ function refreshSkyLight() {
 const nightFill = new THREE.PointLight(0xffe2c0, 0, 18, 1.2);
 scene.add(nightFill);
 const HEMI_BASE = PRESET.skyLight ? 0.9 : 1.4;
+const SKY_BLUE = new THREE.Color('#b9cbe6');
 let lookAt = -1;
 let mapLookAt = -1;
 let nightShown = -1;
@@ -388,6 +389,9 @@ function applyDayLook(force = false) {
   sun.color.copy(day.sun);
   sun.intensity = day.sunI;
   hemi.color.copy(day.sky);
+  // (Light phones have no sky light, whose cool blue balances the warm sun: without it grey tarmac
+  // turned brown. Their fill light carries some of that blue instead.)
+  if (!PRESET.skyLight) hemi.color.lerp(SKY_BLUE, 0.45);
   hemi.groundColor.copy(day.ground);
   hemi.intensity = HEMI_BASE * day.skyI;
   scene.environmentIntensity = 0.16 * day.env; // the sky model is very bright: a little goes a long way
@@ -4594,7 +4598,7 @@ life = new StreetLife((x, z, m) => buildings.blocked(x, z, m), { ...{
   // Packed, chaotic Circle (owner, 2026-10-27: "very crowded", kiosks and stalls everywhere).
   // On a struggling phone the walkers thin out automatically (busy %), the shops stay.
   // still: people standing about on top of the walkers (idling and chatting).
-  light: { radiusM: 140, people: 170, props: 520, scenes: 42, still: 50 },
+  light: { radiusM: 110, people: 130, props: 420, scenes: 42, still: 40 }, // (speed pass, 30 Oct 2026: 140 m / 170 / 520 / 50 before)
   standard: { radiusM: 200, people: 520, props: 1300, scenes: 100, still: 160 },
   ultra: { radiusM: 280, people: 850, props: 2000, scenes: 150, still: 260 },
 }[tier], smoothCrowd: PRESET.smoothCrowd, light: tier === 'light' });
@@ -4845,6 +4849,7 @@ scene.add(railway.group);
 flyovers.maxLamps = { light: 40, standard: 90, ultra: 140 }[tier];
 scene.add(flyovers.group);
 const epicRoads = new EpicRoads();
+setRoadLite(!PRESET.skyLight);
 epicRoads.showRadius = { light: 260, standard: 380, ultra: 550 }[tier];
 scene.add(epicRoads.group);
 const groundDip = (x: number, z: number) => epicRoads.dipAt(x, z);
@@ -4935,7 +4940,7 @@ async function start() {
     for (const b of pendingBatches.splice(0)) traffic.addRoads(b);
     // Busy roads (raised from the first budget of 15 / 40 / 100: they are drawn in batches, so they cost little).
     const limit = { light: 260, standard: 420, ultra: 560 }[tier]; // (well above what is ever near you: nothing blinks out)
-    streetTraffic = new StreetTraffic(traffic, (lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT], limit, { light: 105, standard: 170, ultra: 220 }[tier]);
+    streetTraffic = new StreetTraffic(traffic, (lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT], limit, { light: 85, standard: 170, ultra: 220 }[tier]); // (Light 105 m before the speed pass, 30 Oct 2026)
     scene.add(streetTraffic.group);
     streetTraffic.deckHeight = (x, z) => flyovers.heightAt(x, z);
     streetTraffic.groundDip = groundDip;
@@ -4945,7 +4950,7 @@ async function start() {
     streetTraffic.onBlocked = onVehicleBlocked;
     // The drivers: every vehicle drives by the traffic rules (trafficSim.ts), on all the streets loaded.
     const toLngLat = (x: number, z: number): [number, number] => [START[0] + x / M_LON, START[1] - z / M_LAT];
-    trafficSim = new TrafficSim((lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT], toLngLat, { light: { max: 280, radius: 135, seen: 112 }, standard: { max: 650, radius: 200, seen: 170 }, ultra: { max: 900, radius: 260, seen: 220 } }[tier]);
+    trafficSim = new TrafficSim((lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT], toLngLat, { light: { max: 200, radius: 120, seen: 100 }, standard: { max: 650, radius: 200, seen: 170 }, ultra: { max: 900, radius: 260, seen: 220 } }[tier]);
     for (const b of simBatches.splice(0)) trafficSim.addRoads(b);
     // Strict (owner, 28 Oct 2026): no lane on the ground runs under a low flyover ramp or through a
     // building; such lanes are never used. Checked again as more flyovers and buildings load.
@@ -4965,7 +4970,7 @@ async function start() {
     };
     streetTraffic.sim = trafficSim;
     void loadDriver();
-    if (debug) Object.assign(window, { __street: { renderer: () => renderer, epicMaterial, state, sky, look, life, story, thief, signals, lightFor, flyovers, pinch, bigScreen, roadSigns, getStation: () => station, places, fuelWhy, bag, driver, shove, uncle, compound, props, camera3d, adCard, frameShot, placeCompound, buildings, nimaRoute, rideSign, RIDE_SIGNS, map, placeCarTag, fullMap, phone, camAvoid, camAt, viewBlocked, heightAtView, solidAt, traffic: streetTraffic, railway, driveIn, parkingNear, pullIn, pullOut, roadLineNear, compoundAt, music, streetSound, epicRoads, THREE, horns: () => hornsPlayed, people: () => ({ player: playerPerson, thief: thief.person, auntie, uncle }), vehicleAt: (x: number, z: number, r: number) => vehicleAt(x, z, r), placesSolid: (x: number, z: number, r: number) => places.solid(x, z, r), trafficSim: () => trafficSim, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
+    if (debug) Object.assign(window, { __street: { renderer: () => renderer, scene, epicMaterial, epicRoadMaterial, state, sky, look, life, story, thief, signals, lightFor, flyovers, pinch, bigScreen, roadSigns, getStation: () => station, places, fuelWhy, bag, driver, shove, uncle, compound, props, camera3d, adCard, frameShot, placeCompound, buildings, nimaRoute, rideSign, RIDE_SIGNS, map, placeCarTag, fullMap, phone, camAvoid, camAt, viewBlocked, heightAtView, solidAt, traffic: streetTraffic, railway, driveIn, parkingNear, pullIn, pullOut, roadLineNear, compoundAt, music, streetSound, epicRoads, THREE, horns: () => hornsPlayed, people: () => ({ player: playerPerson, thief: thief.person, auntie, uncle }), vehicleAt: (x: number, z: number, r: number) => vehicleAt(x, z, r), placesSolid: (x: number, z: number, r: number) => places.solid(x, z, r), trafficSim: () => trafficSim, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
   }
 
   // The dark loading screen is the curtain over the city. Without the story it goes now; with the story

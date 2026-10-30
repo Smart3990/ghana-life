@@ -466,11 +466,11 @@ export function box(w: number, h: number, l: number, x: number, y: number, z: nu
   return g;
 }
 
-function wheel(radius: number, width: number, x: number, z: number): Part[] {
-  const tyre = new THREE.CylinderGeometry(radius, radius, width, 14);
+function wheel(radius: number, width: number, x: number, z: number, sides = 14): Part[] {
+  const tyre = new THREE.CylinderGeometry(radius, radius, width, sides);
   tyre.rotateZ(Math.PI / 2);
   tyre.translate(x, radius, z);
-  const hub = new THREE.CylinderGeometry(radius * 0.55, radius * 0.55, width + 0.02, 10);
+  const hub = new THREE.CylinderGeometry(radius * 0.55, radius * 0.55, width + 0.02, Math.max(6, sides - 4));
   hub.rotateZ(Math.PI / 2);
   hub.translate(x, radius, z);
   return [paint(tyre, '#161616'), paint(hub, '#9ea3a8')];
@@ -604,7 +604,7 @@ function trotro(long = false): Model {
     // Headlight, and the orange indicator beside it.
     fixed.push(paint(box(0.34, 0.18, 0.04, sx * 0.6, 0.85, zF + 0.02), '#e9eef0'));
     fixed.push(paint(box(0.08, 0.16, 0.04, sx * 0.84, 0.85, zF + 0.015), '#f0902a'));
-    for (const z of [zA, zB]) fixed.push(...wheel(0.33, 0.22, sx * 0.78, z));
+    for (const z of [zA, zB]) fixed.push(...wheel(0.33, 0.22, sx * 0.78, z, 10)); // (10 sides: about 34 trotros are in view at once)
   }
   // The roof's ribs (the owner's top view).
   for (let z = zr + 0.45; z < wsTop - 0.2; z += 0.42) fixed.push(paint(box(W - 0.42, 0.012, 0.035, 0, top + 0.004, z), '#d6d8d8'));
