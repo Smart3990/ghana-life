@@ -46,7 +46,7 @@ const LOOKS: Look[] = [
   { el: -1, sun: '#ffb488', sunI: 1.4, sky: '#f2cbb8', ground: '#5c463a', skyI: 0.92, env: 0.78, mapSky: '#5d5a8a', horizon: '#f59a5a', fog: '#d8a080', dim: 0.1, shade: 0.2 },
   { el: 4, sun: '#ffa868', sunI: 1.8, sky: '#ffd8b0', ground: '#5a4232', skyI: 0.92, env: 0.85, mapSky: '#e8935a', horizon: '#ffd09a', fog: '#f0c49a', dim: 0.05, shade: 0.26 },
   { el: 16, sun: '#ffcb94', sunI: 2.3, sky: '#fff1dc', ground: '#6b4f3a', skyI: 1, env: 1, mapSky: '#f2b36b', horizon: '#f7d9b0', fog: '#f1d7b6', dim: 0, shade: 0.3 },
-  { el: 40, sun: '#fff2df', sunI: 2.7, sky: '#f4f6ff', ground: '#7a6450', skyI: 1.08, env: 1.1, mapSky: '#8ec1e6', horizon: '#e4edf2', fog: '#e8eef0', dim: 0, shade: 0.32 },
+  { el: 40, sun: '#ffe9cc', sunI: 2.7, sky: '#f7f3ea', ground: '#7a6450', skyI: 1.08, env: 1.1, mapSky: '#8ec1e6', horizon: '#e4edf2', fog: '#e8eef0', dim: 0, shade: 0.32 },
 ];
 
 export type DayLook = {

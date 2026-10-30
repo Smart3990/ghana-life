@@ -9,7 +9,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import type { Kind, Placed, Traffic } from './traffic';
 import { slidingAdMaterial } from './adScreens';
-import { epicGeometry, epicGlowMaps, epicMaterial } from './epicKit';
+import { epicGeometry, epicGlowMaps, epicMaterial, DAY_GLOW } from './epicKit';
 import type { TrafficSim } from './trafficSim';
 import { TYPE_BY_KEY, VEHICLE_TYPES, typeFor } from './vehicleTypes';
 import { SEATS, SIT_POSES, riderShapes } from './riders';
@@ -1774,7 +1774,7 @@ function taillightShape() {
 function dayLookMaterial() {
   const m = epicMaterial().clone();
   m.emissiveMap = epicGlowMaps().day;
-  m.emissive.setRGB(0.58, 0.58, 0.58);
+  m.emissive.setRGB(DAY_GLOW, DAY_GLOW, DAY_GLOW);
   m.emissiveIntensity = 1;
   return m;
 }

@@ -11,7 +11,7 @@
 // Bridges are built by flyovers.ts. All of it uses the pack's one texture sheet, so it shares the
 // pack's day and night look. Widths stay Accra's (main road 11 m of tarmac, side road 7.6 m).
 import * as THREE from 'three';
-import { epicMaterial, EPIC_UV } from './epicKit';
+import { epicRoadMaterial, EPIC_UV } from './epicKit';
 
 export const ROAD_DIP = 0.15; // how far the tarmac is below the pavement
 const PAVE_Y = 0.012; // pavement top (just above the map's ground)
@@ -443,7 +443,7 @@ export class EpicRoads {
 
     for (const [k, sh] of shapes) {
       if (!sh.pos.length) continue;
-      const mesh = new THREE.Mesh(sh.geometry(), epicMaterial());
+      const mesh = new THREE.Mesh(sh.geometry(), epicRoadMaterial());
       mesh.matrixAutoUpdate = false;
       mesh.receiveShadow = true;
       mesh.visible = false;

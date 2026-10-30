@@ -22,14 +22,33 @@ let atlas: THREE.Texture | null = null;
 let dayGlow: THREE.Texture | null = null;
 let nightGlow: THREE.Texture | null = null;
 let material: THREE.MeshStandardMaterial | null = null;
+/** The pack's own glow by day (0.58 before 30 Oct 2026; the owner found the city too bright and flat:
+ *  less glow lets the sun's light and shade model the shapes). */
+export const DAY_GLOW = 0.3;
 
 /** The one material all pack pieces share (one material = fewer draw calls on the phone). */
 export function epicMaterial() {
-  if (!material) {
-    atlas = tex('albedo.png');
-    dayGlow = tex('emission.png');
-    nightGlow = tex('emission-night.png');
-    material = new THREE.MeshStandardMaterial({ name: 'epic-atlas', map: atlas, emissiveMap: dayGlow, emissive: new THREE.Color(0.58, 0.58, 0.58), roughness: 0.9, metalness: 0 });
+  if (!material) material = makeEpic(false);
+  return material;
+}
+let roadMaterial: THREE.MeshStandardMaterial | null = null;
+/**
+ * The pack's material for the roads (epicRoads.ts): the same colours, plus the look of an Accra road
+ * drawn on top by the graphics card (owner, 30 Oct 2026: "it has to look Ghanaian… very beautiful"):
+ * warm sun-faded tarmac with a fine grain, darker patches of newer tarmac, red laterite dust blown
+ * over it, worn lines, and dusty, weathered pavements. No pictures to download.
+ */
+export function epicRoadMaterial() {
+  if (!roadMaterial) roadMaterial = makeEpic(true);
+  return roadMaterial;
+}
+function makeEpic(road: boolean) {
+  {
+    atlas ??= tex('albedo.png');
+    dayGlow ??= tex('emission.png');
+    nightGlow ??= tex('emission-night.png');
+    const material = new THREE.MeshStandardMaterial({ name: road ? 'epic-road' : 'epic-atlas', map: atlas, emissiveMap: dayGlow, emissive: new THREE.Color(DAY_GLOW, DAY_GLOW, DAY_GLOW), roughness: 0.9, metalness: 0 });
+    if (road) material.defines = { EPIC_ROAD: '' };
     // At night the lit windows and signs glow block by block: mostly warm lamplight, a few softly
     // pink, violet or cyan (owner, 29 Oct 2026: neon "very slightly, not too bulky"). By day: the
     // pack's own glow, untouched.
@@ -50,7 +69,46 @@ varying vec3 vNeonPos;`)
       shader.fragmentShader = shader.fragmentShader
         .replace('#include <common>', `#include <common>
 varying vec3 vNeonPos;
-uniform float uNeon;`)
+uniform float uNeon;
+#ifdef EPIC_ROAD
+float roadHash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+float roadNoise(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(roadHash(i), roadHash(i + vec2(1.0, 0.0)), f.x), mix(roadHash(i + vec2(0.0, 1.0)), roadHash(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+#endif`)
+        .replace(
+          '#include <map_fragment>',
+          `#include <map_fragment>
+          #ifdef EPIC_ROAD
+          {
+            vec3 c = diffuseColor.rgb;
+            vec2 w = vNeonPos.xz;
+            float lum = dot(c, vec3(0.299, 0.587, 0.114));
+            float sat = max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b));
+            float big = roadNoise(w * 0.3);              // blotches of about 3 m
+            float wide = roadNoise(w * 0.07 + 7.3);      // about 14 m: where the dust lies
+            float grain = roadHash(floor(w * 9.0));      // 11 cm grain
+            if (lum < 0.09 && sat < 0.03) {
+              // The tarmac: warm and a little sun-faded, with grain and blotches.
+              c *= vec3(1.3, 1.22, 1.1) * (0.84 + 0.24 * big + 0.12 * (grain - 0.5));
+              // Patches of newer, darker tarmac where the road was mended.
+              if (roadNoise(floor(w / 2.4) * 0.41 + 3.1) > 0.8) c *= 0.7;
+              // Red laterite dust blown over it.
+              c = mix(c, vec3(0.32, 0.14, 0.06), smoothstep(0.5, 0.95, wide) * 0.4);
+            } else if (lum > 0.2 && lum < 0.55 && sat < 0.06) {
+              // Pavements and kerbs: weathered concrete, dusty in places.
+              c *= 0.88 + 0.18 * big + 0.1 * (grain - 0.5);
+              c = mix(c, vec3(0.5, 0.27, 0.14), smoothstep(0.45, 0.9, wide) * 0.3);
+            } else {
+              // The painted lines: worn by the traffic.
+              c = mix(c, vec3(0.08), (1.0 - smoothstep(0.15, 0.6, big)) * 0.25 + 0.1 * grain);
+            }
+            diffuseColor.rgb = c;
+          }
+          #endif`,
+        )
         .replace(
           '#include <emissivemap_fragment>',
           `#include <emissivemap_fragment>
@@ -64,9 +122,9 @@ uniform float uNeon;`)
           }`,
         );
     };
-    material.customProgramCacheKey = () => 'epic-neon';
+    material.customProgramCacheKey = () => (road ? 'epic-road' : 'epic-neon');
+    return material;
   }
-  return material;
 }
 const neon = { value: 0 };
 
@@ -78,12 +136,13 @@ export function epicGlowMaps() {
 
 /** Day or night look of the pack (the night glow sheet and the pack's night glow colour). */
 export function setEpicNight(on: boolean) {
-  const m = epicMaterial();
-  m.emissiveMap = on ? nightGlow : dayGlow;
-  m.emissive.setRGB(on ? 1.3 : 0.58, on ? 1.15 : 0.58, on ? 1.05 : 0.58); // (white: the neon colours tint it)
+  for (const m of [epicMaterial(), epicRoadMaterial()]) {
+    m.emissiveMap = on ? nightGlow : dayGlow;
+    m.emissive.setRGB(on ? 1.3 : DAY_GLOW, on ? 1.15 : DAY_GLOW, on ? 1.05 : DAY_GLOW); // (white: the neon colours tint it)
+    m.emissiveIntensity = on ? 1.6 : 1;
+    m.needsUpdate = true;
+  }
   neon.value = on ? 1 : 0;
-  m.emissiveIntensity = on ? 1.6 : 1;
-  m.needsUpdate = true;
 }
 
 /**
@@ -181,6 +240,6 @@ export function setEpicLampNight(n: number) {
   const glow = epicGlowMaps();
   m.emissiveMap = lit ? glow.night : glow.day;
   if (lit) m.emissive.setRGB(1.5, 0.9, 0.32);
-  else m.emissive.setRGB(0.58, 0.58, 0.58);
+  else m.emissive.setRGB(DAY_GLOW, DAY_GLOW, DAY_GLOW);
   m.needsUpdate = true;
 }
