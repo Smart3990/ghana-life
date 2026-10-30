@@ -4,6 +4,7 @@
 // on a cheap phone? The map, buildings and traffic are the game's own; this page adds the
 // follow camera, the 3D player and okada (through a three.js layer inside the map) and the controls.
 import { Railway } from '../game/railway';
+import { Trains } from '../game/trains';
 import * as THREE from 'three';
 import * as maplibregl from 'maplibre-gl';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
@@ -1101,6 +1102,8 @@ function step(player: Player, dt: number, t: number) {
   flyovers.update();
   flyovers.updateLamps(state.x, state.z);
   epicRoads.update(state.x, state.z, tier === 'light' ? 3 : 5);
+  trains.update(gameTime.now() / 1000, state.x, state.z);
+  if (streetTraffic) streetTraffic.blockers = trains.blockers;
   if (flyovers.version !== flyoverVersion) {
     flyoverVersion = flyovers.version;
     streetTraffic?.recheckRoutes();
@@ -1200,7 +1203,7 @@ function vehicleAt(x: number, z: number, room: number) {
   return null;
 }
 function solidAt(x: number, z: number, room: number) {
-  return buildings.blocked(x, z, room) || !!life?.solid(x, z, room) || !!vehicleAt(x, z, room) || places.solid(x, z, room) || compoundAt(x, z, room) || flyovers.lowRampAt(x, z);
+  return buildings.blocked(x, z, room) || !!life?.solid(x, z, room) || !!vehicleAt(x, z, room) || trains.solid(x, z, room) || places.solid(x, z, room) || compoundAt(x, z, room) || flyovers.lowRampAt(x, z);
 }
 function pushOutOfVehicles(room: number) {
   for (let i = 0; i < 3; i++) {
@@ -4846,6 +4849,12 @@ let screenCheck = 0;
 const flyovers = new Flyovers();
 const railway = new Railway();
 scene.add(railway.group);
+// Trains on it, with level crossings where it meets a road (step 7 of the Epic City plan).
+const trains = new Trains(railway, {
+  at: (x, z) => !!life?.roadAt(x, z) && !(flyovers.heightAt(x, z) > 1.5), // (under a flyover the line passes beneath: no crossing)
+  near: (x, z) => life?.roadPointNear(x, z, 12, 2) ?? null,
+});
+scene.add(trains.group);
 flyovers.maxLamps = { light: 40, standard: 90, ultra: 140 }[tier];
 scene.add(flyovers.group);
 const epicRoads = new EpicRoads();
@@ -4970,7 +4979,7 @@ async function start() {
     };
     streetTraffic.sim = trafficSim;
     void loadDriver();
-    if (debug) Object.assign(window, { __street: { renderer: () => renderer, scene, epicMaterial, epicRoadMaterial, state, sky, look, life, story, thief, signals, lightFor, flyovers, pinch, bigScreen, roadSigns, getStation: () => station, places, fuelWhy, bag, driver, shove, uncle, compound, props, camera3d, adCard, frameShot, placeCompound, buildings, nimaRoute, rideSign, RIDE_SIGNS, map, placeCarTag, fullMap, phone, camAvoid, camAt, viewBlocked, heightAtView, solidAt, traffic: streetTraffic, railway, driveIn, parkingNear, pullIn, pullOut, roadLineNear, compoundAt, music, streetSound, epicRoads, THREE, horns: () => hornsPlayed, people: () => ({ player: playerPerson, thief: thief.person, auntie, uncle }), vehicleAt: (x: number, z: number, r: number) => vehicleAt(x, z, r), placesSolid: (x: number, z: number, r: number) => places.solid(x, z, r), trafficSim: () => trafficSim, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
+    if (debug) Object.assign(window, { __street: { renderer: () => renderer, scene, trains, epicMaterial, epicRoadMaterial, state, sky, look, life, story, thief, signals, lightFor, flyovers, pinch, bigScreen, roadSigns, getStation: () => station, places, fuelWhy, bag, driver, shove, uncle, compound, props, camera3d, adCard, frameShot, placeCompound, buildings, nimaRoute, rideSign, RIDE_SIGNS, map, placeCarTag, fullMap, phone, camAvoid, camAt, viewBlocked, heightAtView, solidAt, traffic: streetTraffic, railway, driveIn, parkingNear, pullIn, pullOut, roadLineNear, compoundAt, music, streetSound, epicRoads, THREE, horns: () => hornsPlayed, people: () => ({ player: playerPerson, thief: thief.person, auntie, uncle }), vehicleAt: (x: number, z: number, r: number) => vehicleAt(x, z, r), placesSolid: (x: number, z: number, r: number) => places.solid(x, z, r), trafficSim: () => trafficSim, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
   }
 
   // The dark loading screen is the curtain over the city. Without the story it goes now; with the story

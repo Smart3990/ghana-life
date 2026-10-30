@@ -582,6 +582,13 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
     - Light's road: Light has no blue sky light, so the warm sun turned the grey tarmac brown there; on Light the tarmac is drawn cooler and stays grey (`setRoadLite`), and Light's fill light carries a little sky blue. The road dust is softer.
     - Done when: `/street-test?debug` on the A07 shows close to 30 fps walking round Circle (the owner sends the number), and the streets still look full.
 
+  - **Epic City step 7a: trains and level crossings** (owner, 30 Oct: "proceed with the plan"; `src/game/trains.ts`):
+    - The train's way is traced along the real track near you (from the map tiles, 650 m each way from where you first are, traced again when you go far): step a metre and a half along, snap back onto the rail running the same way, until the line ends.
+    - One passenger train, the Epic City pack's blue engine and three coaches, runs along it on the game clock at about 40 km/h: out to one end, a 10 s stop as at a platform, and back (push-pull, as on commuter trains: the coaches never swap round). It passes a given point every couple of minutes. The coaches are solid: you cannot walk through them.
+    - Level crossings wherever the line cuts across a road (not where it runs beside one, and not under a flyover, where it passes beneath): half-barriers in red and white on posts at the road's edge, a black board with two red lamps and a white cross sign on each side. About 150 m before the train comes the lamps flash in turn and the barriers come down across the lanes leading onto the track; the drivers stop at them; a vehicle already on the crossing drives off it. They go up once the train is 25 m past.
+    - Checked (test browser): a train runs on a 1.3 km stretch west of Circle; real crossings found north (-374, -1185) and south (-99, 1849) of it; at the northern one the barriers came down with the train 150 m off, a tricycle and a jeep waited, the taxi already on the track drove off, the train passed and the barriers rose.
+    - Done when: on the phone, walking along the railway north of Circle you see the blue train come and go every couple of minutes, and at the level crossing the lights flash, the barriers come down, the traffic waits and goes on after the train.
+
 ## Waiting on the owner
 
 - Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.

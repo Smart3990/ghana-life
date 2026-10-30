@@ -1337,6 +1337,8 @@ export class StreetTraffic {
   hold = new Set<number>();
   /** People out on the road (streetLife.ts crossers), set each frame. */
   walkers: { x: number; z: number }[] = [];
+  /** More things the drivers stop for (the barriers of a level crossing that is down). */
+  blockers: { x: number; z: number; r: number }[] = [];
   private blockedTotal = new Map<number, number>();
 
   /** The traffic drivers (trafficSim.ts): when set, vehicles drive by the rules instead of the timetable. */
@@ -1358,6 +1360,7 @@ export class StreetTraffic {
     for (const q of this.parked) sim.obstacles.push({ x: q.x, z: q.z, r: 2.6 });
     // People crossing the road: drivers stop for them (owner, 28 Oct 2026: never through each other).
     for (const w of this.walkers) sim.obstacles.push({ x: w.x, z: w.z, r: 0.5 });
+    for (const b of this.blockers) sim.obstacles.push(b);
     sim.hold = this.hold;
     sim.update(dt, mx, mz);
     // (No lane of the traffic runs through a low ramp any more, trafficSim.ts: nothing is hidden for
