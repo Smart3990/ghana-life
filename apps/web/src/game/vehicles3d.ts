@@ -76,7 +76,7 @@ const PACK_WRAPS: Partial<Record<BatchKey, Wrap>> = {
 const trotroWrap = (long: boolean): Wrap => {
   const L = long ? 5.3 : 4.7, H = long ? 2.3 : 2.06;
   const z0 = -L / 2 + 0.12, z1 = L / 2 - 1.36, zB = -L / 2 + (long ? 1.15 : 1.05);
-  return { profile: [[0.44, 0.955], [H - 0.1, 0.955]], z0, z1, shape: 'tall', bands: [[0.44, 0.77, [[z0, zB - 0.48], [zB + 0.48, z1]]], [0.77, H - 0.1, [[z0, z1]]]] };
+  return { profile: [[0.44, 0.955], [H - 0.1, 0.955]], z0, z1, shape: 'tall', bands: [[0.44, 0.83, [[z0, zB - 0.52], [zB + 0.52, z1]]], [0.83, H - 0.1, [[z0, z1]]]] }; // (the rear wheel arch cut out)
 };
 const OWN_WRAPS: Partial<Record<BatchKey, Wrap>> = { trotro: trotroWrap(false), sprinter: trotroWrap(true) };
 const MODERN: Partial<Record<BatchKey, string>> = {
@@ -119,8 +119,8 @@ function livery(base: THREE.MeshStandardMaterial, kind: 'taxi' | 'trotro' | 'spr
   const m = base.clone();
   const rule = {
     taxi: 'if (abs(vLocal.z) > 1.35 && vLocal.y < 0.88) diffuseColor.rgb = vec3(0.9, 0.55, 0.07);',
-    trotro: 'if (vLocal.y > 1.06) diffuseColor.rgb = vec3(0.84, 0.83, 0.79); else if (vLocal.y > 0.97) diffuseColor.rgb = vec3(0.86, 0.42, 0.0);', // (linear light: white #ecebe6, gold #f0ac00)
-    sprinter: 'if (vLocal.y > 1.06) diffuseColor.rgb = vec3(0.84, 0.83, 0.79); else if (vLocal.y > 0.97) diffuseColor.rgb = vec3(0.86, 0.42, 0.0);',
+    trotro: 'if (vLocal.y > 1.06) diffuseColor.rgb = vec3(0.84, 0.83, 0.79); else if (vLocal.y > 0.97) diffuseColor.rgb = vec3(0.78, 0.3, 0.0);', // (linear light: white #ecebe6, gold #e59500)
+    sprinter: 'if (vLocal.y > 1.06) diffuseColor.rgb = vec3(0.84, 0.83, 0.79); else if (vLocal.y > 0.97) diffuseColor.rgb = vec3(0.78, 0.3, 0.0);',
     bus: 'if (vLocal.y > 1.0 && vLocal.y < 1.12) diffuseColor.rgb = vec3(0.12, 0.33, 0.66); else if (vLocal.y >= 1.12 && vLocal.y < 1.22) diffuseColor.rgb = vec3(0.75, 0.15, 0.12);',
   }[kind];
   m.onBeforeCompile = (shader) => {
@@ -444,14 +444,14 @@ type Part = THREE.BufferGeometry;
 // ---------- Shape helpers (length runs along +z = forward, y is up, x is across) ----------
 
 // A side profile [along, up] pushed out to a width, centred across the vehicle.
-function profile(points: [number, number][], width: number, bevel = 0.04): Part {
+function profile(points: [number, number][], width: number, bevel = 0.04, bevelSegments = 1): Part {
   const shape = new THREE.Shape(points.map(([a, u]) => new THREE.Vector2(a, u)));
   const g = new THREE.ExtrudeGeometry(shape, {
     depth: width - bevel * 2,
     bevelEnabled: bevel > 0,
     bevelThickness: bevel,
     bevelSize: bevel,
-    bevelSegments: 1,
+    bevelSegments,
     curveSegments: 1,
   });
   g.rotateY(-Math.PI / 2); // along → z, width → x
@@ -557,14 +557,21 @@ function trotro(long = false): Model {
   const zA = zf - 0.95; // front axle
   const zB = zr + (long ? 1.15 : 1.05); // rear axle
   const wsBot = zf - 0.42, wsTop = zf - 1.12; // windscreen: bottom (y 1.22) and top (y H - 0.06)
-  const arch = (z: number): [number, number][] => [[z + 0.46, 0.34], [z + 0.4, 0.6], [z + 0.22, 0.75], [z - 0.22, 0.75], [z - 0.4, 0.6], [z - 0.46, 0.34]];
+  // (Owner, 30 Oct 2026: "too boxy… a little curve": every edge is rounded (B, in 3 steps), the roof's
+  // ends, the nose and the back curve, and everything laid on the body sits B further out.)
+  const B = 0.07;
+  const zF = zf + B, zR = zr - B, top = H + B;
+  const arch = (z: number): [number, number][] => [[z + 0.5, 0.36], [z + 0.45, 0.62], [z + 0.33, 0.76], [z + 0.12, 0.81], [z - 0.12, 0.81], [z - 0.33, 0.76], [z - 0.45, 0.62], [z - 0.5, 0.36]];
   const body = profile(
     [
-      [zr, 0.36], [zr, H - 0.1], [zr + 0.1, H], [wsTop, H], [wsTop + 0.1, H - 0.06], [wsBot, 1.22], [zf - 0.15, 1.16], [zf, 0.96], [zf + 0.02, 0.74], [zf + 0.01, 0.38], [zf - 0.06, 0.34],
+      [zr, 0.38], [zr, H - 0.2], [zr + 0.03, H - 0.08], [zr + 0.1, H - 0.02], [zr + 0.22, H],
+      [wsTop - 0.12, H], [wsTop + 0.02, H - 0.012], [wsTop + 0.1, H - 0.06], [wsBot, 1.22],
+      [wsBot + 0.1, 1.205], [zf - 0.2, 1.17], [zf - 0.08, 1.1], [zf - 0.02, 1.02], [zf, 0.94], [zf + 0.015, 0.74], [zf + 0.005, 0.42], [zf - 0.06, 0.38],
       ...arch(zA), ...arch(zB),
     ],
     W,
-    0, // (no bevel: a bevel swells the outline, which would bury the lights and glass laid on it)
+    B,
+    3,
   );
   const hx = W / 2;
   // The A-pillar line, from the windscreen's bottom to its top: the side windows' front edge follows it.
@@ -592,43 +599,44 @@ function trotro(long = false): Model {
     fixed.push(paint(box(0.14, 0.04, 0.05, sx * (hx + 0.06), 1.36, wsBot - 0.06), '#1a1c1e'));
     fixed.push(paint(box(0.07, 0.24, 0.17, sx * (hx + 0.15), 1.44, wsBot - 0.06), '#1a1c1e'));
     // Tail light (red, a white reversing light at its foot) on the back corner.
-    fixed.push(paint(box(0.13, 0.44, 0.06, sx * (hx - 0.07), 1.3, zr - 0.02), TAIL));
-    fixed.push(paint(box(0.13, 0.16, 0.06, sx * (hx - 0.07), 1.0, zr - 0.02), '#e8e6e0'));
+    fixed.push(paint(box(0.13, 0.44, 0.06, sx * (hx - 0.07), 1.3, zR - 0.02), TAIL));
+    fixed.push(paint(box(0.13, 0.16, 0.06, sx * (hx - 0.07), 1.0, zR - 0.02), '#e8e6e0'));
     // Headlight, and the orange indicator beside it.
-    fixed.push(paint(box(0.34, 0.18, 0.04, sx * 0.6, 0.85, zf + 0.02), '#e9eef0'));
-    fixed.push(paint(box(0.08, 0.16, 0.04, sx * 0.84, 0.85, zf + 0.015), '#f0902a'));
+    fixed.push(paint(box(0.34, 0.18, 0.04, sx * 0.6, 0.85, zF + 0.02), '#e9eef0'));
+    fixed.push(paint(box(0.08, 0.16, 0.04, sx * 0.84, 0.85, zF + 0.015), '#f0902a'));
     for (const z of [zA, zB]) fixed.push(...wheel(0.33, 0.22, sx * 0.78, z));
   }
   // The roof's ribs (the owner's top view).
-  for (let z = zr + 0.45; z < wsTop - 0.2; z += 0.42) fixed.push(paint(box(W - 0.42, 0.012, 0.035, 0, H + 0.004, z), '#d6d8d8'));
+  for (let z = zr + 0.45; z < wsTop - 0.2; z += 0.42) fixed.push(paint(box(W - 0.42, 0.012, 0.035, 0, top + 0.004, z), '#d6d8d8'));
   // The wheel wells (dark, so you never see through the arches).
   for (const z of [zA, zB]) fixed.push(paint(box(W - 0.5, 0.42, 0.88, 0, 0.55, z), '#151617'));
   // Windscreen, from its bottom edge up to the roof.
-  fixed.push(paint(facePoly([[-hx + 0.1, 1.24, wsBot - 0.01], [hx - 0.1, 1.24, wsBot - 0.01], [hx - 0.12, H - 0.08, wsTop + 0.09], [-hx + 0.12, H - 0.08, wsTop + 0.09]], 0.012), '#2c3f4f'));
+  fixed.push(paint(facePoly([[-hx + 0.1, 1.24, wsBot - 0.01], [hx - 0.1, 1.24, wsBot - 0.01], [hx - 0.12, H - 0.08, wsTop + 0.09], [-hx + 0.12, H - 0.08, wsTop + 0.09]], B + 0.012), '#2c3f4f'));
   // Front: the grille between the headlights, the navy bumper and its lower grille.
-  fixed.push(paint(box(0.76, 0.18, 0.04, 0, 0.85, zf + 0.02), '#15171a'));
-  fixed.push(paint(box(W + 0.04, 0.4, 0.16, 0, 0.55, zf), '#1f2b45'));
-  fixed.push(paint(box(1.0, 0.1, 0.02, 0, 0.47, zf + 0.085), '#111316'));
+  fixed.push(paint(box(0.76, 0.18, 0.04, 0, 0.85, zF + 0.02), '#15171a'));
+  fixed.push(paint(box(W + 0.04, 0.4, 0.16, 0, 0.55, zF), '#1f2b45'));
+  fixed.push(paint(box(1.0, 0.1, 0.02, 0, 0.47, zF + 0.085), '#111316'));
   // Back: the big rear window, the door's handle bar, and the black bumper.
-  fixed.push(paint(box(1.5, winHi - winLo + 0.06, 0.02, 0, (winLo + winHi) / 2 + 0.02, zr - 0.006), '#0e1114'));
-  fixed.push(paint(box(1.4, winHi - winLo - 0.04, 0.02, 0, (winLo + winHi) / 2 + 0.02, zr - 0.012), '#33475a'));
-  fixed.push(paint(box(0.7, 0.07, 0.04, 0, 1.0, zr - 0.02), '#15171a'));
-  fixed.push(paint(box(W + 0.04, 0.26, 0.16, 0, 0.48, zr - 0.02), '#1b1c1e'));
+  fixed.push(paint(box(1.5, winHi - winLo + 0.06, 0.02, 0, (winLo + winHi) / 2 + 0.02, zR - 0.006), '#0e1114'));
+  fixed.push(paint(box(1.4, winHi - winLo - 0.04, 0.02, 0, (winLo + winHi) / 2 + 0.02, zR - 0.012), '#33475a'));
+  fixed.push(paint(box(0.7, 0.07, 0.04, 0, 1.0, zR - 0.02), '#15171a'));
+  fixed.push(paint(box(W + 0.04, 0.26, 0.16, 0, 0.48, zR - 0.02), '#1b1c1e'));
   // The painted signs (one picture: "TRO TRO", the route, the number plate, the flag), each laid flat
   // on the body; each vehicle shows its own route and plate (a row of the picture).
   const d: Part[] = [];
-  const ny = 1.16 - 0.96, nz = -0.15, nl = Math.hypot(ny, nz);
-  d.push(decal([0, 1.06, zf - 0.075], [1, 0, 0], [0, ny / nl, nz / nl], 0.5, 0.095, DECAL.troTro));
+  // (On the nose's slope, from (zf, 0.94) up to (zf - 0.08, 1.1): out along its normal by B.)
+  const ny = 1.1 - 0.94, nz = -0.08, nl = Math.hypot(ny, nz);
+  d.push(decal([0, 1.02 + (-nz / nl) * (B + 0.025), zf - 0.04 + (ny / nl) * (B + 0.025)], [1, 0, 0], [0, ny / nl, nz / nl], 0.46, 0.085, DECAL.troTro));
   for (const sx of sides) {
     const right = [0, 0, -sx]; // reading left to right from outside (front to back on the left side)
     const x = sx * (hx + 0.006);
     d.push(decal([x, 1.17, zf - 0.88], right, [0, 1, 0], 0.32, 0.065, DECAL.troTro));
     d.push(decal([x, 1.17, zr + 1.2], right, [0, 1, 0], 0.55, 0.08, DECAL.route));
     d.push(decal([x, 1.17, zr + 0.4], right, [0, 1, 0], 0.13, 0.065, DECAL.flag));
-    d.push(decal([sx * 0.55, 1.2, zr - 0.013], [-1, 0, 0], [0, 1, 0], 0.1, 0.05, DECAL.flag));
+    d.push(decal([sx * 0.55, 1.2, zR - 0.013], [-1, 0, 0], [0, 1, 0], 0.1, 0.05, DECAL.flag));
   }
-  d.push(decal([0, 0.79, zr - 0.024], [-1, 0, 0], [0, 1, 0], 0.21, 0.105, DECAL.plate));
-  d.push(decal([0, 0.6, zf + 0.085], [1, 0, 0], [0, 1, 0], 0.21, 0.105, DECAL.plate));
+  d.push(decal([0, 0.79, zR - 0.024], [-1, 0, 0], [0, 1, 0], 0.21, 0.105, DECAL.plate));
+  d.push(decal([0, 0.6, zF + 0.085], [1, 0, 0], [0, 1, 0], 0.21, 0.105, DECAL.plate));
   return { body, fixed: merge(fixed), shadow: [2.3, L + 0.8], decals: mergeDecals(d) };
 }
 /** A flat four-sided piece on a vehicle's side (x fixed): corners [along, up]. */

@@ -566,6 +566,7 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
     - The shaking: the camera was moved only every 50 ms while the car moved every frame. Now the car and the camera move together every frame, just before the picture is drawn.
     - Checked (slow test browser): in all four shots he drove on; the few stops left were a second at a red light and two cars stuck inside junctions (the film cuts after 2 s). The street lamps along Ring Road and the traffic lights at the Nima junctions are in the shots.
     - Done when: on the phone the ride is smooth (no shaking), each shot about 10 s, Uncle never held up more than a second or two, and nobody cuts across him.
+  - **The trotro, rounder** (owner, 30 Oct: "this one looks too boxy… a little curve"): every edge of the body is rounded (7 cm, in three steps), the roof curves down at both ends, the nose is a rounded slope and the wheel arches are rounder; the lights, glass, bumpers, plates and signs sit out on the rounded body. Done when: the trotros look like the owner's pictures, no longer like boxes.
     - Done when: the ride to Nima feels like a real drive through Accra's streets (traffic, kiosks, people, lights and poles), never shows the car stuck, and takes under 40 s; Auntie Dede's stall is the pack's market stand with kelewele on the table.
 
 ## Waiting on the owner
