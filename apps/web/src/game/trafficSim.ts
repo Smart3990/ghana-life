@@ -74,8 +74,8 @@ const HEADWAY = 1.0; // seconds behind the vehicle in front
 const MIN_GAP = 1.6; // metres left when stopped in a queue
 const LOOK = 70; // metres a driver looks ahead
 // Lengths and widths of the vehicles (the Epic City pack's, as vehicles3d.ts draws them).
-const LEN: Record<Kind, number> = { car: 4.7, taxi: 5.35, trotro: 4.4, tricycle: 3, okada: 2.2, bus: 11.3, truck: 6.3, pickup: 5.3, suv: 4.7 };
-const WIDTH: Record<Kind, number> = { car: 2.1, taxi: 2.2, trotro: 1.85, tricycle: 1.4, okada: 0.85, bus: 2.85, truck: 2.3, pickup: 2.0, suv: 2.1 };
+const LEN: Record<Kind, number> = { car: 4.7, taxi: 5.35, trotro: 4.9, tricycle: 3, okada: 2.2, bus: 11.3, truck: 6.3, pickup: 5.3, suv: 4.7 };
+const WIDTH: Record<Kind, number> = { car: 2.1, taxi: 2.2, trotro: 1.9, tricycle: 1.4, okada: 0.85, bus: 2.85, truck: 2.3, pickup: 2.0, suv: 2.1 };
 
 const hash = (n: number) => {
   let x = Math.imul(n ^ 0x9e3779b9, 0x85ebca6b);

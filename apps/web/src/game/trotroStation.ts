@@ -77,7 +77,7 @@ export function planStation(x: number, z: number, face: number): StationPlan {
   // Rows of trotros, noses towards the road, waiting to fill up.
   const parked: StationPlan['parked'] = [];
   const people: StationPlan['people'] = [];
-  const cols = ['#f1ece0', '#3d7cc0', '#e9e4d6', '#3d7cc0', '#f1ece0'];
+  const cols = ['#0d47b8', '#0d47b8', '#f1ece0', '#1352c4', '#0d47b8'];
   let id = 777000;
   for (const [row, v] of [-4, 1.5, 7].entries()) {
     for (const [k, u] of [-12, -7.5, -3, 1.5, 6].entries()) {

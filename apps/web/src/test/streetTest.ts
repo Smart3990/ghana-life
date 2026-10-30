@@ -3122,9 +3122,9 @@ const busDoor = (() => {
     doorway.position.set(x, 0, z);
     doorway.rotation.y = Math.PI - heading;
     // (Moved out to the van's side and forward to the door's front edge, in the van's frame.)
-    doorway.translateX(-0.925);
+    doorway.translateX(-0.95); // (our trotro: its sliding door, behind the front door on the right)
     doorway.translateY(1.12);
-    doorway.translateZ(1.025);
+    doorway.translateZ(1.05);
     doorway.scale.z = Math.max(0.01, open);
   };
   return { set, hide: () => (doorway.visible = false) };
@@ -3146,7 +3146,10 @@ function arrivalShot() {
  *  kerb clear. Made behind the black, before the camera comes down from the sky. */
 let trotroIn: ReturnType<typeof prepareTrotro> | null = null;
 function prepareTrotro(spot: { x: number; z: number }, lane: NonNullable<ReturnType<typeof roadLineNear>>) {
-  const bus = { key: 'trotro' as const, kind: 'trotro' as const, id: 900003, x: 0, z: 0, heading: 0, colour: '#f1ece0', shown: true, moving: true };
+  // The trotro from the opening film (owner, 30 Oct 2026: "use the color of the original video"): white,
+  // the green Sika Mobile Money advert along its side, its route sign from your hometown to Accra.
+  const look = { advert: 'SIKA MOBILE MONEY', route: `${homeTown.toUpperCase()} - ACCRA` };
+  const bus = { key: 'trotro' as const, kind: 'trotro' as const, id: 900003, x: 0, z: 0, heading: 0, colour: '#f1ece0', shown: true, moving: true, ...look };
   const STOP = -3; // its door (front right) comes level with you
   // The trotro is a real driver in the traffic (owner, 28 Oct 2026: it must never pass through a car):
   // it comes along its lane from about 45 m back, stops for the lights and waits behind the traffic
@@ -3156,6 +3159,7 @@ function prepareTrotro(spot: { x: number; z: number }, lane: NonNullable<ReturnT
   clearStoryPath([-55, -30, -10, STOP, STOP + 12].map((d) => lane(d)));
   const stopAt = lane(STOP);
   const simBus = trafficSim?.addStory({ kind: 'trotro', type: 'trotro', colour: '#f1ece0', x: stopAt.x, z: stopAt.z, heading: stopAt.heading, back: 45 }) ?? null;
+  if (simBus !== null) streetTraffic?.looks.set(simBus, look); // (dressed the same when the traffic draws it)
   if (simBus !== null) {
     trafficSim!.stopAt(simBus, stopAt.x, stopAt.z);
     // It pulls over right beside the pavement (owner, 29 Oct 2026: "not in the middle of the street"):

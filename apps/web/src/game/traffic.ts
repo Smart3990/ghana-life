@@ -29,7 +29,7 @@ export type Kind = 'car' | 'taxi' | 'trotro' | 'tricycle' | 'okada' | 'bus' | 't
 export const KINDS: Record<Kind, { length: number; width: number; height: number; speed: number; colours: string[]; cabin?: string }> = {
   car: { length: 4.4, width: 1.8, height: 1.45, speed: 10, colours: ['#f4f4f2', '#c0c4c8', '#2b2f36', '#8e1b1b', '#1f4f8a'], cabin: '#33404d' },
   taxi: { length: 4.4, width: 1.8, height: 1.45, speed: 9, colours: ['#6e1a24', '#1d2f5c', '#2a2c33', '#5a1a3a', '#1f4f8a', '#2f4a3a'], cabin: '#33404d' }, // Accra taxis (dark body colours, as at Circle): any body colour, yellow corners
-  trotro: { length: 6.2, width: 2.1, height: 2.4, speed: 7.5, colours: ['#f1ece0', '#e9e4d6', '#3d7cc0', '#3d7cc0', '#d9dde0'] }, // lower body: white or blue
+  trotro: { length: 6.2, width: 2.1, height: 2.4, speed: 7.5, colours: ['#0d47b8', '#0d47b8', '#1352c4', '#f1ece0', '#0d47b8'] }, // lower body: mostly blue, some white (owner's pictures, 30 Oct 2026)
   tricycle: { length: 2.6, width: 1.3, height: 1.7, speed: 6, colours: ['#1f8a5b', '#e8701c', '#2f6fd0', '#e8701c', '#c8102e'] }, // motor kings: mostly orange
   okada: { length: 2.0, width: 0.8, height: 1.6, speed: 9, colours: ['#c8442e', '#1f5fa8', '#e3a92b', '#2f7d55', '#151515', '#f2efe6'] },
   bus: { length: 11, width: 2.5, height: 3.1, speed: 7, colours: ['#e8b820', '#e8b820', '#e8b820', '#f2efe6'] }, // mostly Metro yellow

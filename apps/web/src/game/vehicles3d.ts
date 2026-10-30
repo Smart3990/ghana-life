@@ -37,13 +37,6 @@ const PACK: Record<BatchKey, { file: string; paint: string[]; white?: string[] }
 // profile: [height, distance out from the middle] up the side; z0..z1: back to front; shape: which
 // advert picture it carries (adverts are designed in each wrap's own proportions, never stretched).
 type Wrap = { profile: [number, number][]; z0: number; z1: number; shape: AdShape; bands?: [number, number, [number, number][]][] };
-const VAN_WRAP: Wrap = {
-  // The van: the lower body (x 0.84), the flat belt (x 0.86) and the windows sloping in (x 0.78 at 1.83).
-  profile: [[0.46, 0.862], [0.83, 0.862], [0.85, 0.9], [1.34, 0.9], [1.8, 0.8]], // (clear of the door handles, which reach 0.894)
-  z0: -1.6,
-  z1: 1.64,
-  shape: 'tall',
-};
 // The taxi's roof screen (owner, 28 Oct 2026: the advert on the taxi's roof sign, like the LED roof
 // screens on taxis): a slim dark box over the pack's roof light (which is 1.1 m long, 0.36 m wide,
 // up to 1.74 m), with a bright advert screen on each side, inside a thin border.
@@ -57,8 +50,6 @@ function taxiRoofBox() {
 }
 const PACK_WRAPS: Partial<Record<BatchKey, Wrap>> = {
   taxi: TAXI_ROOF,
-  trotro: VAN_WRAP,
-  sprinter: VAN_WRAP,
   // The city bus (owner, 28 Oct 2026: "full side, bigger in both length and width"): its whole flat
   // side (x 1.32), from just above the ground line to the roof edge and from the back to the driver's
   // window, with the two wheel arches cut out (mapped on the model every 10 cm: bands of height, and
@@ -80,6 +71,14 @@ const PACK_WRAPS: Partial<Record<BatchKey, Wrap>> = {
   // The box lorry: its whole cargo box (x 1.04, y 0.88 to 2.81, z -3.03 to 1.42).
   truck: { profile: [[0.9, 1.066], [2.79, 1.066]], z0: -3.01, z1: 1.4, shape: 'tall' }, // (clear of the fittings at 1.058)
 };
+// Our own trotros (trotro() below): the whole side behind the front doors, from just above the
+// bottom edge up over the windows to the roof line, the rear wheel arch cut out.
+const trotroWrap = (long: boolean): Wrap => {
+  const L = long ? 5.3 : 4.7, H = long ? 2.3 : 2.06;
+  const z0 = -L / 2 + 0.12, z1 = L / 2 - 1.36, zB = -L / 2 + (long ? 1.15 : 1.05);
+  return { profile: [[0.44, 0.955], [H - 0.1, 0.955]], z0, z1, shape: 'tall', bands: [[0.44, 0.77, [[z0, zB - 0.48], [zB + 0.48, z1]]], [0.77, H - 0.1, [[z0, z1]]]] };
+};
+const OWN_WRAPS: Partial<Record<BatchKey, Wrap>> = { trotro: trotroWrap(false), sprinter: trotroWrap(true) };
 const MODERN: Partial<Record<BatchKey, string>> = {
   // Our own models shaped after the real vehicles at Circle (scripts/vehicles/build_ghana.py).
   car: 'saloon', // Corolla-type saloon
@@ -120,8 +119,8 @@ function livery(base: THREE.MeshStandardMaterial, kind: 'taxi' | 'trotro' | 'spr
   const m = base.clone();
   const rule = {
     taxi: 'if (abs(vLocal.z) > 1.35 && vLocal.y < 0.88) diffuseColor.rgb = vec3(0.9, 0.55, 0.07);',
-    trotro: 'if (vLocal.y > 1.0) diffuseColor.rgb = vec3(0.93, 0.92, 0.88); else if (vLocal.y > 0.86) diffuseColor.rgb = vec3(0.9, 0.68, 0.1);',
-    sprinter: 'if (vLocal.y > 1.15) diffuseColor.rgb = vec3(0.93, 0.92, 0.88); else if (vLocal.y > 0.98) diffuseColor.rgb = vec3(0.9, 0.68, 0.1);',
+    trotro: 'if (vLocal.y > 1.06) diffuseColor.rgb = vec3(0.84, 0.83, 0.79); else if (vLocal.y > 0.97) diffuseColor.rgb = vec3(0.86, 0.42, 0.0);', // (linear light: white #ecebe6, gold #f0ac00)
+    sprinter: 'if (vLocal.y > 1.06) diffuseColor.rgb = vec3(0.84, 0.83, 0.79); else if (vLocal.y > 0.97) diffuseColor.rgb = vec3(0.86, 0.42, 0.0);',
     bus: 'if (vLocal.y > 1.0 && vLocal.y < 1.12) diffuseColor.rgb = vec3(0.12, 0.33, 0.66); else if (vLocal.y >= 1.12 && vLocal.y < 1.22) diffuseColor.rgb = vec3(0.75, 0.15, 0.12);',
   }[kind];
   m.onBeforeCompile = (shader) => {
@@ -372,8 +371,6 @@ function wrapGeometry(w: Wrap) {
 // the roof line, from behind the driver's door to the back.
 const AD_PANELS: Partial<Record<BatchKey, [number, number, number, number, number, number]>> = {
   // [half width, bottom, top, back end, front end, the back face's position]
-  trotro: [0.885, 0.7, 2.02, -2.42, 1.35, -2.52],
-  sprinter: [0.985, 0.76, 2.45, -2.9, 1.5, -3.02],
   bus: [1.262, 1.0, 2.92, -5.25, 3.55, -5.43], // stops before the front door
   truck: [1.165, 1.1, 2.6, -3.7, 1.85, -3.83],
 };
@@ -402,10 +399,11 @@ function adPanels([hw, y0, y1, z0, z1, zb]: [number, number, number, number, num
   return g;
 }
 const AD_TIME = { value: 0 };
-function adMaterial(map: THREE.Texture) {
+function adMaterial(map: THREE.Texture, period = 8) {
   // The same sliding change as the billboards (the next advert slides in every 8 seconds), and lit
   // like them: a bright screen, the same at noon and at midnight, so it is always clear to read.
-  const sliding = slidingAdMaterial(map, AD_ROWS, 8, true) as THREE.MeshBasicMaterial;
+  // (A huge period holds one advert for good: the story's own trotro.)
+  const sliding = slidingAdMaterial(map, AD_ROWS, period, true) as THREE.MeshBasicMaterial;
   sliding.polygonOffset = true;
   sliding.polygonOffsetFactor = -2;
   sliding.side = THREE.FrontSide;
@@ -501,10 +499,10 @@ export function merge(parts: Part[]): Part {
 }
 
 // Vehicle lengths (metres), for keeping a gap.
-const KIND_LENGTH: Record<Kind, number> = { car: 4.7, taxi: 5.35, trotro: 4.4, tricycle: 3, okada: 2.2, bus: 11.3, truck: 6.3, pickup: 5.3, suv: 4.7 }; // (the pack's vehicles)
+const KIND_LENGTH: Record<Kind, number> = { car: 4.7, taxi: 5.35, trotro: 4.9, tricycle: 3, okada: 2.2, bus: 11.3, truck: 6.3, pickup: 5.3, suv: 4.7 }; // (the pack's vehicles; our trotros)
 
 // Widths (metres), for crossings and for not walking through vehicles.
-const KIND_WIDTH: Record<Kind, number> = { car: 2.1, taxi: 2.2, trotro: 1.85, tricycle: 1.4, okada: 0.85, bus: 2.85, truck: 2.3, pickup: 2.0, suv: 2.1 };
+const KIND_WIDTH: Record<Kind, number> = { car: 2.1, taxi: 2.2, trotro: 1.9, tricycle: 1.4, okada: 0.85, bus: 2.85, truck: 2.3, pickup: 2.0, suv: 2.1 };
 
 export type VehicleBox = { x: number; z: number; fx: number; fz: number; half: number; halfW: number };
 
@@ -515,7 +513,7 @@ const TAIL = '#b3121b';
 
 // ---------- The vehicles ----------
 
-type Model = { body: Part; fixed: Part; shadow: [number, number] }; // shadow: width, length
+type Model = { body: Part; fixed: Part; shadow: [number, number]; decals?: Part }; // shadow: width, length; decals: painted signs (uv)
 
 function car(taxi: boolean): Model {
   const W = 1.76;
@@ -545,33 +543,222 @@ function car(taxi: boolean): Model {
   return { body, fixed: merge(fixed), shadow: [2.1, 4.8] };
 }
 
-function trotro(): Model {
-  const W = 2.0;
-  const body = merge([
-    profile([[-2.8, 0.36], [-2.82, 2.22], [-2.72, 2.32], [1.55, 2.32], [2.32, 1.48], [2.76, 1.18], [2.8, 0.36]], W, 0.05),
-  ]);
-  const slope = Math.atan2(2.32 - 1.48, 2.32 - 1.55);
-  const fixed: Part[] = [
-    paint(box(W + 0.03, 0.66, 4.2, 0, 1.7, -0.62), GLASS), // side windows
-    paint(box(W - 0.2, 0.05, 1.12, 0, 1.92, 1.97, -(Math.PI / 2 - slope) - Math.PI / 2), GLASS), // windscreen
-    paint(box(1.5, 0.6, 0.05, 0, 1.72, -2.84), GLASS), // rear window
-    paint(box(W + 0.03, 0.06, 5.3, 0, 1.3, 0), '#2f8f57'), // a coloured stripe, like many trotros
-    paint(box(W + 0.02, 0.22, 0.14, 0, 0.45, 2.8), TRIM),
-    paint(box(W + 0.02, 0.22, 0.14, 0, 0.45, -2.84), TRIM),
-    paint(box(0.32, 0.14, 0.06, 0.7, 0.85, 2.79), HEAD),
-    paint(box(0.32, 0.14, 0.06, -0.7, 0.85, 2.79), HEAD),
-    paint(box(0.16, 0.34, 0.06, 0.88, 0.85, -2.84), TAIL),
-    paint(box(0.16, 0.34, 0.06, -0.88, 0.85, -2.84), TAIL),
-    // Roof rack
-    paint(box(1.7, 0.05, 3.6, 0, 2.46, -0.6), '#3a3b3d'),
-    paint(box(0.05, 0.12, 3.6, 0.82, 2.4, -0.6), '#3a3b3d'),
-    paint(box(0.05, 0.12, 3.6, -0.82, 2.4, -0.6), '#3a3b3d'),
-    ...wheel(0.36, 0.24, 0.86, 1.85),
-    ...wheel(0.36, 0.24, -0.86, 1.85),
-    ...wheel(0.36, 0.24, 0.86, -1.85),
-    ...wheel(0.36, 0.24, -0.86, -1.85),
-  ];
-  return { body, fixed: merge(fixed), shadow: [2.4, 6.2] };
+// The Accra trotro (owner, 30 Oct 2026, from five pictures of a real one: front, back, both sides and
+// the top): a Hiace-type minibus with a short sloping nose, white on top with a yellow stripe and the
+// lower body in its colour (mostly blue), big black-framed windows, a navy front bumper, "TRO TRO" on
+// the nose and the front doors, its route along the side, Ghana flags and the yellow GR number plates.
+// No maker's badge (fictional brands only). long: the long, high-roof kind (the "sprinter" type).
+// Built from a side profile with the wheel arches cut out.
+function trotro(long = false): Model {
+  const L = long ? 5.3 : 4.7;
+  const H = long ? 2.3 : 2.06;
+  const W = 1.88;
+  const zf = L / 2, zr = -L / 2;
+  const zA = zf - 0.95; // front axle
+  const zB = zr + (long ? 1.15 : 1.05); // rear axle
+  const wsBot = zf - 0.42, wsTop = zf - 1.12; // windscreen: bottom (y 1.22) and top (y H - 0.06)
+  const arch = (z: number): [number, number][] => [[z + 0.46, 0.34], [z + 0.4, 0.6], [z + 0.22, 0.75], [z - 0.22, 0.75], [z - 0.4, 0.6], [z - 0.46, 0.34]];
+  const body = profile(
+    [
+      [zr, 0.36], [zr, H - 0.1], [zr + 0.1, H], [wsTop, H], [wsTop + 0.1, H - 0.06], [wsBot, 1.22], [zf - 0.15, 1.16], [zf, 0.96], [zf + 0.02, 0.74], [zf + 0.01, 0.38], [zf - 0.06, 0.34],
+      ...arch(zA), ...arch(zB),
+    ],
+    W,
+    0, // (no bevel: a bevel swells the outline, which would bury the lights and glass laid on it)
+  );
+  const hx = W / 2;
+  // The A-pillar line, from the windscreen's bottom to its top: the side windows' front edge follows it.
+  const pillarZ = (y: number) => wsBot + ((y - 1.22) / (H - 0.06 - 1.22)) * (wsTop + 0.1 - wsBot) - 0.1;
+  const winLo = 1.3, winHi = H - 0.13;
+  const sides = [1, -1];
+  const fixed: Part[] = [];
+  for (const sx of sides) {
+    const x = sx * (hx + 0.004);
+    // The black window band, then the glass panes in it (pillars between them).
+    fixed.push(paint(sidePoly(x, [[zr + 0.12, winLo], [pillarZ(winLo), winLo], [pillarZ(winHi), winHi], [zr + 0.12, winHi]]), '#0e1114'));
+    const pillars = long ? [zf - 1.3, zf - 2.4, zf - 3.5] : [zf - 1.3, zf - 2.35, zf - 3.35];
+    const edges = [zr + 0.2, ...pillars.slice().reverse()];
+    for (let i = 0; i < edges.length; i++) {
+      const z0 = edges[i] + (i ? 0.05 : 0);
+      const z1 = i + 1 < edges.length ? edges[i + 1] - 0.05 : null;
+      const lo = winLo + 0.05, hi = winHi - 0.05;
+      const pane: [number, number][] = z1 === null ? [[z0, lo], [pillarZ(lo) - 0.05, lo], [pillarZ(hi) - 0.05, hi], [z0, hi]] : [[z0, lo], [z1, lo], [z1, hi], [z0, hi]];
+      fixed.push(paint(sidePoly(sx * (hx + 0.008), pane), '#33475a'));
+    }
+    // Door seams, handles, and the mirror on its arm.
+    for (const z of [zf - 1.3, zf - 2.35]) fixed.push(paint(box(0.012, 0.9, 0.014, x, 0.82, z), '#7d8288'));
+    fixed.push(paint(box(0.03, 0.04, 0.16, sx * (hx + 0.01), 1.14, zf - 1.42), '#1a1c1e'));
+    fixed.push(paint(box(0.03, 0.12, 0.04, sx * (hx + 0.01), 1.12, zf - 2.25), '#1a1c1e'));
+    fixed.push(paint(box(0.14, 0.04, 0.05, sx * (hx + 0.06), 1.36, wsBot - 0.06), '#1a1c1e'));
+    fixed.push(paint(box(0.07, 0.24, 0.17, sx * (hx + 0.15), 1.44, wsBot - 0.06), '#1a1c1e'));
+    // Tail light (red, a white reversing light at its foot) on the back corner.
+    fixed.push(paint(box(0.13, 0.44, 0.06, sx * (hx - 0.07), 1.3, zr - 0.02), TAIL));
+    fixed.push(paint(box(0.13, 0.16, 0.06, sx * (hx - 0.07), 1.0, zr - 0.02), '#e8e6e0'));
+    // Headlight, and the orange indicator beside it.
+    fixed.push(paint(box(0.34, 0.18, 0.04, sx * 0.6, 0.85, zf + 0.02), '#e9eef0'));
+    fixed.push(paint(box(0.08, 0.16, 0.04, sx * 0.84, 0.85, zf + 0.015), '#f0902a'));
+    for (const z of [zA, zB]) fixed.push(...wheel(0.33, 0.22, sx * 0.78, z));
+  }
+  // The roof's ribs (the owner's top view).
+  for (let z = zr + 0.45; z < wsTop - 0.2; z += 0.42) fixed.push(paint(box(W - 0.42, 0.012, 0.035, 0, H + 0.004, z), '#d6d8d8'));
+  // The wheel wells (dark, so you never see through the arches).
+  for (const z of [zA, zB]) fixed.push(paint(box(W - 0.5, 0.42, 0.88, 0, 0.55, z), '#151617'));
+  // Windscreen, from its bottom edge up to the roof.
+  fixed.push(paint(facePoly([[-hx + 0.1, 1.24, wsBot - 0.01], [hx - 0.1, 1.24, wsBot - 0.01], [hx - 0.12, H - 0.08, wsTop + 0.09], [-hx + 0.12, H - 0.08, wsTop + 0.09]], 0.012), '#2c3f4f'));
+  // Front: the grille between the headlights, the navy bumper and its lower grille.
+  fixed.push(paint(box(0.76, 0.18, 0.04, 0, 0.85, zf + 0.02), '#15171a'));
+  fixed.push(paint(box(W + 0.04, 0.4, 0.16, 0, 0.55, zf), '#1f2b45'));
+  fixed.push(paint(box(1.0, 0.1, 0.02, 0, 0.47, zf + 0.085), '#111316'));
+  // Back: the big rear window, the door's handle bar, and the black bumper.
+  fixed.push(paint(box(1.5, winHi - winLo + 0.06, 0.02, 0, (winLo + winHi) / 2 + 0.02, zr - 0.006), '#0e1114'));
+  fixed.push(paint(box(1.4, winHi - winLo - 0.04, 0.02, 0, (winLo + winHi) / 2 + 0.02, zr - 0.012), '#33475a'));
+  fixed.push(paint(box(0.7, 0.07, 0.04, 0, 1.0, zr - 0.02), '#15171a'));
+  fixed.push(paint(box(W + 0.04, 0.26, 0.16, 0, 0.48, zr - 0.02), '#1b1c1e'));
+  // The painted signs (one picture: "TRO TRO", the route, the number plate, the flag), each laid flat
+  // on the body; each vehicle shows its own route and plate (a row of the picture).
+  const d: Part[] = [];
+  const ny = 1.16 - 0.96, nz = -0.15, nl = Math.hypot(ny, nz);
+  d.push(decal([0, 1.06, zf - 0.075], [1, 0, 0], [0, ny / nl, nz / nl], 0.5, 0.095, DECAL.troTro));
+  for (const sx of sides) {
+    const right = [0, 0, -sx]; // reading left to right from outside (front to back on the left side)
+    const x = sx * (hx + 0.006);
+    d.push(decal([x, 1.17, zf - 0.88], right, [0, 1, 0], 0.32, 0.065, DECAL.troTro));
+    d.push(decal([x, 1.17, zr + 1.2], right, [0, 1, 0], 0.55, 0.08, DECAL.route));
+    d.push(decal([x, 1.17, zr + 0.4], right, [0, 1, 0], 0.13, 0.065, DECAL.flag));
+    d.push(decal([sx * 0.55, 1.2, zr - 0.013], [-1, 0, 0], [0, 1, 0], 0.1, 0.05, DECAL.flag));
+  }
+  d.push(decal([0, 0.79, zr - 0.024], [-1, 0, 0], [0, 1, 0], 0.21, 0.105, DECAL.plate));
+  d.push(decal([0, 0.6, zf + 0.085], [1, 0, 0], [0, 1, 0], 0.21, 0.105, DECAL.plate));
+  return { body, fixed: merge(fixed), shadow: [2.3, L + 0.8], decals: mergeDecals(d) };
+}
+/** A flat four-sided piece on a vehicle's side (x fixed): corners [along, up]. */
+function sidePoly(x: number, pts: [number, number][]): Part {
+  return facePoly(pts.map(([z, y]) => [x, y, z]), 0);
+}
+/** A flat four-sided piece, both faces drawn (seen whichever way it was wound); `lift` moves it out along its normal. */
+function facePoly(c: number[][], lift: number): Part {
+  const v = c.map((p) => new THREE.Vector3(p[0], p[1], p[2]));
+  const nrm = new THREE.Vector3().subVectors(v[1], v[0]).cross(new THREE.Vector3().subVectors(v[3], v[0])).normalize();
+  if (lift) v.forEach((p) => p.addScaledVector(nrm, lift));
+  const pos: number[] = [];
+  for (const k of [0, 1, 2, 0, 2, 3, 0, 2, 1, 0, 3, 2]) pos.push(v[k].x, v[k].y, v[k].z);
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.computeVertexNormals();
+  return g;
+}
+// The trotro's signs picture: 8 rows (each vehicle shows one: its route and plate), each row
+// "TRO TRO" | the route | the plate | the flag, as fractions across the picture.
+const DECAL = { troTro: [0, 0.3125], route: [0.3125, 0.75], plate: [0.75, 0.875], flag: [0.875, 1] } as const;
+const DECAL_ROWS = 8;
+const ROUTES = ['ACCRA - TEMA', 'CIRCLE - MADINA', 'KANESHIE - KASOA', 'CIRCLE - LAPAZ', 'ACCRA - NSAWAM', 'MADINA - 37', 'ODORKOR - CIRCLE', 'TEMA - ASHAIMAN'];
+const PLATES = ['GR 3120-23', 'GT 4471-19', 'GR 8812-22', 'GE 2093-21', 'GW 5530-24', 'GR 1768-20', 'GN 6402-18', 'GR 9257-23']; // (made-up numbers)
+/** A sign laid on the body: centre, the way its text reads, its up, half width and half height, and its part of the picture. */
+function decal(c: number[], u: number[], v: number[], hu: number, hv: number, [u0, u1]: readonly [number, number]): Part {
+  const U = new THREE.Vector3(u[0], u[1], u[2]), V = new THREE.Vector3(v[0], v[1], v[2]), C = new THREE.Vector3(c[0], c[1], c[2]);
+  const N = new THREE.Vector3().crossVectors(U, V).normalize();
+  const corner = (a: number, b: number) => C.clone().addScaledVector(U, a * hu).addScaledVector(V, b * hv);
+  const q = [corner(-1, -1), corner(1, -1), corner(1, 1), corner(-1, 1)];
+  const uv = [[u0, 0], [u1, 0], [u1, 1], [u0, 1]];
+  const pos: number[] = [], uvs: number[] = [], nor: number[] = [];
+  for (const k of [0, 1, 2, 0, 2, 3]) {
+    pos.push(q[k].x, q[k].y, q[k].z);
+    uvs.push(uv[k][0], uv[k][1]);
+    nor.push(N.x, N.y, N.z);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  return g;
+}
+function mergeDecals(parts: Part[]): Part {
+  const g = mergeGeometries(parts, false)!;
+  g.computeBoundingSphere();
+  return g;
+}
+/** The signs picture (drawn once; the story's route row again when it is set). */
+let decalPic: { canvas: HTMLCanvasElement; tex: THREE.CanvasTexture } | null = null;
+const RW = 1024, RH = 64;
+function decalTexture() {
+  const c = document.createElement('canvas');
+  c.width = RW;
+  c.height = RH * DECAL_ROWS;
+  const g = c.getContext('2d')!;
+  const at = (k: keyof typeof DECAL) => [DECAL[k][0] * RW, (DECAL[k][1] - DECAL[k][0]) * RW];
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  for (let r = 0; r < DECAL_ROWS; r++) {
+    const top = (DECAL_ROWS - 1 - r) * RH;
+    g.clearRect(0, top, RW, RH);
+    // "TRO TRO": blue letters on the white paint.
+    // (The letters only: round them the picture is clear, and the paint shows through.)
+    let [x, w] = at('troTro');
+    g.fillStyle = '#1446b4';
+    fitFont(g, 'TRO TRO', 900, 52, w - 16);
+    g.fillText('TRO TRO', x + w / 2, top + RH / 2 + 2);
+    routeText(g, r, ROUTES[r]);
+    // The yellow number plate with a black edge, on two lines.
+    [x, w] = at('plate');
+    g.fillStyle = '#16181a';
+    g.fillRect(x, top, w, RH);
+    g.fillStyle = '#f4cf1d';
+    g.fillRect(x + 2, top + 2, w - 4, RH - 4);
+    g.fillStyle = '#16181a';
+    const [a, b] = PLATES[r].split(' ');
+    g.font = '800 24px system-ui, sans-serif';
+    g.fillText(a, x + w / 2, top + 18);
+    g.fillText(b, x + w / 2, top + 46);
+    // Ghana's flag: red, gold and green with the black star.
+    [x, w] = at('flag');
+    ['#ce1126', '#fcd116', '#006b3f'].forEach((col, i) => {
+      g.fillStyle = col;
+      g.fillRect(x, top + (i * RH) / 3, w, RH / 3 + 1);
+    });
+    g.fillStyle = '#000';
+    star(g, x + w / 2, top + RH / 2, 9);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  decalPic = { canvas: c, tex: t };
+  return t;
+}
+/** The route, black letters on the white paint (the row's route part cleared first). */
+function routeText(g: CanvasRenderingContext2D, r: number, text: string) {
+  const x = DECAL.route[0] * RW, w = (DECAL.route[1] - DECAL.route[0]) * RW, top = (DECAL_ROWS - 1 - r) * RH;
+  g.clearRect(x, top, w, RH);
+  g.fillStyle = '#16181a';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  fitFont(g, text, 800, 44, w - 20);
+  g.fillText(text, x + w / 2, top + RH / 2 + 2);
+}
+function drawRoute(r: number, text: string) {
+  if (!decalPic) return;
+  routeText(decalPic.canvas.getContext('2d')!, r, text);
+  decalPic.tex.needsUpdate = true;
+}
+function star(g: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
+  g.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const a = -Math.PI / 2 + (i * Math.PI) / 5;
+    const rr = i % 2 ? r * 0.4 : r;
+    g.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr);
+  }
+  g.closePath();
+  g.fill();
+}
+/** The signs' material: lit like the paint; each vehicle shows its own row of the picture (aRow). */
+function decalMaterial(map: THREE.Texture) {
+  const m = new THREE.MeshStandardMaterial({ map, roughness: 0.45, metalness: 0.1, alphaTest: 0.5, polygonOffset: true, polygonOffsetFactor: -1 });
+  m.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float aRow;')
+      .replace('#include <uv_vertex>', '#include <uv_vertex>\nvMapUv.y = (vMapUv.y + aRow) / ' + DECAL_ROWS.toFixed(1) + ';');
+  };
+  m.customProgramCacheKey = () => 'vehicle-decal';
+  return m;
 }
 
 function motorKing(): Model {
@@ -784,9 +971,9 @@ export class StreetTraffic {
     const paintMat = new THREE.MeshStandardMaterial({ roughness: 0.38, metalness: 0.25 });
     const fixedMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, metalness: 0.1 });
     // Until each pack model has loaded, a shape built in code for its kind stands in.
-    const byKind: Record<Kind, () => Model> = { car: () => car(false), taxi: () => car(true), trotro: trotro, tricycle: pragya, okada, bus, truck, pickup, suv };
+    const byKind: Record<Kind, () => Model> = { car: () => car(false), taxi: () => car(true), trotro: () => trotro(), tricycle: pragya, okada, bus, truck, pickup, suv };
     const models: Record<BatchKey, Model> = {};
-    for (const t of VEHICLE_TYPES) models[t.key] = t.key === 'motorking' ? motorKing() : byKind[t.kind]();
+    for (const t of VEHICLE_TYPES) models[t.key] = t.key === 'motorking' ? motorKing() : t.key === 'sprinter' ? trotro(true) : byKind[t.kind]();
     this.batches = {} as typeof this.batches;
     // Two advert pictures, one per wrap shape (smaller on Light phones).
     const AW = limit <= 300 ? 768 : 1024;
@@ -803,6 +990,12 @@ export class StreetTraffic {
         for (const shape of ['tall', 'wide', 'roof'] as const) {
           adMats[shape].map = adAtlas([...list, ...DEFAULT_ADS].slice(0, AD_ROWS), this.adCanvases[shape], shape, shape === 'roof' ? Math.round(AW * 0.6) : AW);
           adMats[shape].needsUpdate = true;
+        }
+        this.adTitles = [...list, ...DEFAULT_ADS].slice(0, AD_ROWS).map((a) => a.title);
+        for (const hold of Object.values(this.heldAds)) {
+          const m = hold!.material as THREE.MeshBasicMaterial;
+          m.map = adMats.tall.map;
+          m.needsUpdate = true;
         }
       })
       .catch(() => undefined);
@@ -843,6 +1036,7 @@ export class StreetTraffic {
       m.visible = false;
       this.group.add(m);
     }
+    let decalMat: THREE.MeshStandardMaterial | undefined;
     for (const [kind, model] of Object.entries(models) as [BatchKey, Model][]) {
       const look = kind === 'taxi' || kind === 'trotro' || kind === 'sprinter' || kind === 'bus' ? livery(paintMat, kind) : paintMat;
       const body = new THREE.InstancedMesh(model.body, look, limit);
@@ -869,9 +1063,20 @@ export class StreetTraffic {
         fb.setColorAt(0, this.c.set('#ffffff'));
         this.far[kind] = { body: fb, fixed: ff };
       }
+      // The trotros' painted signs ("TRO TRO", route, plates, flags), each vehicle its own row.
+      if (model.decals) {
+        model.decals.setAttribute('aRow', new THREE.InstancedBufferAttribute(new Float32Array(limit), 1));
+        const decals = new THREE.InstancedMesh(model.decals, decalMat ??= decalMaterial(decalTexture()), limit);
+        decals.count = 0;
+        decals.frustumCulled = false;
+        decals.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        this.group.add(decals);
+        this.decals[kind] = decals;
+      }
       const panel = AD_PANELS[kind];
-      if (panel || kind === 'taxi') {
-        const geo = kind === 'taxi' ? wrapGeometry(TAXI_ROOF) : adPanels(panel!);
+      const own = OWN_WRAPS[kind];
+      if (panel || own || kind === 'taxi') {
+        const geo = kind === 'taxi' ? wrapGeometry(TAXI_ROOF) : own ? wrapGeometry(own) : adPanels(panel!);
         geo.setAttribute('aAd', new THREE.InstancedBufferAttribute(new Float32Array(limit), 1));
         const ads = new THREE.InstancedMesh(geo, adMats[SHAPE_OF[kind] ?? 'tall'], limit);
         ads.count = 0;
@@ -879,6 +1084,16 @@ export class StreetTraffic {
         ads.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         this.group.add(ads);
         this.ads[kind] = ads;
+        if (own) {
+          const g = wrapGeometry(own);
+          g.setAttribute('aAd', new THREE.InstancedBufferAttribute(new Float32Array(4), 1));
+          const hold = new THREE.InstancedMesh(g, adMaterial(adMats.tall.map!, 1e9), 4);
+          hold.count = 0;
+          hold.frustumCulled = false;
+          hold.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+          this.group.add(hold);
+          this.heldAds[kind] = hold;
+        }
       }
     }
     const plane = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
@@ -1018,6 +1233,7 @@ export class StreetTraffic {
   /** Traffic lights: vehicles stop at the line on red (set by the street test). */
   signals: { shouldStop: (x: number, z: number, heading: number, half: number, t: number) => boolean } | null = null;
   private ads: Partial<Record<BatchKey, THREE.InstancedMesh>> = {};
+  private decals: Partial<Record<BatchKey, THREE.InstancedMesh>> = {};
   private taxiSigns!: THREE.InstancedMesh;
   private roofBoxes!: THREE.InstancedMesh;
   private headlights!: THREE.InstancedMesh;
@@ -1032,7 +1248,14 @@ export class StreetTraffic {
   }
   /** The story's own vehicles (the car that blocks you in the chase, Uncle Kwame's car): moved by
    *  the story, drawn with the others, and solid. */
-  story: { key: BatchKey; kind: Kind; id: number; x: number; z: number; heading: number; colour: string; shown: boolean; moving: boolean }[] = [];
+  story: { key: BatchKey; kind: Kind; id: number; x: number; z: number; heading: number; colour: string; shown: boolean; moving: boolean; advert?: string; route?: string }[] = [];
+  /** The story vehicle's own advert, held (never changing): one per wrap shape of our trotros. */
+  private heldAds: Partial<Record<BatchKey, THREE.InstancedMesh>> = {};
+  /** A traffic vehicle the story dresses (by its number): the advert it holds and its route sign. */
+  looks = new Map<number, { advert?: string; route?: string }>();
+  private adTitles = DEFAULT_ADS.map((a) => a.title);
+  /** The story's route sign (the last row of the trotros' signs picture): "HO - ACCRA". */
+  private storyRoute = '';
   /** Vehicles parked for good (the trotro station): drawn with the others, and solid. */
   parked: { key: BatchKey; id: number; x: number; z: number; heading: number; colour: string }[] = [];
   /** Share of vehicles shown (1 = all), lowered when the phone struggles. */
@@ -1367,11 +1590,12 @@ export class StreetTraffic {
   /** Draw the vehicles in `placed` (and the story's and parked ones). */
   private draw(placed: Placed[], t: number, lon: number, lat: number) {
     const adCount: Partial<Record<BatchKey, number>> = {};
+    const decalCount: Partial<Record<BatchKey, number>> = {};
     let signs = 0;
     let roofBoxes = 0;
     const counts: Record<BatchKey, number> = Object.fromEntries(Object.keys(this.batches).map((k) => [k, 0]));
     let shadowCount = 0;
-    type Draw = { key: BatchKey; id: number; x: number; z: number; ground: number; heading: number; colour: string; bounce: boolean };
+    type Draw = { key: BatchKey; id: number; x: number; z: number; ground: number; heading: number; colour: string; bounce: boolean; advert?: string; route?: string };
     const draws: Draw[] = [];
     let lit = 0;
     for (const p of placed) {
@@ -1382,11 +1606,13 @@ export class StreetTraffic {
       // On a flyover: at the deck's height.
       // Off it: on the tarmac, which sits a little below the pavement.
       const ground = p.bridge && this.deckHeight ? this.deckHeight(x, z) : -(this.groundDip?.(x, z) ?? 0);
-      draws.push({ key: this.drawKey(key), id: p.v.id, x, z, ground, heading: p.heading, colour: p.v.colour, bounce: true });
+      const look = this.looks.get(p.v.id);
+      draws.push({ key: this.drawKey(key), id: p.v.id, x, z, ground, heading: p.heading, colour: p.v.colour, bounce: true, advert: look?.advert, route: look?.route });
     }
     for (const q of this.parked) draws.push({ ...q, key: this.drawKey(q.key), ground: -(this.groundDip?.(q.x, q.z) ?? 0), bounce: false });
     // The story's own vehicles first, so they are always drawn even when a batch is full.
-    for (const q of this.story) if (q.shown) draws.unshift({ key: this.drawKey(q.key), id: q.id, x: q.x, z: q.z, heading: q.heading, colour: q.colour, ground: -(this.groundDip?.(q.x, q.z) ?? 0), bounce: q.moving });
+    for (const q of this.story) if (q.shown) draws.unshift({ key: this.drawKey(q.key), id: q.id, x: q.x, z: q.z, heading: q.heading, colour: q.colour, ground: -(this.groundDip?.(q.x, q.z) ?? 0), bounce: q.moving, advert: q.advert, route: q.route });
+    const held: Partial<Record<BatchKey, number>> = {};
     const [px, pz] = this.toLocal(lon, lat);
     const farCounts: Partial<Record<BatchKey, number>> = {};
     this.riderCounts.fill(0);
@@ -1410,11 +1636,30 @@ export class StreetTraffic {
       const ads = this.ads[d.key];
       const r = ((d.id * 2246822519) >>> 0) / 4294967296;
       if (d.key === 'taxi') this.roofBoxes.setMatrixAt(roofBoxes++, this.m);
-      if (ads && (r < 0.8 || d.key === 'taxi')) {
+      // (The story's own vehicles, numbered from 900000, carry none, unless the story gives one its own
+      // advert to hold: the trotro you arrive in wears the green one from the opening film.)
+      const hold = d.advert ? this.heldAds[d.key] : undefined;
+      const row = d.advert ? this.adTitles.indexOf(d.advert) : -1;
+      if (hold && row >= 0 && row < AD_ROWS) {
+        const n = held[d.key] ?? 0;
+        held[d.key] = n + 1;
+        hold.setMatrixAt(n, this.m);
+        (hold.geometry.getAttribute('aAd') as THREE.InstancedBufferAttribute).setX(n, row);
+      }
+      if (ads && (r < 0.8 || d.key === 'taxi') && d.id < 900000 && !d.advert) {
         const n = adCount[d.key] ?? 0;
         adCount[d.key] = n + 1;
         ads.setMatrixAt(n, this.m);
         (ads.geometry.getAttribute('aAd') as THREE.InstancedBufferAttribute).setX(n, Math.floor(r * 1.25 * AD_ROWS) % AD_ROWS);
+      }
+      const decals = this.decals[d.key];
+      if (decals) {
+        const n = decalCount[d.key] ?? 0;
+        decalCount[d.key] = n + 1;
+        decals.setMatrixAt(n, this.m);
+        // Traffic shows the first rows; the last row is the story trotro's own route.
+        if (d.route && d.route !== this.storyRoute) drawRoute(DECAL_ROWS - 1, (this.storyRoute = d.route));
+        (decals.geometry.getAttribute('aRow') as THREE.InstancedBufferAttribute).setX(n, d.route ? DECAL_ROWS - 1 : d.id % (DECAL_ROWS - 1));
       }
       // (The old painted "TAXI" sign is replaced by the roof screen.)
       // The rider (and passenger) or driver, where you can see them.
@@ -1459,6 +1704,18 @@ export class StreetTraffic {
       ads.count = adCount[key] ?? 0;
       ads.instanceMatrix.needsUpdate = true;
       ads.geometry.getAttribute('aAd').needsUpdate = true;
+    }
+    for (const [key, hold] of Object.entries(this.heldAds) as [BatchKey, THREE.InstancedMesh][]) {
+      hold.count = held[key] ?? 0;
+      hold.visible = hold.count > 0;
+      hold.instanceMatrix.needsUpdate = true;
+      hold.geometry.getAttribute('aAd').needsUpdate = true;
+    }
+    for (const [key, decals] of Object.entries(this.decals) as [BatchKey, THREE.InstancedMesh][]) {
+      decals.count = decalCount[key] ?? 0;
+      decals.visible = decals.count > 0;
+      decals.instanceMatrix.needsUpdate = true;
+      decals.geometry.getAttribute('aRow').needsUpdate = true;
     }
     AD_TIME.value = t;
     this.taxiSigns.count = signs;

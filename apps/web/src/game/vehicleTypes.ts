@@ -9,7 +9,7 @@ import type { Kind } from './traffic';
 export type VehicleType = {
   key: string;
   kind: Kind;
-  file?: string; // the pack model (public/models/epic/vehicles); none: our own model (tricycles)
+  file?: string; // the pack model (public/models/epic/vehicles); none: our own model (trotros, tricycles)
   paint?: string[];
   white?: string[];
   len: number;
@@ -36,8 +36,8 @@ export const VEHICLE_TYPES: VehicleType[] = [
   { key: 'tow', kind: 'pickup', file: 'car-tow-truck', len: 5.43, width: 1.96, weight: 14 },
   { key: 'firepickup', kind: 'pickup', file: 'car-firefighter-pickup', len: 6.24, width: 2.43, weight: 7 },
   { key: 'ambulance', kind: 'pickup', file: 'car-ambulance-pickup', len: 6.24, width: 2.43, weight: 8 },
-  { key: 'trotro', kind: 'trotro', file: 'car-hippie-van', paint: ['35ccdd'], white: ['b7f0f2'], len: 4.38, width: 1.83, weight: 66 },
-  { key: 'sprinter', kind: 'trotro', file: 'car-hippie-van', paint: ['35ccdd'], white: ['b7f0f2'], len: 4.38, width: 1.83, weight: 34 },
+  { key: 'trotro', kind: 'trotro', len: 4.75, width: 1.9, weight: 66 }, // our own Accra trotro (vehicles3d.ts: trotro)
+  { key: 'sprinter', kind: 'trotro', len: 5.35, width: 1.9, weight: 34 }, // ... the long, high-roof kind
   // Buses
   { key: 'bus', kind: 'bus', file: 'bus-passenger', paint: ['dbdbda'], len: 11.28, width: 2.85, weight: 74 },
   { key: 'schoolbus', kind: 'bus', file: 'bus-school', len: 9.77, width: 3.03, weight: 26 },

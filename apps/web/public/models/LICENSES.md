@@ -22,6 +22,7 @@ The plastic chairs and football (`src/game/streetScenes.ts`) are built in code. 
 - **Our own models** (made in code by `scripts/vehicles/build_ghana.py`, no outside source): `saloon.glb` (Corolla-type saloon, cars and Accra taxis), `trotro.glb` (Hiace-type trotro with roof rack), `sprinter.glb` (Sprinter-type trotro), `citybus.glb` (Metro-type city bus), `smallcar.glb` (Picanto / Vitz-type small car), `pickup4x4.glb` (Hilux-type double cab) and `cargotruck.glb` (Tata-type truck with a wooden body and tarpaulin load), shaped after photos of real vehicles at Circle, with no badges or brand names.
   - Changes: resized to the real size of the cars they stand for, split into a paint part and a fixed part with colours baked in, and compressed, by `scripts/vehicles/build_modern.py` and `scripts/vehicles/optimise-vehicles.mjs`. The Accra taxi's yellow corners are drawn by the game.
 - Pragya tricycles and okadas are still built in code (`src/game/vehicles3d.ts`).
+- **The trotros on the streets** (since 30 Oct 2026, both kinds: the Hiace type and the long, high-roof type) are our own, built in code (`trotro()` in `src/game/vehicles3d.ts`), shaped after five reference pictures the owner supplied (front, back, both sides, top) of a white-and-blue Accra trotro. No maker's badge or brand name; the number plates are made up; the advert on the arriving trotro is our own fictional brand (Sika Mobile Money). The pictures were only looked at, not used in the game.
 
 ## Opening film pictures (public/film)
 

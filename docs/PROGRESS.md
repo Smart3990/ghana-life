@@ -554,6 +554,12 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
     - **Auntie Dede's call:** the close shot of her was taken from behind the stand's striped back wall (only her back showed). Now the shots come from the open front: on her from the customer's side, low under the roof's edge (her face, the phone at her ear); on you from inside the stall over her shoulder (your face, eating, the street behind you).
     - **Frame rate:** `/street-test?debug` now shows it too (before, only `?fps` did).
     - Done when: on the phone, Skip ends any scene within a few seconds, and during the call you see Auntie Dede's face with the phone.
+  - **The real Accra trotro** (owner, 30 Oct: "the truck we are using doesn't match Ghana truck", five pictures of a real one; "use the color of the original video"):
+    - Every trotro on the streets is now our own Hiace-type minibus built in code from the owner's pictures (it replaces the pack's old hippie-style van): the short sloping nose, the windscreen up to the roof, a black band of big side windows with pillars, the sliding door's seams and handles, mirrors, wheel arches with the wheels in them, a navy front bumper with the grille and headlights, a big rear window, tall tail lights, ribs on the white roof. Painted like the pictures: white top, a gold stripe, the lower body blue (some white). "TRO TRO" on the nose and front doors, the route on the side (eight Accra routes), Ghana flags, yellow GR number plates (made-up numbers). No maker's badge. The long, high-roof kind (5.3 m) is the same van, longer and taller.
+    - Adverts: as before, 8 in 10 carry a full-side advert, now on the side behind the front doors (rear wheel arch cut out); the rest show the plain paint and route.
+    - The trotro that brings you to Circle is dressed like the one in the opening film: white with the green Sika Mobile Money advert (held, never changing), and its route sign reads your hometown to Accra (for example "KUMASI - ACCRA").
+    - Cost: about 1,000 triangles per trotro (counted from its parts), plus one draw for each kind's signs.
+    - Done when: on the phone, the trotros at Circle look like the owner's pictures, and the one you arrive in is white with the green advert and "{your hometown} - ACCRA" on its side.
     - Done when: the ride to Nima feels like a real drive through Accra's streets (traffic, kiosks, people, lights and poles), never shows the car stuck, and takes under 40 s; Auntie Dede's stall is the pack's market stand with kelewele on the table.
 
 ## Waiting on the owner
