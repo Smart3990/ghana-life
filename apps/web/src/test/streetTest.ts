@@ -5,6 +5,7 @@
 // follow camera, the 3D player and okada (through a three.js layer inside the map) and the controls.
 import { Railway } from '../game/railway';
 import { Trains } from '../game/trains';
+import { Aircraft } from '../game/aircraft';
 import * as THREE from 'three';
 import * as maplibregl from 'maplibre-gl';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
@@ -1103,6 +1104,8 @@ function step(player: Player, dt: number, t: number) {
   flyovers.updateLamps(state.x, state.z);
   epicRoads.update(state.x, state.z, tier === 'light' ? 3 : 5);
   trains.update(gameTime.now() / 1000, state.x, state.z);
+  aircraft.night = day.night;
+  aircraft.update(gameTime.now() / 1000, state.x, state.z);
   if (streetTraffic) streetTraffic.blockers = trains.blockers;
   if (flyovers.version !== flyoverVersion) {
     flyoverVersion = flyovers.version;
@@ -4855,6 +4858,9 @@ const trains = new Trains(railway, {
   near: (x, z) => life?.roadPointNear(x, z, 12, 2) ?? null,
 });
 scene.add(trains.group);
+// Planes over Accra on Kotoka's shared schedule (step 7).
+const aircraft = new Aircraft((lng, lat) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT]);
+scene.add(aircraft.group);
 flyovers.maxLamps = { light: 40, standard: 90, ultra: 140 }[tier];
 scene.add(flyovers.group);
 const epicRoads = new EpicRoads();
@@ -4979,7 +4985,7 @@ async function start() {
     };
     streetTraffic.sim = trafficSim;
     void loadDriver();
-    if (debug) Object.assign(window, { __street: { renderer: () => renderer, scene, trains, epicMaterial, epicRoadMaterial, state, sky, look, life, story, thief, signals, lightFor, flyovers, pinch, bigScreen, roadSigns, getStation: () => station, places, fuelWhy, bag, driver, shove, uncle, compound, props, camera3d, adCard, frameShot, placeCompound, buildings, nimaRoute, rideSign, RIDE_SIGNS, map, placeCarTag, fullMap, phone, camAvoid, camAt, viewBlocked, heightAtView, solidAt, traffic: streetTraffic, railway, driveIn, parkingNear, pullIn, pullOut, roadLineNear, compoundAt, music, streetSound, epicRoads, THREE, horns: () => hornsPlayed, people: () => ({ player: playerPerson, thief: thief.person, auntie, uncle }), vehicleAt: (x: number, z: number, r: number) => vehicleAt(x, z, r), placesSolid: (x: number, z: number, r: number) => places.solid(x, z, r), trafficSim: () => trafficSim, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
+    if (debug) Object.assign(window, { __street: { renderer: () => renderer, scene, trains, aircraft, epicMaterial, epicRoadMaterial, state, sky, look, life, story, thief, signals, lightFor, flyovers, pinch, bigScreen, roadSigns, getStation: () => station, places, fuelWhy, bag, driver, shove, uncle, compound, props, camera3d, adCard, frameShot, placeCompound, buildings, nimaRoute, rideSign, RIDE_SIGNS, map, placeCarTag, fullMap, phone, camAvoid, camAt, viewBlocked, heightAtView, solidAt, traffic: streetTraffic, railway, driveIn, parkingNear, pullIn, pullOut, roadLineNear, compoundAt, music, streetSound, epicRoads, THREE, horns: () => hornsPlayed, people: () => ({ player: playerPerson, thief: thief.person, auntie, uncle }), vehicleAt: (x: number, z: number, r: number) => vehicleAt(x, z, r), placesSolid: (x: number, z: number, r: number) => places.solid(x, z, r), trafficSim: () => trafficSim, toLocal: (lng: number, lat: number) => [(lng - START[0]) * M_LON, (START[1] - lat) * M_LAT] } });
   }
 
   // The dark loading screen is the curtain over the city. Without the story it goes now; with the story
