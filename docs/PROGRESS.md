@@ -601,6 +601,13 @@ Page: `/street-test.html` (source `apps/web/street-test.html` and `src/test/stre
     - Already there: the automatic deploy compiles the code first, so broken code never reaches the test site.
     - Done when: the owner opens a code file in VS Code and finds typing in it does nothing (read-only), and the game keeps loading.
 
+  - **Epic City step 7c: helicopter, balloon and boats** (`src/game/skyAndSea.ts`), all from the Epic City pack, on the shared clock (every phone sees them in the same place), each drawn only within a few km of you:
+    - A blue helicopter circling right over Circle, 120 m up, once every minute and a half, its main rotor turning fast (drawn twice life size up there, so it reads from the street).
+    - A striped hot-air balloon drifting round slowly over Adabraka and Circle (once in 40 minutes), about 220 m up, rising and sinking a little (drawn three times life size).
+    - Off the coast: four fishing boats rocking at anchor off Jamestown and Osu, a sailing boat going slowly back and forth, a speedboat, and a cargo ship far out on its way along the coast to Tema. The shore was placed from the old forts that stand on it (James Fort and the lighthouse, Usher Fort, Osu Castle) and the coastline measured from the map east of Osu; the boats are out on the water (checked in pictures).
+    - Checked (test browser): the helicopter seen from above circling near Circle with its rotor at a different angle in each picture; the balloon in the sky above Adabraka; a red fishing boat rocking off Jamestown with others along the coast.
+    - Done when: at Circle the helicopter passes over every minute and a half (drag the view up to see it) and the balloon hangs in the sky; at Jamestown's shore the fishing boats rock on the sea.
+
 ## Waiting on the owner
 
 - Deploy first (the live site has none of the street work yet): `git pull`, `cd apps/web`, `npm install`, `npm run deploy`. Then the street test on the cheap Android: open `/street-test?debug`, tap to play with the phone sideways, walk, sprint, jump and ride for a minute, and report the fps number and how the controls feel.

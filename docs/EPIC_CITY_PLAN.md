@@ -45,7 +45,7 @@ test, and goes live only after the owner has seen it work. Agreed with the owner
    - **Circle junction packed with sellers:** rows of kiosks and stalls so full that you can see at once
      this is a busy market place, all on the pavements and the open ground, none on the road. (Done, 6d.)
    - Uncle's compound in Nima rebuilt in the pack's style. (Done, 6c: a quiet street of pack houses off a main road; his white modern family house, his wife and children; your room at the back.)
-7. **The living world.** Trains on the real railway with level crossings; planes taking off and
+7. **Done: the living world.** (Trains on the railway with level crossings, planes at Kotoka, a helicopter, a hot-air balloon and boats at the coast, 30-31 Oct 2026.) Trains on the real railway with level crossings; planes taking off and
    landing at Kotoka; a helicopter, a hot-air balloon and boats at the coast.
 8. **The story scenes, redone in the new world.**
    - Auntie Dede's stall in a better place: on a busy pavement near Circle, beside the zebra, in view,
