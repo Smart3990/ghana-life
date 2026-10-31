@@ -30,7 +30,8 @@ type Crossing = {
   edges: number[]; // for each side of the track (-1, +1): which edge of the road its barrier closes from
   s: number; // where along the way
   x: number; z: number;
-  across: { x: number; z: number }; // along the road
+  road: { x: number; z: number }; // the road's direction (along it)
+  back: number; // how far back along the road from the middle of the track each barrier stands
   half: number; // the road's half width
   gates: THREE.Group[]; // the two barriers (each turns about its post)
   lamps: THREE.Mesh[];
@@ -129,12 +130,10 @@ export class Trains {
       cr.lamps.forEach((l, i) => (l.visible = down && flash === (i % 2 === 0)));
       if (cr.closed > 0.3) {
         // At each barrier, across the half of the road leading onto the track: the drivers stop there.
-        const ts = this.trackSide(cr);
-        [-1, 1].forEach((side, i) => {
-          const tx = cr.x + side * ts.x * 4.2, tz = cr.z + side * ts.z * 4.2;
-          const e = cr.edges[i];
-          for (let o = 0.4; o <= cr.half; o += 1.4) this.blockers.push({ x: tx + cr.across.x * o * e, z: tz + cr.across.z * o * e, r: 0.8 });
-        });
+        for (const g of cr.gates) {
+          const { bx, bz, nx, nz } = g.userData as { bx: number; bz: number; nx: number; nz: number };
+          for (let o = 0.4; o <= cr.half; o += 1.3) this.blockers.push({ x: bx + nx * o, z: bz + nz * o, r: 0.8 });
+        }
       }
     }
   }
@@ -240,7 +239,7 @@ export class Trains {
     return true;
   }
 
-  private trackSide(cr: Crossing) {
+  private trackSide(cr: { s: number }) {
     // Along the track at the crossing (the barriers stand either side of it, along the road).
     const p = { x: 0, z: 0, fx: 0, fz: 1 };
     this.pointAt(cr.s, p);
@@ -277,62 +276,70 @@ export class Trains {
     }
   }
 
-  private addCrossing(s: number, x: number, z: number, across: { x: number; z: number }, half: number) {
-    const cr: Crossing = { s, x, z, across, half, gates: [], lamps: [], closed: 0, edges: [] };
-    const t = this.trackSide(cr);
+  private addCrossing(s: number, x: number, z: number, road: { x: number; z: number }, half: number) {
+    const t = this.trackSide({ s } as Crossing);
+    // Each barrier stands back from the track along the road (further where the line crosses at a
+    // slant, so the whole track stays clear), the cars stopping in front of it.
+    const slant = Math.abs(road.x * t.z - road.z * t.x) || 1;
+    const back = Math.min(12, 3.6 / Math.max(0.45, slant) + 0.8);
+    const cr: Crossing = { s, x, z, road, back, half, gates: [], lamps: [], closed: 0, edges: [] };
     const white = new THREE.MeshStandardMaterial({ color: '#f2efe6', roughness: 0.6 });
     const red = new THREE.MeshStandardMaterial({ color: '#c8102e', roughness: 0.6 });
     const grey = new THREE.MeshStandardMaterial({ color: '#5a5d61', roughness: 0.7 });
     const glow = new THREE.MeshBasicMaterial({ color: '#ff2a1a' });
     const len = half + 0.4;
-    // Half-barriers, as on real crossings: each side of the track, a post at the road's edge and a
-    // striped boom across the half of the road that leads onto the track (traffic drives on the
-    // right), so a vehicle already on the crossing can always drive off it.
+    // Across the road (its normal).
+    const N = { x: -road.z, z: road.x };
     for (const side of [-1, 1]) {
-      // Traffic coming towards the track on this side moves along -side x (the track's direction t);
-      // its right-hand edge of the road is where the post stands.
-      const dx = -side * t.x, dz = -side * t.z;
-      const edge = Math.sign(across.x * -dz + across.z * dx) || 1;
-      cr.edges.push(edge);
-      const ox = x + t.x * side * 4.2 + across.x * edge * (half + 0.5);
-      const oz = z + t.z * side * 4.2 + across.z * edge * (half + 0.5);
+      // Half-barriers, as on real crossings: traffic coming towards the track on this side drives
+      // along -side x road, on the right; its barrier's post stands at its right-hand edge and the
+      // striped boom swings down across its half of the road (a vehicle already on the crossing can
+      // always drive off it). The right of a direction (dx, dz) here is (-dz, dx).
+      const dx = -side * road.x, dz = -side * road.z;
+      const e = Math.sign(N.x * -dz + N.z * dx) || 1;
+      cr.edges.push(e);
+      const bx = x + road.x * side * back, bz = z + road.z * side * back; // the barrier's line, in the middle of the road
+      const ox = bx + N.x * e * (half + 0.5), oz = bz + N.z * e * (half + 0.5); // its post
       const pivot = new THREE.Group();
       pivot.position.set(ox, 1.05, oz);
-      // The boom lies along -x of the pivot: turned to point across the road from its post.
-      // (Its local -x is turned to point from the post across the road; it lifts by turning about z.)
+      // Its local -x points from the post across the road (towards -e N); it lifts by turning about z.
       pivot.rotation.order = 'YXZ';
-      pivot.rotation.y = Math.atan2(-edge * across.z, edge * across.x);
+      pivot.rotation.y = Math.atan2(-e * N.z, e * N.x);
+      pivot.userData = { bx, bz, nx: N.x * e, nz: N.z * e };
       for (let k = 0; k < Math.ceil(len / 0.8); k++) {
-        const seg = new THREE.Mesh(new THREE.BoxGeometry(Math.min(0.8, len - k * 0.8), 0.12, 0.08), k % 2 ? white : red);
-        seg.position.x = -(k * 0.8 + Math.min(0.8, len - k * 0.8) / 2);
+        const w = Math.min(0.8, len - k * 0.8);
+        const seg = new THREE.Mesh(new THREE.BoxGeometry(w, 0.12, 0.08), k % 2 ? white : red);
+        seg.position.x = -(k * 0.8 + w / 2);
         pivot.add(seg);
       }
-      const post = new THREE.Mesh(new THREE.BoxGeometry(0.2, 1.1, 0.2), grey);
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.22, 1.1, 0.22), grey);
       post.position.set(ox, 0.55, oz);
-      // The light post beside it: a black board with two red lamps.
-      const lightPost = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2.6, 6), grey);
-      const lx = ox + t.x * side * 0.8, lz = oz + t.z * side * 0.8;
-      lightPost.position.set(lx, 1.3, lz);
+      // Beside it, facing the coming traffic: a post with a black board of two red lamps and the white
+      // cross sign above.
+      const lx = ox + road.x * side * 0.7 + N.x * e * 0.3, lz = oz + road.z * side * 0.7 + N.z * e * 0.3;
+      const face = Math.atan2(side * road.x, side * road.z); // (the board's front looks along +side x road)
+      const lightPost = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 3.0, 6), grey);
+      lightPost.position.set(lx, 1.5, lz);
       const board = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.35, 0.06), new THREE.MeshStandardMaterial({ color: '#16181a' }));
       board.position.set(lx, 2.3, lz);
-      board.rotation.y = Math.atan2(t.x * side, t.z * side);
-      // A cross-buck (the X sign) above it.
+      board.rotation.y = face;
       const xa = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.18, 0.04), white);
       const xb = xa.clone();
-      xa.position.set(lx, 2.85, lz);
-      xb.position.set(lx, 2.85, lz);
-      xa.rotation.set(0, board.rotation.y, 0.6);
-      xb.rotation.set(0, board.rotation.y, -0.6);
+      xa.position.set(lx, 2.9, lz);
+      xb.position.set(lx, 2.9, lz);
+      xa.rotation.set(0, face, 0, 'YXZ');
+      xb.rotation.set(0, face, 0, 'YXZ');
+      xa.rotateZ(0.6);
+      xb.rotateZ(-0.6);
       this.crossingGroup.add(pivot, post, lightPost, board, xa, xb);
       cr.gates.push(pivot);
-      if (side === 1) {
-        for (const o of [-0.22, 0.22]) {
-          const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 6), glow);
-          lamp.position.set(lx + Math.cos(board.rotation.y) * o, 2.3, lz - Math.sin(board.rotation.y) * o);
-          lamp.visible = false;
-          this.crossingGroup.add(lamp);
-          cr.lamps.push(lamp);
-        }
+      for (const o of [-0.22, 0.22]) {
+        const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), glow);
+        // (On the board's front, left and right.)
+        lamp.position.set(lx + Math.cos(face) * o + Math.sin(face) * 0.05, 2.3, lz - Math.sin(face) * o + Math.cos(face) * 0.05);
+        lamp.visible = false;
+        this.crossingGroup.add(lamp);
+        cr.lamps.push(lamp);
       }
     }
     this.crossings.push(cr);
