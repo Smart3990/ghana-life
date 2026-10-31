@@ -1,0 +1,17 @@
+{
+  // Protection for the game's code (31 Oct 2026: a stray "q1`a" typed into an open file at midnight was
+  // saved straight into the project by Auto Save, and the game stopped loading).
+  // The code opens read-only in VS Code: you can read every file, but nothing typed by accident can
+  // change it. (The code is changed by Claude's tools, which do not go through VS Code.)
+  // To edit a file yourself on purpose: open it and choose "Set Active Editor Writeable in Session"
+  // from the Command Palette (Ctrl+Shift+P).
+  "files.readonlyInclude": {
+    "apps/web/src/**": true,
+    "apps/web/*.html": true,
+    "apps/server/src/**": true,
+    "scripts/**/*.mjs": true,
+    "scripts/**/*.py": true
+  },
+  // No Auto Save in this project: a change is only saved when you press Ctrl+S.
+  "files.autoSave": "off"
+}

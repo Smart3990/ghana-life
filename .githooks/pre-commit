@@ -1,0 +1,30 @@
+#!/bin/sh
+# Runs before every save to Git (commit). If the game's code does not compile, or a source file has
+# junk at its start (like the "q1`a q1`a" typed into foodKit.ts on 31 Oct 2026), the save is refused,
+# so a damaged file can never reach GitHub or the test site.
+# Switched on for this copy of the project with:  git config core.hooksPath .githooks
+
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+
+# 1. Junk at the start of a code file (a source file starts with a comment, import, export or code).
+bad=""
+for f in $(printf '%s\n' "$staged" | grep -E '\.(ts|mjs|js|html|css)$'); do
+  first=$(git show ":$f" | head -c 200 | tr -d '\r' | head -n 1)
+  # The same 4 to 6 characters over and over on the first line (as from keys pressed again and again).
+  if printf '%s' "$first" | grep -Eq '(.{4,6})\1{7,}'; then bad="$bad $f"; fi
+done
+if [ -n "$bad" ]; then
+  echo "Save refused: these files start with junk (typed by accident?):$bad"
+  echo "Get the last good copy back with:  git checkout -- <file>"
+  exit 1
+fi
+
+# 2. The web game's code must compile.
+if printf '%s\n' "$staged" | grep -q '^apps/web/'; then
+  (cd apps/web && npx --no-install tsc --noEmit -p .) || {
+    echo "Save refused: the game's code does not compile (see the errors above)."
+    echo "If a file was damaged by accident, get the last good copy back with:  git checkout -- <file>"
+    exit 1
+  }
+fi
+exit 0

@@ -16,6 +16,12 @@ cd apps/web && npm install && cd ../..
 cd apps/server && npm install && cd ../..
 ```
 
+Then switch on the safety check that runs before every save to Git (it refuses a save if the game's code is broken or a file starts with junk typed by accident):
+
+```
+git config core.hooksPath .githooks
+```
+
 ### Get the map data onto a new computer (needed before deploying)
 
 The map tiles and street files are not stored in Git. On a new computer, copy them from the live site (about 3 minutes, about 110 MB):
